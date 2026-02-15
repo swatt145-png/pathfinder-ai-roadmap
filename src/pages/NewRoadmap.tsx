@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, ArrowRight, Archive } from "lucide-react";
+import { Loader2, BookOpen } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
 const SKILLS = [
@@ -43,19 +43,6 @@ const getTopicMessages = (topic: string, skillLevel: string) => {
   ];
 };
 
-interface RoadmapRow {
-  id: string;
-  topic: string;
-  skill_level: string;
-  timeline_weeks: number;
-  hours_per_day: number;
-  status: string;
-  created_at: string;
-  completed_modules: number | null;
-  total_modules: number | null;
-  current_streak: number | null;
-  roadmap_data: unknown;
-}
 
 export default function NewRoadmap() {
   const { user, profile } = useAuth();
@@ -71,24 +58,20 @@ export default function NewRoadmap() {
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [activeCount, setActiveCount] = useState(0);
-  const [checkingActive, setCheckingActive] = useState(true);
-  const [roadmaps, setRoadmaps] = useState<RoadmapRow[]>([]);
+  const [checkingActive, setCheckingActive] = useState(true);  
 
-  const fetchRoadmaps = async () => {
+  const checkActive = async () => {
     if (!user) return;
     const { data } = await supabase
       .from("roadmaps")
-      .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
+      .select("id")
       .eq("user_id", user.id)
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
-    const rows = (data as RoadmapRow[]) ?? [];
-    setRoadmaps(rows);
-    setActiveCount(rows.length);
+      .eq("status", "active");
+    setActiveCount(data?.length ?? 0);
     setCheckingActive(false);
   };
 
-  useEffect(() => { fetchRoadmaps(); }, [user]);
+  useEffect(() => { checkActive(); }, [user]);
 
   const timelineWeeks = timelineUnit === "weeks" ? timelineValue : Math.ceil(timelineValue / 7);
 
@@ -100,12 +83,7 @@ export default function NewRoadmap() {
     setSkillLevel(qs.skill);
   };
 
-  const handleArchive = async (id: string) => {
-    const confirmed = window.confirm("Archive this roadmap? This can't be undone.");
-    if (!confirmed) return;
-    await supabase.from("roadmaps").update({ status: "archived" }).eq("id", id);
-    fetchRoadmaps();
-  };
+
 
   const handleGenerate = async () => {
     if (!topic.trim() || !user || activeCount >= 5) return;
@@ -327,63 +305,18 @@ export default function NewRoadmap() {
             </div>
           </div>
 
-          {/* Right Sidebar: Existing Roadmaps */}
-          {roadmaps.length > 0 && (
-            <div className="lg:w-80 xl:w-96 shrink-0">
-              <h3 className="font-heading text-lg font-bold mb-4">My Roadmaps ({roadmaps.length})</h3>
-              <div className="space-y-3">
-                {roadmaps.map((rm) => {
-                  const completed = rm.completed_modules ?? 0;
-                  const total = rm.total_modules ?? 0;
-                  const pct = total ? Math.round((completed / total) * 100) : 0;
-                  const rd = rm.roadmap_data as unknown as RoadmapData;
-
-                  return (
-                    <div key={rm.id} className="glass-strong p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h4 className="font-heading font-bold text-sm">{rm.topic}</h4>
-                          <p className="text-xs text-muted-foreground">
-                            {rm.skill_level} · {rm.timeline_weeks}w · {rm.hours_per_day}h/day
-                          </p>
-                        </div>
-                        <span className="px-2 py-0.5 text-xs font-heading rounded-full bg-primary/20 text-primary">
-                          {pct}%
-                        </span>
-                      </div>
-
-                      {rd?.summary && (
-                        <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{rd.summary}</p>
-                      )}
-
-                      <div className="mb-3">
-                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                          <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{completed}/{total} modules</p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => navigate(`/dashboard/${rm.id}`)}
-                          className="flex-1 gradient-primary text-primary-foreground font-heading font-bold text-xs"
-                        >
-                          Continue <ArrowRight className="ml-1 h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleArchive(rm.id)}
-                          className="border-white/10 hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Archive className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Right Sidebar: My Roadmaps Button */}
+          {activeCount > 0 && (
+            <div className="hidden lg:flex lg:w-16 shrink-0 flex-col items-center pt-2">
+              <Button
+                variant="outline"
+                onClick={() => navigate("/my-roadmaps")}
+                className="w-14 h-14 rounded-xl border-white/10 hover:bg-white/5 flex flex-col items-center justify-center gap-1 p-0"
+                title="My Roadmaps"
+              >
+                <BookOpen className="h-5 w-5 text-primary" />
+                <span className="text-[10px] text-muted-foreground font-heading">{activeCount}</span>
+              </Button>
             </div>
           )}
         </div>
