@@ -367,12 +367,12 @@ export default function Dashboard() {
         <div className="glass-strong p-6 mb-6 animate-fade-in">
           <h2 className="font-heading text-xl md:text-2xl font-bold mb-1">{roadmapData.topic}</h2>
           <div className="flex flex-wrap gap-2 mb-4">
-            <span className="px-2 py-0.5 text-xs font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
+            <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
           </div>
 
           {/* Progress bar */}
           <div className="mb-4">
-            <div className="flex justify-between text-sm mb-1">
+            <div className="flex justify-between text-base mb-1">
               <span className="text-muted-foreground">{completedCount} of {totalModules} modules</span>
               <span className="text-primary font-heading font-bold">{progressPercent}%</span>
             </div>
@@ -381,18 +381,18 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 text-center text-sm">
+          <div className="grid grid-cols-3 gap-3 text-center text-base">
             <div className="glass p-3">
-              <Clock className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">{completedHours.toFixed(0)}h / {totalHours.toFixed(0)}h</span>
+              <Clock className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">{completedHours.toFixed(0)}h / {totalHours.toFixed(0)}h</span>
             </div>
             <div className="glass p-3">
-              <BookOpen className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Week {Math.min(Math.ceil((Date.now() - new Date(roadmap.created_at).getTime()) / 604800000) || 1, roadmapData.timeline_weeks)} of {roadmapData.timeline_weeks}</span>
+              <BookOpen className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Week {Math.min(Math.ceil((Date.now() - new Date(roadmap.created_at).getTime()) / 604800000) || 1, roadmapData.timeline_weeks)} of {roadmapData.timeline_weeks}</span>
             </div>
             <div className="glass p-3">
-              <Flame className="w-4 h-4 mx-auto mb-1 text-warning" />
-              <span className="text-xs text-muted-foreground">
+              <Flame className="w-5 h-5 mx-auto mb-1 text-warning" />
+              <span className="text-sm text-muted-foreground">
                 {completedCount > 0 ? `${completedCount}-day streak` : "Start your streak!"}
               </span>
             </div>
@@ -414,7 +414,7 @@ export default function Dashboard() {
           <div className="space-y-2">
             <div className="glass-strong p-4 text-center">
               <p className="font-heading font-bold text-success mb-2">All Modules Complete!</p>
-              <p className="text-sm text-muted-foreground mb-3">You've finished your entire roadmap. Ready for the next challenge?</p>
+              <p className="text-base text-muted-foreground mb-3">You've finished your entire roadmap. Ready for the next challenge?</p>
               <Button
                 type="button"
                 onClick={() => setArchiveConfirmOpen(true)}
@@ -447,10 +447,10 @@ export default function Dashboard() {
                   {status === "completed" ? "✓" : i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-heading font-semibold text-sm truncate">{mod.title}</p>
-                  <p className="text-xs text-muted-foreground">Day {mod.day_start}-{mod.day_end} · {mod.estimated_hours}h · {mod.resources.length} resources</p>
+                  <p className="font-heading font-semibold text-base truncate">{mod.title}</p>
+                  <p className="text-sm text-muted-foreground">Day {mod.day_start}-{mod.day_end} · {mod.estimated_hours}h · {mod.resources.length} resources</p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full shrink-0 font-heading font-semibold ${
+                <span className={`text-sm px-2 py-1 rounded-full shrink-0 font-heading font-semibold ${
                   status === "completed" ? "bg-success/20 text-success" :
                   isUpNext ? "bg-primary/20 text-primary border border-primary/40" :
                   status === "in_progress" ? "bg-primary/20 text-primary" :
@@ -474,7 +474,7 @@ export default function Dashboard() {
           <Button
             variant="ghost"
             onClick={() => setArchiveConfirmOpen(true)}
-            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-sm"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-base"
           >
             Start New Roadmap
           </Button>
