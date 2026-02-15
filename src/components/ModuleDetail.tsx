@@ -27,8 +27,12 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
   const [notes, setNotes] = useState<string>(progress?.notes ?? "");
   const isCompleted = progress?.status === "completed";
 
-  const resourceProgress = module.resources.length > 0
-    ? Math.round((completedResources.length / module.resources.length) * 100)
+  const resources = module.resources ?? [];
+  const learningObjectives = module.learning_objectives ?? [];
+  const quiz = module.quiz ?? [];
+
+  const resourceProgress = resources.length > 0
+    ? Math.round((completedResources.length / resources.length) * 100)
     : 0;
 
   const toggleResource = (resourceTitle: string) => {
@@ -74,7 +78,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         <div>
           <h4 className="font-heading font-semibold text-sm mb-2">Learning Objectives</h4>
           <ul className="space-y-1">
-            {module.learning_objectives.map((obj, i) => (
+            {learningObjectives.map((obj, i) => (
               <li key={i} className="text-sm text-muted-foreground flex gap-2">
                 <span className="text-primary">•</span> {obj}
               </li>
@@ -86,15 +90,15 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         <div>
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-heading font-semibold text-sm">Resources</h4>
-            {module.resources.length > 0 && (
+            {resources.length > 0 && (
               <span className="text-xs text-muted-foreground">
-                {completedResources.length}/{module.resources.length} done
+                {completedResources.length}/{resources.length} done
                 {resourceProgress > 0 && ` · ${resourceProgress}%`}
               </span>
             )}
           </div>
           <div className="space-y-2">
-            {module.resources.map((r, i) => {
+            {resources.map((r, i) => {
               const isChecked = completedResources.includes(r.title);
               return (
                 <div
@@ -167,7 +171,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
               ))}
             </div>
 
-            {module.quiz.length > 0 && (
+            {quiz.length > 0 && (
               <div>
                 <Button
                   variant="outline"
@@ -195,7 +199,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
       {quizOpen && (
         <QuizModal
-          quiz={module.quiz}
+          quiz={quiz}
           moduleTitle={module.title}
           onClose={() => setQuizOpen(false)}
           onDone={(score, answers) => {
