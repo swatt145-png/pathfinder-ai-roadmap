@@ -33,15 +33,6 @@ export function AppBar() {
         PathFinder
       </Link>
       <div className="flex items-center gap-3">
-        {activeCount > 0 && (
-          <Button
-            onClick={() => navigate("/my-roadmaps")}
-            className="h-9 px-4 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-105"
-          >
-            <BookOpen className="mr-2 h-4 w-4" />
-            My Roadmaps ({activeCount})
-          </Button>
-        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-sm font-heading font-bold text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary">
