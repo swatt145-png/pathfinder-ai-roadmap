@@ -36,14 +36,7 @@ interface RoadmapRow {
   roadmap_data: unknown;
 }
 
-const CARD_COLORS = [
-  "from-primary/80 to-emerald-400/80",
-  "from-primary/60 to-cyan-500/80",
-  "from-accent/80 to-primary/60",
-  "from-emerald-500/80 to-primary/80",
-  "from-cyan-400/80 to-primary/60",
-  "from-primary/70 to-teal-400/80",
-];
+const CARD_GRADIENT = "from-primary/80 to-emerald-400/80";
 
 export default function Flashcards() {
   const { user } = useAuth();
@@ -82,8 +75,7 @@ export default function Flashcards() {
   const cards = selectedRoadmap
     ? generateFlashcards(selectedRoadmap.roadmap_data as unknown as RoadmapData)
     : [];
-  const colorIndex = selectedRoadmap ? roadmaps.findIndex(r => r.id === selectedRoadmap.id) : 0;
-  const gradient = CARD_COLORS[colorIndex % CARD_COLORS.length];
+  const gradient = CARD_GRADIENT;
 
   // === View 3: Single card focused ===
   if (selectedRoadmap && selectedCard !== null) {
@@ -195,7 +187,7 @@ export default function Flashcards() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {roadmaps.map((rm, i) => {
                 const cardCount = generateFlashcards(rm.roadmap_data as unknown as RoadmapData).length;
-                const grad = CARD_COLORS[i % CARD_COLORS.length];
+                const grad = CARD_GRADIENT;
                 return (
                   <button
                     key={rm.id}
