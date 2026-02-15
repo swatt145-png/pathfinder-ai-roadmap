@@ -209,7 +209,7 @@ export default function NewRoadmap() {
                       onClick={() => setSkillLevel(s.value)}
                       className={`glass p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-white/5"}`}
                     >
-                      <span className="block text-sm font-heading font-semibold">{s.label}</span>
+                      <span className="block text-base font-heading font-semibold">{s.label}</span>
                       {skillLevel === s.value && <span className="block text-xs text-muted-foreground mt-1">{s.desc}</span>}
                     </button>
                   ))}
@@ -282,7 +282,7 @@ export default function NewRoadmap() {
                 <Button
                   onClick={handleGenerate}
                   disabled={!topic.trim()}
-                  className="w-full h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                  className="w-full h-16 text-xl font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
                 >
                   Generate My Roadmap ✨
                 </Button>
