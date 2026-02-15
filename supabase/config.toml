@@ -1,0 +1,10 @@
+project_id = "rnjkjzloyttcselzsoao"
+
+[functions.generate-roadmap]
+verify_jwt = false
+
+[functions.check-in]
+verify_jwt = false
+
+[functions.adapt-roadmap]
+verify_jwt = false
