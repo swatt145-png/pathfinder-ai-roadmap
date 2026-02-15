@@ -159,11 +159,20 @@ export default function Dashboard() {
       } as ModuleProgress,
     }));
 
-    // Close module view and refresh persisted progress.
+    // Close module view and show completion popup immediately
     setSelectedModule(null);
+
+    // Show popup right away before async check-in
+    const immediateNextModule = currentModuleIndex >= 0 ? (roadmapData.modules[currentModuleIndex + 1] ?? null) : null;
+    setCompletionActions({
+      completedModuleTitle: mod?.title ?? "this module",
+      nextModule: immediateNextModule,
+      suggestedAdaptation: null,
+    });
+
     await fetchData();
 
-    // Call check-in
+    // Call check-in in background
     const allProg = Object.values(progressMap);
     allProg.push({
       id: "", roadmap_id: roadmap.id, user_id: user.id,
@@ -192,18 +201,12 @@ export default function Dashboard() {
         ? (checkInResult as AdaptationResult)
         : null;
 
-      setCompletionActions({
-        completedModuleTitle: mod?.title ?? "this module",
-        nextModule,
-        suggestedAdaptation: suggestion,
-      });
+      // Update popup with adaptation suggestion if available
+      if (suggestion) {
+        setCompletionActions(prev => prev ? { ...prev, suggestedAdaptation: suggestion } : null);
+      }
     } catch (e) {
       console.error("Check-in error:", e);
-      setCompletionActions({
-        completedModuleTitle: mod?.title ?? "this module",
-        nextModule,
-        suggestedAdaptation: null,
-      });
     }
   };
 
@@ -357,6 +360,7 @@ export default function Dashboard() {
 
   const getModuleStatus = (mod: Module) => progressMap[mod.id]?.status ?? "not_started";
 
+  // All modules are clickable regardless of order — firstIncomplete is just for the "Continue" CTA
   const firstIncomplete = roadmapData.modules.find((m) => getModuleStatus(m) !== "completed");
 
   return (
