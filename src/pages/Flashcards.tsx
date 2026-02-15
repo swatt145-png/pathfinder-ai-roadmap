@@ -16,13 +16,8 @@ interface FlashCard {
 function generateFlashcards(roadmap: RoadmapData): FlashCard[] {
   const cards: FlashCard[] = [];
   for (const mod of (roadmap.modules ?? [])) {
-    for (const obj of (mod.learning_objectives ?? [])) {
-      cards.push({
-        front: obj,
-        back: `Key concept from "${mod.title}" — ${(mod.description ?? "").slice(0, 120)}${(mod.description ?? "").length > 120 ? "…" : ""}`,
-        module: mod.title,
-      });
-    }
+    // Skip learning objectives as standalone flashcards — they make poor Q&A pairs
+    // Only use quiz questions which have proper question/answer format
     for (const q of (mod.quiz ?? [])) {
       cards.push({
         front: q.question,

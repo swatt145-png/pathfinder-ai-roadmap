@@ -32,14 +32,25 @@ const LOADING_STEPS = [
   "Finalizing your personalized roadmap...",
 ];
 
+const extractTopicKeywords = (input: string): string => {
+  // Strip common filler phrases to get just the core topic
+  const cleaned = input
+    .replace(/^(i\s+(want|need|would like)\s+to\s+(learn|study|understand|master|know)\s+(about|more about|how to)?)\s*/i, "")
+    .replace(/^(teach me|help me learn|show me)\s+(about\s+)?\s*/i, "")
+    .replace(/^(how to|learn|study|understand|master)\s+/i, "")
+    .trim();
+  return cleaned || input;
+};
+
 const getTopicMessages = (topic: string, skillLevel: string) => {
+  const keywords = extractTopicKeywords(topic);
   const level = skillLevel === "beginner" ? "from the ground up" : skillLevel === "advanced" ? "at an advanced level" : "with practical depth";
   return [
-    `Great choice to learn ${topic}!`,
-    `We're crafting your personalized ${topic} roadmap ${level}...`,
-    `Finding the best ${topic} resources from top educators...`,
-    `Building quizzes to test your ${topic} knowledge...`,
-    `Almost done — your ${topic} learning journey is taking shape! ✨`,
+    `Great choice to learn ${keywords}!`,
+    `We're crafting your personalized ${keywords} roadmap ${level}...`,
+    `Finding the best ${keywords} resources from top educators...`,
+    `Building quizzes to test your ${keywords} knowledge...`,
+    `Almost done — your ${keywords} learning journey is taking shape! ✨`,
   ];
 };
 
