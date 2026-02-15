@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, BookOpen } from "lucide-react";
+import { Loader2, BookOpen, Layers } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
 const SKILLS = [
@@ -92,8 +92,10 @@ export default function NewRoadmap() {
       const selected = new Date(deadlineDate);
       const minDate = new Date();
       minDate.setDate(minDate.getDate() + timelineWeeks * 7);
+      minDate.setHours(0, 0, 0, 0);
+      selected.setHours(0, 0, 0, 0);
       if (selected < minDate) {
-        setError(`Please choose a date after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
+        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
         return;
       }
     }
@@ -281,8 +283,10 @@ export default function NewRoadmap() {
                       const selected = new Date(e.target.value);
                       const minDate = new Date();
                       minDate.setDate(minDate.getDate() + timelineWeeks * 7);
+                      minDate.setHours(0, 0, 0, 0);
+                      selected.setHours(0, 0, 0, 0);
                       if (selected < minDate) {
-                        setError(`Please choose a date after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
+                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
                         setDeadlineDate(e.target.value);
                       } else {
                         setError(null);
@@ -347,13 +351,14 @@ export default function NewRoadmap() {
                 className="w-full h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
               >
                 <BookOpen className="mr-2 h-4 w-4" />
-                My Roadmaps ({activeCount})
+                My Roadmaps
               </Button>
             )}
             <Button
               onClick={() => navigate("/flashcards")}
               className="w-full h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
             >
+              <Layers className="mr-2 h-4 w-4" />
               Flashcards
             </Button>
           </div>
