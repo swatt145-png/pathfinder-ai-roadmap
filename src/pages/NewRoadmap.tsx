@@ -35,7 +35,7 @@ const LOADING_STEPS = [
 const getTopicMessages = (topic: string, skillLevel: string) => {
   const level = skillLevel === "beginner" ? "from the ground up" : skillLevel === "advanced" ? "at an advanced level" : "with practical depth";
   return [
-    `Great choice to learn ${topic}! 🎯`,
+    `Great choice to learn ${topic}!`,
     `We're crafting your personalized ${topic} roadmap ${level}...`,
     `Finding the best ${topic} resources from top educators...`,
     `Building quizzes to test your ${topic} knowledge...`,

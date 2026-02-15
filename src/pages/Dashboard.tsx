@@ -393,7 +393,7 @@ export default function Dashboard() {
             <div className="glass p-3">
               <Flame className="w-4 h-4 mx-auto mb-1 text-warning" />
               <span className="text-xs text-muted-foreground">
-                {completedCount > 0 ? `🔥 ${completedCount}-day streak` : "Start your streak!"}
+                {completedCount > 0 ? `${completedCount}-day streak` : "Start your streak!"}
               </span>
             </div>
           </div>
@@ -413,7 +413,7 @@ export default function Dashboard() {
           ) : (
           <div className="space-y-2">
             <div className="glass-strong p-4 text-center">
-              <p className="font-heading font-bold text-success mb-2">🎉 All Modules Complete!</p>
+              <p className="font-heading font-bold text-success mb-2">All Modules Complete!</p>
               <p className="text-sm text-muted-foreground mb-3">You've finished your entire roadmap. Ready for the next challenge?</p>
               <Button
                 type="button"
