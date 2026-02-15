@@ -57,57 +57,45 @@ export function AdaptationNotification({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { if (!saving) onKeepCurrent(); }} />
-      <div className="relative glass-strong max-w-lg w-full p-6 animate-fade-in">
-        <h3 className="font-heading font-bold text-lg mb-2">Pathfinder Suggests a Roadmap Update</h3>
-        
-        <div className="glass p-4 mb-4">
-          <p className="text-sm text-muted-foreground italic">{result.message_to_student}</p>
-        </div>
+      <div className="relative glass-strong max-w-md w-full p-6 animate-fade-in rounded-xl max-h-[90vh] overflow-y-auto">
+        <h3 className="font-heading font-bold text-lg mb-3">Suggested Update</h3>
 
-        <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 mb-6">
-          <p className="text-sm mb-3">{result.changes_summary}</p>
-          <div className="space-y-2 text-xs text-muted-foreground">
-            <p>
-              Timeline: {currentTimelineDays} days ({currentTimelineWeeks} weeks) → {proposedTimelineDays} days ({proposedTimelineWeeks} weeks)
-            </p>
-            <p>Impact: {formatDelta(timelineDeltaDays, "days")}</p>
-            <p>
-              Total effort: {currentTotalHours}h → {proposedTotalHours}h
-            </p>
-            <p>Impact: {formatDelta(totalHoursDelta, "hours")}</p>
-            <p>
-              No schedule change option: {requiredHoursPerDayNoSchedule}h/day
-              {" "}({formatDelta(extraDailyHoursNoSchedule, "hours/day")} vs current)
-            </p>
+        <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 mb-4">
+          <p className="text-sm mb-2 line-clamp-3">{result.changes_summary}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <p>Timeline: {currentTimelineDays}d → {proposedTimelineDays}d</p>
+            <p>{formatDelta(timelineDeltaDays, "days")}</p>
+            <p>Effort: {currentTotalHours}h → {proposedTotalHours}h</p>
+            <p>{formatDelta(totalHoursDelta, "hours")}</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="space-y-2">
           <Button
             type="button"
-            variant="outline"
-            onClick={onKeepCurrent}
-            disabled={saving}
-            className="border-white/10 hover:bg-white/5"
+            onClick={onAccept}
+            disabled={saving || !proposed}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold"
           >
-            Continue Current Plan
+            {saving ? "Applying..." : "Accept Update"}
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={onAcceptNoScheduleChange}
             disabled={saving || !proposed}
-            className="border-white/10 hover:bg-white/5"
+            className="w-full border-white/10 hover:bg-white/5"
           >
-            {saving ? "Applying..." : "Accept Update (No Schedule Change)"}
+            {saving ? "Applying..." : "Accept (Keep Schedule)"}
           </Button>
           <Button
             type="button"
-            onClick={onAccept}
-            disabled={saving || !proposed}
-            className="gradient-primary text-primary-foreground font-heading font-bold"
+            variant="outline"
+            onClick={onKeepCurrent}
+            disabled={saving}
+            className="w-full border-white/10 hover:bg-white/5"
           >
-            {saving ? "Applying..." : "Accept Updated Roadmap"}
+            Keep Current Plan
           </Button>
         </div>
       </div>
