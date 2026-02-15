@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
   const [adaptOpen, setAdaptOpen] = useState(false);
   const [adaptationNotif, setAdaptationNotif] = useState<AdaptationResult | null>(null);
+  const [applyingAdaptation, setApplyingAdaptation] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
@@ -109,6 +110,10 @@ export default function Dashboard() {
       last_activity_date: today,
     }).eq("id", roadmap.id);
 
+    // Close immediately after completion so hard/easy/medium feel consistent.
+    setSelectedModule(null);
+    fetchData();
+
     // Call check-in
     const allProg = Object.values(progressMap);
     allProg.push({
@@ -134,36 +139,11 @@ export default function Dashboard() {
       });
 
       if (checkInResult?.needs_adaptation && checkInResult?.updated_roadmap) {
-        // Save adaptation
-        await supabase.from("adaptations").insert({
-          roadmap_id: roadmap.id,
-          user_id: user.id,
-          trigger_reason: `self_report_${selfReport}`,
-          changes_summary: checkInResult.changes_summary,
-          previous_roadmap: roadmapData as any,
-          new_roadmap: checkInResult.updated_roadmap as any,
-        });
-
-        await supabase.from("roadmaps").update({
-          roadmap_data: checkInResult.updated_roadmap as any,
-          total_modules: checkInResult.updated_roadmap.modules.length,
-        }).eq("id", roadmap.id);
-
         setAdaptationNotif(checkInResult as AdaptationResult);
       }
     } catch (e) {
       console.error("Check-in error:", e);
     }
-
-    setSelectedModule(null);
-    fetchData();
-  };
-
-  const handleArchive = async () => {
-    if (!roadmap) return;
-    if (!confirm("This will archive your current roadmap. You can't undo this. Continue?")) return;
-    await supabase.from("roadmaps").update({ status: "archived" }).eq("id", roadmap.id);
-    navigate("/new");
   };
 
   const handleAdaptApply = async (updatedRoadmap: RoadmapData) => {
@@ -186,6 +166,38 @@ export default function Dashboard() {
 
     setAdaptOpen(false);
     fetchData();
+  };
+
+  const handleAcceptCheckInAdaptation = async () => {
+    if (!adaptationNotif?.updated_roadmap || !roadmap || !user || !roadmapData) return;
+    setApplyingAdaptation(true);
+    const updatedRoadmap = adaptationNotif.updated_roadmap;
+    try {
+      await supabase.from("adaptations").insert({
+        roadmap_id: roadmap.id,
+        user_id: user.id,
+        trigger_reason: `self_report_adaptation`,
+        changes_summary: adaptationNotif.changes_summary,
+        previous_roadmap: roadmapData as any,
+        new_roadmap: updatedRoadmap as any,
+      });
+
+      await supabase.from("roadmaps").update({
+        roadmap_data: updatedRoadmap as any,
+        total_modules: updatedRoadmap.modules.length,
+        timeline_weeks: updatedRoadmap.timeline_weeks,
+        hours_per_day: updatedRoadmap.hours_per_day,
+      }).eq("id", roadmap.id);
+
+      setAdaptationNotif(null);
+      fetchData();
+    } finally {
+      setApplyingAdaptation(false);
+    }
+  };
+
+  const handleKeepCurrentRoadmap = () => {
+    setAdaptationNotif(null);
   };
 
   if (loading) {
@@ -280,13 +292,10 @@ export default function Dashboard() {
         </div>
 
         {/* Bottom Actions */}
-        <div className="mt-8 flex flex-col sm:flex-row gap-3">
-          <Button variant="outline" onClick={() => setAdaptOpen(true)} className="flex-1 border-white/10 hover:bg-white/5">
+        <div className="mt-8">
+          <Button variant="outline" onClick={() => setAdaptOpen(true)} className="w-full border-white/10 hover:bg-white/5">
             <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
           </Button>
-          <button onClick={handleArchive} className="text-sm text-muted-foreground hover:text-destructive transition-colors">
-            Start New Roadmap
-          </button>
         </div>
       </div>
 
@@ -312,10 +321,13 @@ export default function Dashboard() {
       )}
 
       {/* Adaptation Notification */}
-      {adaptationNotif && (
+      {adaptationNotif && roadmapData && (
         <AdaptationNotification
           result={adaptationNotif}
-          onDismiss={() => setAdaptationNotif(null)}
+          currentRoadmap={roadmapData}
+          onAccept={handleAcceptCheckInAdaptation}
+          onKeepCurrent={handleKeepCurrentRoadmap}
+          saving={applyingAdaptation}
         />
       )}
     </>

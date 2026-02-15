@@ -81,9 +81,20 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
 
             {error && <p className="text-destructive text-sm">{error}</p>}
 
-            <Button onClick={handleRecalculate} disabled={loading} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12">
-              {loading ? <><Loader2 className="animate-spin mr-2" /> Recalculating...</> : "Recalculate"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={loading}
+                className="flex-1 border-white/10 hover:bg-white/5"
+              >
+                Skip for now
+              </Button>
+              <Button onClick={handleRecalculate} disabled={loading} className="flex-1 gradient-primary text-primary-foreground font-heading font-bold h-12">
+                {loading ? <><Loader2 className="animate-spin mr-2" /> Recalculating...</> : "Recalculate"}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
