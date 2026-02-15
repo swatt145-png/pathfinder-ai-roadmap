@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save } from "lucide-react";
+import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuizModal } from "@/components/QuizModal";
@@ -15,8 +15,20 @@ interface ModuleDetailProps {
   onUpdateCompletedModule?: (moduleId: string, selfReport: string, notes: string) => void;
 }
 
-const RESOURCE_ICONS: Record<string, string> = {
-  video: "🎬", article: "📄", documentation: "📚", tutorial: "💻", practice: "🏋️",
+const RESOURCE_ICONS: Record<string, React.ElementType> = {
+  video: Video,
+  article: FileText,
+  documentation: BookMarked,
+  tutorial: Code2,
+  practice: Dumbbell,
+};
+
+const RESOURCE_COLORS: Record<string, string> = {
+  video: "text-accent",
+  article: "text-primary",
+  documentation: "text-secondary",
+  tutorial: "text-warning",
+  practice: "text-success",
 };
 
 export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateResourcesAndNotes, onUpdateCompletedModule }: ModuleDetailProps) {
@@ -74,7 +86,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         </button>
         <div className="flex-1 min-w-0">
           <h3 className="font-heading font-bold text-lg truncate">{module.title}</h3>
-          <p className="text-sm text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h</p>
+          <p className="text-base text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h</p>
         </div>
       </div>
 
@@ -83,34 +95,43 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
         {/* Learning Objectives */}
         <div>
-          <h4 className="font-heading font-semibold text-base mb-2">Learning Objectives</h4>
-          <ul className="space-y-1">
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="w-5 h-5 text-primary" />
+            <h4 className="font-heading font-bold text-lg gradient-text">Learning Objectives</h4>
+          </div>
+          <ul className="space-y-2">
             {learningObjectives.map((obj, i) => (
-              <li key={i} className="text-base text-muted-foreground flex gap-2">
-                <span className="text-primary">•</span> {obj}
+              <li key={i} className="text-base text-muted-foreground flex gap-3 items-start glass p-3">
+                <span className="text-primary font-bold mt-0.5">→</span>
+                <span>{obj}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Resources with checkboxes */}
+        {/* Resources */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-heading font-semibold text-base">Resources</h4>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-accent" />
+              <h4 className="font-heading font-bold text-lg gradient-text">Resources</h4>
+            </div>
             {resources.length > 0 && (
-              <span className="text-sm text-muted-foreground">
+              <span className="text-base text-muted-foreground font-heading">
                 {completedResources.length}/{resources.length} done
                 {resourceProgress > 0 && ` · ${resourceProgress}%`}
               </span>
             )}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {resources.map((r, i) => {
               const isChecked = completedResources.includes(r.title);
+              const IconComponent = RESOURCE_ICONS[r.type] ?? FileText;
+              const iconColor = RESOURCE_COLORS[r.type] ?? "text-primary";
               return (
                 <div
                   key={i}
-                  className={`glass p-3 flex items-start gap-3 transition-colors ${isChecked ? "opacity-60" : ""}`}
+                  className={`glass-strong p-4 flex items-start gap-3 transition-all border ${isChecked ? "opacity-50 border-success/20" : "border-white/10 hover:border-primary/30"}`}
                 >
                   <button
                     onClick={() => toggleResource(r.title)}
@@ -118,17 +139,19 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                   >
                     {isChecked ? <CheckSquare className="w-5 h-5 text-success" /> : <Square className="w-5 h-5" />}
                   </button>
+                  <div className={`mt-0.5 shrink-0 ${iconColor}`}>
+                    <IconComponent className="w-5 h-5" />
+                  </div>
                   <a
                     href={r.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 min-w-0 hover:opacity-80 transition-opacity"
                   >
-                    <p className={`text-base font-medium flex items-center gap-1 ${isChecked ? "line-through" : ""}`}>
-                      <span>{RESOURCE_ICONS[r.type] ?? "📄"}</span>
-                      {r.title} <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                    <p className={`text-base font-heading font-semibold flex items-center gap-2 ${isChecked ? "line-through" : ""}`}>
+                      {r.title} <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     </p>
-                    <p className="text-sm text-muted-foreground mt-0.5">~{r.estimated_minutes} min · {r.description}</p>
+                    <p className="text-base text-muted-foreground mt-1">~{r.estimated_minutes} min · {r.description}</p>
                   </a>
                 </div>
               );
@@ -138,13 +161,16 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
         {/* Notes */}
         <div>
-          <h4 className="font-heading font-semibold text-base mb-2">Your Notes</h4>
+          <div className="flex items-center gap-2 mb-3">
+            <StickyNote className="w-5 h-5 text-warning" />
+            <h4 className="font-heading font-bold text-lg gradient-text">Your Notes</h4>
+          </div>
           <Textarea
             value={notes}
             onChange={(e) => handleNotesChange(e.target.value)}
             onBlur={handleNotesSave}
             placeholder="Write your notes here — what was easy, difficult, or anything for your reference..."
-            className="min-h-[120px] bg-white/5 border-white/10 focus:border-primary resize-y"
+            className="min-h-[120px] bg-white/5 border-white/10 focus:border-primary resize-y text-base"
           />
         </div>
 
@@ -153,14 +179,17 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         {/* Check-in */}
         {isCompleted ? (
           <div className="space-y-4">
-            <div className="glass p-4">
-              <p className="text-base text-muted-foreground mb-3">
-                Completed · Felt: <span className="font-medium text-foreground">{progress?.self_report ?? "not rated"}</span>
-                {progress?.quiz_score != null && <> · Quiz: <span className="font-medium text-foreground">{progress.quiz_score}%</span></>}
+            <div className="glass-strong p-4 border border-success/20">
+              <p className="text-base text-muted-foreground">
+                Completed · Felt: <span className="font-heading font-semibold text-foreground">{progress?.self_report ?? "not rated"}</span>
+                {progress?.quiz_score != null && <> · Quiz: <span className="font-heading font-semibold text-foreground">{progress.quiz_score}%</span></>}
               </p>
             </div>
 
-            <h4 className="font-heading font-semibold text-base">Update difficulty rating</h4>
+            <div className="flex items-center gap-2">
+              <MessageCircleQuestion className="w-5 h-5 text-secondary" />
+              <h4 className="font-heading font-bold text-lg gradient-text">Update Difficulty Rating</h4>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { value: "easy", icon: ThumbsUp, label: "Easy", color: "bg-success/20 text-success border-success/30" },
@@ -173,7 +202,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                   className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-white/5"}`}
                 >
                   <opt.icon className="w-7 h-7 mx-auto" />
-                  <span className="text-sm mt-1 block">{opt.label}</span>
+                  <span className="text-base mt-1 block font-heading">{opt.label}</span>
                 </button>
               ))}
             </div>
@@ -188,7 +217,10 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
           </div>
         ) : (
           <div className="space-y-4">
-            <h4 className="font-heading font-semibold text-base">How did this module feel?</h4>
+            <div className="flex items-center gap-2">
+              <MessageCircleQuestion className="w-5 h-5 text-secondary" />
+              <h4 className="font-heading font-bold text-lg gradient-text">How Did This Module Feel?</h4>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { value: "easy", icon: ThumbsUp, label: "Easy", color: "bg-success/20 text-success border-success/30" },
@@ -201,7 +233,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                   className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-white/5"}`}
                 >
                   <opt.icon className="w-7 h-7 mx-auto" />
-                  <span className="text-sm mt-1 block">{opt.label}</span>
+                  <span className="text-base mt-1 block font-heading">{opt.label}</span>
                 </button>
               ))}
             </div>
@@ -211,11 +243,11 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                 <Button
                   variant="outline"
                   onClick={() => setQuizOpen(true)}
-                  className="w-full border-white/10 hover:bg-white/5"
+                  className="w-full border-white/10 hover:bg-white/5 text-base"
                 >
                   {quizScore != null ? `Quiz Score: ${quizScore}% — Retake` : "Take Quiz"}
                 </Button>
-                <p className="text-sm text-muted-foreground mt-1 text-center">
+                <p className="text-base text-muted-foreground mt-1 text-center">
                   Taking the quiz helps Pathfinder adapt better to your needs
                 </p>
               </div>
