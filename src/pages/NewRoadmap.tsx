@@ -183,17 +183,7 @@ export default function NewRoadmap() {
       <AppBar />
       <div className="min-h-screen pt-20 pb-10 px-4">
         <div className="max-w-lg mx-auto animate-fade-in">
-          {/* My Roadmaps button */}
-          {activeCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => navigate("/my-roadmaps")}
-              className="mb-6 border-white/10 hover:bg-white/5 font-heading"
-            >
-              <BookOpen className="mr-2 h-4 w-4" />
-              My Roadmaps ({activeCount})
-            </Button>
-          )}
+
 
           <div>
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
