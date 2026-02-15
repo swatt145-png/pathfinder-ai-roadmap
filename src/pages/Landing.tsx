@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Loader2, BookOpen, Plus } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 export default function Landing() {
   const { user, loading } = useAuth();
@@ -42,8 +43,9 @@ export default function Landing() {
       {user && <AppBar />}
       <div className={`flex min-h-screen items-center justify-center px-4 ${user ? "pt-14" : ""}`}>
         <div className="text-center max-w-lg animate-fade-in">
+        <img src={logo} alt="PathFinder logo" className="h-24 w-24 mx-auto mb-4 object-contain" />
         <h1 className="font-heading text-5xl md:text-6xl font-extrabold gradient-text mb-4">
-          🧭 Pathfinder
+          PathFinder
         </h1>
         <p className="text-lg md:text-xl text-muted-foreground mb-10 font-body">
           Your AI-powered learning companion that adapts to you
