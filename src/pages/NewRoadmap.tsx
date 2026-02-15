@@ -219,7 +219,7 @@ export default function NewRoadmap() {
                     <button
                       key={s.value}
                       onClick={() => setSkillLevel(s.value)}
-                      className={`glass p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-white/5"}`}
+                      className={`glass-blue p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-accent/10"}`}
                     >
                       <span className="block text-base font-heading font-semibold">{s.label}</span>
                       {skillLevel === s.value && <span className="block text-sm text-muted-foreground mt-1">{s.desc}</span>}
@@ -269,7 +269,7 @@ export default function NewRoadmap() {
                 />
               </div>
 
-              <div className="flex items-center justify-between glass p-4">
+              <div className="flex items-center justify-between glass-blue p-4">
                 <Label className="text-base">Is this a hard deadline?</Label>
                 <Switch checked={hardDeadline} onCheckedChange={setHardDeadline} />
               </div>
@@ -301,7 +301,7 @@ export default function NewRoadmap() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between glass p-4">
+              <div className="flex items-center justify-between glass-blue p-4">
                 <div>
                   <Label className="text-base">Include weekends?</Label>
                   <p className="text-sm text-muted-foreground mt-0.5">Study on Saturday & Sunday too</p>
@@ -312,7 +312,7 @@ export default function NewRoadmap() {
               {error && <p className="text-destructive text-base">{error}</p>}
 
               {activeCount >= 5 ? (
-                <div className="glass p-4 border-warning/30 bg-warning/5">
+                <div className="glass-blue p-4 border-warning/30 bg-warning/5">
                   <p className="text-base text-warning font-medium mb-2">⚠️ You've reached the limit of 5 active roadmaps</p>
                   <p className="text-sm text-muted-foreground mb-3">Archive an existing roadmap to create a new one.</p>
                 </div>
@@ -333,7 +333,7 @@ export default function NewRoadmap() {
                     <button
                       key={qs.label}
                       onClick={() => applyQuickStart(qs)}
-                      className="glass px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all"
+                      className="glass-blue px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-all"
                     >
                       {qs.label}
                     </button>
