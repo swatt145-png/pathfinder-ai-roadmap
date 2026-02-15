@@ -15,12 +15,16 @@ interface Props {
 
 export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, onApply }: Props) {
   const completedCount = Object.values(progressMap).filter((p) => p.status === "completed").length;
+  const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
+  const [newDays, setNewDays] = useState(roadmapData.timeline_weeks * 7);
   const [newWeeks, setNewWeeks] = useState(roadmapData.timeline_weeks);
   const [newHours, setNewHours] = useState(roadmapData.hours_per_day);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AdaptResult | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const effectiveWeeks = timelineUnit === "days" ? Math.max(Math.ceil(newDays / 7), 1) : newWeeks;
 
   const handleRecalculate = async () => {
     setLoading(true);
@@ -30,7 +34,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
         body: {
           roadmap_data: roadmapData,
           all_progress: Object.values(progressMap),
-          new_timeline_weeks: newWeeks,
+          new_timeline_weeks: effectiveWeeks,
           new_hours_per_day: newHours,
           adjustment_type: "manual",
         },
@@ -67,16 +71,38 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
         {!result ? (
           <div className="space-y-4">
             <div>
-              <Label className="text-sm text-muted-foreground mb-2 block">
-                New timeline (weeks): <span className="text-primary font-heading font-bold">{newWeeks}</span>
-              </Label>
-              <input type="range" min={1} max={16} value={newWeeks} onChange={(e) => setNewWeeks(Number(e.target.value))} className="w-full accent-primary" />
+              <Label className="text-sm text-muted-foreground mb-2 block">Timeline</Label>
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => setTimelineUnit("days")}
+                  className={`flex-1 py-1.5 text-xs font-heading font-bold rounded-lg transition-all ${timelineUnit === "days" ? "gradient-primary text-primary-foreground" : "glass text-muted-foreground hover:bg-white/5"}`}
+                >Days</button>
+                <button
+                  onClick={() => setTimelineUnit("weeks")}
+                  className={`flex-1 py-1.5 text-xs font-heading font-bold rounded-lg transition-all ${timelineUnit === "weeks" ? "gradient-primary text-primary-foreground" : "glass text-muted-foreground hover:bg-white/5"}`}
+                >Weeks</button>
+              </div>
+              {timelineUnit === "days" ? (
+                <>
+                  <Label className="text-sm text-muted-foreground mb-2 block">
+                    Number of days: <span className="text-primary font-heading font-bold">{newDays}</span>
+                  </Label>
+                  <input type="range" min={0} max={90} value={newDays} onChange={(e) => setNewDays(Number(e.target.value))} className="w-full accent-primary" />
+                </>
+              ) : (
+                <>
+                  <Label className="text-sm text-muted-foreground mb-2 block">
+                    Number of weeks: <span className="text-primary font-heading font-bold">{newWeeks}</span>
+                  </Label>
+                  <input type="range" min={1} max={16} value={newWeeks} onChange={(e) => setNewWeeks(Number(e.target.value))} className="w-full accent-primary" />
+                </>
+              )}
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-2 block">
-                New hours/day: <span className="text-primary font-heading font-bold">{newHours}</span>
+                Hours/day: <span className="text-primary font-heading font-bold">{newHours}</span>
               </Label>
-              <input type="range" min={0.5} max={6} step={0.5} value={newHours} onChange={(e) => setNewHours(Number(e.target.value))} className="w-full accent-primary" />
+              <input type="range" min={0.5} max={8} step={0.5} value={newHours} onChange={(e) => setNewHours(Number(e.target.value))} className="w-full accent-primary" />
             </div>
 
             {error && <p className="text-destructive text-sm">{error}</p>}
