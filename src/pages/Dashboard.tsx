@@ -34,6 +34,8 @@ export default function Dashboard() {
   const [completionActions, setCompletionActions] = useState<CompletionActionState | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [revertConfirmOpen, setRevertConfirmOpen] = useState(false);
+  const [reverting, setReverting] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
@@ -80,9 +82,11 @@ export default function Dashboard() {
 
   useEffect(() => { fetchData(); }, [user]);
 
-  const completedCount = Object.values(progressMap).filter((p) => p.status === "completed").length;
+  // Only count completed modules that exist in the current roadmap
+  const currentModuleIds = new Set(roadmapData?.modules.map((m) => m.id) ?? []);
+  const completedCount = Object.values(progressMap).filter((p) => p.status === "completed" && currentModuleIds.has(p.module_id)).length;
   const totalModules = roadmapData?.modules.length ?? 0;
-  const progressPercent = totalModules ? Math.round((completedCount / totalModules) * 100) : 0;
+  const progressPercent = totalModules ? Math.min(Math.round((completedCount / totalModules) * 100), 100) : 0;
 
   const totalHours = roadmapData?.modules.reduce((s, m) => s + m.estimated_hours, 0) ?? 0;
   const completedHours = roadmapData?.modules
@@ -121,7 +125,7 @@ export default function Dashboard() {
     }
 
     // Update roadmap completed count + streak
-    const newCompleted = completedCount + 1;
+    const newCompleted = Object.values(progressMap).filter(p => p.status === "completed" && currentModuleIds.has(p.module_id)).length + (currentModuleIds.has(moduleId) ? 1 : 0);
     const today = new Date().toISOString().split("T")[0];
     const lastActivity = roadmap.last_activity_date;
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
@@ -284,6 +288,50 @@ export default function Dashboard() {
     navigate("/my-roadmaps");
   };
 
+  const handleRevertToPreviousPlan = async () => {
+    if (!roadmap || !user) return;
+    setReverting(true);
+    try {
+      const { data: lastAdaptation } = await supabase
+        .from("adaptations")
+        .select("*")
+        .eq("roadmap_id", roadmap.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!lastAdaptation?.previous_roadmap) {
+        setReverting(false);
+        setRevertConfirmOpen(false);
+        return;
+      }
+
+      const previousRoadmap = lastAdaptation.previous_roadmap as unknown as RoadmapData;
+
+      // Log this revert as a new adaptation
+      await supabase.from("adaptations").insert({
+        roadmap_id: roadmap.id,
+        user_id: user.id,
+        trigger_reason: "revert_to_previous",
+        changes_summary: "Reverted to previous plan",
+        previous_roadmap: roadmapData as any,
+        new_roadmap: previousRoadmap as any,
+      });
+
+      await supabase.from("roadmaps").update({
+        roadmap_data: previousRoadmap as any,
+        total_modules: previousRoadmap.modules.length,
+        timeline_weeks: previousRoadmap.timeline_weeks,
+        hours_per_day: previousRoadmap.hours_per_day,
+      }).eq("id", roadmap.id);
+
+      setRevertConfirmOpen(false);
+      fetchData();
+    } finally {
+      setReverting(false);
+    }
+  };
+
   const handleAdaptFromCompletion = () => {
     const suggested = completionActions?.suggestedAdaptation ?? null;
     setCompletionActions(null);
@@ -345,7 +393,7 @@ export default function Dashboard() {
             <div className="glass p-3">
               <Flame className="w-4 h-4 mx-auto mb-1 text-warning" />
               <span className="text-xs text-muted-foreground">
-                {roadmap.current_streak > 0 ? `🔥 ${roadmap.current_streak}-day streak` : "Start your streak!"}
+                {roadmap.current_streak > 0 ? `🔥 ${roadmap.current_streak} ${roadmap.current_streak === 1 ? "day active" : "day streak"}` : "Start your streak!"}
               </span>
             </div>
           </div>
@@ -418,6 +466,9 @@ export default function Dashboard() {
         <div className="mt-8 space-y-3">
           <Button variant="outline" onClick={() => setAdaptOpen(true)} className="w-full border-white/10 hover:bg-white/5">
             <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
+          </Button>
+          <Button variant="outline" onClick={() => setRevertConfirmOpen(true)} className="w-full border-white/10 hover:bg-white/5">
+            Revert to Previous Plan
           </Button>
           <Button
             variant="ghost"
@@ -517,6 +568,25 @@ export default function Dashboard() {
             </Button>
             <Button onClick={handleArchiveAndNew} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Archive & Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={revertConfirmOpen} onOpenChange={setRevertConfirmOpen}>
+        <DialogContent className="glass-strong border-white/10">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Revert to previous plan?</DialogTitle>
+            <DialogDescription>
+              This will undo the last plan adaptation and restore your previous roadmap. Your progress on completed modules is kept.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRevertConfirmOpen(false)} className="border-white/10" disabled={reverting}>
+              Cancel
+            </Button>
+            <Button onClick={handleRevertToPreviousPlan} disabled={reverting} className="gradient-primary text-primary-foreground font-heading font-bold">
+              {reverting ? "Reverting..." : "Revert Plan"}
             </Button>
           </DialogFooter>
         </DialogContent>
