@@ -146,11 +146,26 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
               </button>
             ))}
 
+            {/* Keep Current Plan option */}
+            <button
+              onClick={() => setSelectedOption("keep_current")}
+              className={`w-full text-left glass p-4 transition-all rounded-xl border-2 ${selectedOption === "keep_current" ? "border-primary bg-primary/15 glow-primary shadow-lg shadow-primary/20" : "border-transparent hover:bg-white/5"}`}
+            >
+              <span className="font-heading font-bold text-sm">Keep Current Plan</span>
+              <p className="text-xs text-muted-foreground mt-1">No changes — continue with your existing roadmap as-is.</p>
+            </button>
+
             <p className="text-xs text-muted-foreground">💡 {result.recommendation_reason}</p>
 
-            <Button onClick={handleApply} disabled={!selectedOption} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 disabled:opacity-50">
-              Apply This Plan
-            </Button>
+            {selectedOption === "keep_current" ? (
+              <Button onClick={onClose} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12">
+                Keep My Plan
+              </Button>
+            ) : (
+              <Button onClick={handleApply} disabled={!selectedOption} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 disabled:opacity-50">
+                Apply Adapted Plan
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -87,13 +87,13 @@ RULES:
 - Never remove or modify completed modules
 - User wants to finish in ${displayDays} day(s) at ${hrsPerDay}h/day = ${totalAvailableHours}h available
 - Remaining content needs ~${remainingHours}h across ${remainingModules.length} modules
-- You MUST provide exactly 3 options with these strategies:
-  1. "Crash Course" — keep the user's chosen timeline, REPLACE remaining module resources with shorter/compressed alternatives that cover the same topics in less time. Find new resources (videos, articles, tutorials) that fit within the available hours. The updated_roadmap MUST have DIFFERENT resources with reduced estimated_hours matching available time.
-  2. "Increase Daily Hours" — keep same number of days but increase hours/day to cover everything with original content
-  3. "Extend Timeline" — keep hours/day the same but add more days to complete all modules properly with original content
-- Keep analysis to 1 sentence
-- Keep descriptions and tradeoffs to 1 sentence each
-- Calculate timeline_days using: ceil(remaining_hours / hours_per_day)
+- You MUST provide exactly 1 option: "Adapted Plan"
+- ADAPTATION LOGIC:
+  A) If totalAvailableHours < remainingHours (user has LESS time): REPLACE remaining module resources with shorter, condensed alternatives (crash courses, summary videos, quick tutorials) that cover the SAME topics but fit within the available hours. Each module's estimated_hours and resources MUST be updated to fit.
+  B) If user has MORE days but FEWER hours/day: SPLIT remaining modules into smaller daily chunks. For example, a 3h module at 1.5h/day becomes 2 modules of 1.5h each covering the same material across 2 days. Update day_start, day_end, week fields.
+  C) If totalAvailableHours >= remainingHours and hours/day is same or more: Just redistribute the existing modules across the new timeline.
+- In ALL cases, the updated_roadmap MUST reflect the new timeline_weeks (ceil(displayDays/7)), hours_per_day, and total_hours accurately.
+- Keep analysis to 1-2 sentences
 - Use "timeline_days" in the response (not weeks)`;
 
     const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules (${remainingModules.length} remaining, ~${remainingHours}h of content).
@@ -104,52 +104,25 @@ Progress: ${JSON.stringify(all_progress)}
 
 Return ONLY valid JSON:
 {
-  "analysis": "1 sentence summary",
+  "analysis": "1-2 sentence summary of the situation and what the adapted plan does",
   "options": [
     {
-      "id": "crash_course",
-      "label": "Crash Course",
-      "description": "1 sentence",
+      "id": "adapted_plan",
+      "label": "Adapted Plan",
+      "description": "1 sentence describing how the plan was adapted",
       "timeline_days": number,
       "hours_per_day": number,
       "total_remaining_hours": number,
       "modules_kept": number,
       "modules_removed": [],
       "modules_added": [],
-      "tradeoff": "1 sentence",
-      "updated_roadmap": { full roadmap JSON with same structure }
-    },
-    {
-      "id": "increase_hours",
-      "label": "Increase Daily Hours",
-      "description": "1 sentence",
-      "timeline_days": number,
-      "hours_per_day": number,
-      "total_remaining_hours": number,
-      "modules_kept": number,
-      "modules_removed": [],
-      "modules_added": [],
-      "tradeoff": "1 sentence",
-      "updated_roadmap": { full roadmap JSON }
-    },
-    {
-      "id": "extend_timeline",
-      "label": "Extend Timeline",
-      "description": "1 sentence",
-      "timeline_days": number,
-      "hours_per_day": number,
-      "total_remaining_hours": number,
-      "modules_kept": number,
-      "modules_removed": [],
-      "modules_added": [],
-      "tradeoff": "1 sentence",
-      "updated_roadmap": { full roadmap JSON }
+      "tradeoff": "1 sentence about what changed",
+      "updated_roadmap": { full roadmap JSON with same structure, with adapted remaining modules and REPLACED/SPLIT resources as needed }
     }
   ],
-  "recommendation": "crash_course|increase_hours|extend_timeline",
+  "recommendation": "adapted_plan",
   "recommendation_reason": "1 sentence"
 }`;
-
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
