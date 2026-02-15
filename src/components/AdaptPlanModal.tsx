@@ -24,7 +24,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveWeeks = timelineUnit === "days" ? Math.max(Math.ceil(newDays / 7), 1) : newWeeks;
+  const effectiveDays = timelineUnit === "days" ? newDays : newWeeks * 7;
 
   const handleRecalculate = async () => {
     setLoading(true);
@@ -34,7 +34,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
         body: {
           roadmap_data: roadmapData,
           all_progress: Object.values(progressMap),
-          new_timeline_weeks: effectiveWeeks,
+          new_timeline_days: effectiveDays,
           new_hours_per_day: newHours,
           adjustment_type: "manual",
         },
@@ -138,7 +138,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
                 </div>
                 <p className="text-xs text-muted-foreground mb-2">{opt.description}</p>
                 <div className="flex gap-3 text-xs text-muted-foreground">
-                  <span>{opt.timeline_weeks}w</span>
+                  <span>{opt.timeline_days != null ? `${opt.timeline_days}d` : `${opt.timeline_weeks}w`}</span>
                   <span>{opt.hours_per_day}h/day</span>
                   <span>{opt.modules_kept} modules</span>
                 </div>

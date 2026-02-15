@@ -9,29 +9,12 @@ function sanitizeControlCharsInJson(raw: string): string {
   let inString = false;
   let escaped = false;
   let out = "";
-
   for (let i = 0; i < raw.length; i++) {
     const ch = raw[i];
-
     if (inString) {
-      if (escaped) {
-        out += ch;
-        escaped = false;
-        continue;
-      }
-
-      if (ch === "\\") {
-        out += ch;
-        escaped = true;
-        continue;
-      }
-
-      if (ch === "\"") {
-        out += ch;
-        inString = false;
-        continue;
-      }
-
+      if (escaped) { out += ch; escaped = false; continue; }
+      if (ch === "\\") { out += ch; escaped = true; continue; }
+      if (ch === "\"") { out += ch; inString = false; continue; }
       const code = ch.charCodeAt(0);
       if (code < 0x20) {
         if (ch === "\n") out += "\\n";
@@ -42,58 +25,37 @@ function sanitizeControlCharsInJson(raw: string): string {
         else out += `\\u${code.toString(16).padStart(4, "0")}`;
         continue;
       }
-
-      out += ch;
-      continue;
+      out += ch; continue;
     }
-
-    if (ch === "\"") {
-      inString = true;
-    }
+    if (ch === "\"") inString = true;
     out += ch;
   }
-
   return out;
 }
 
 function extractJsonCandidate(content: string): string {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fenced?.[1]) return fenced[1].trim();
-
   const firstBrace = content.indexOf("{");
   const lastBrace = content.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    return content.slice(firstBrace, lastBrace + 1);
-  }
-
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) return content.slice(firstBrace, lastBrace + 1);
   return content;
 }
 
 function parseAiJson(content: unknown): any {
   if (typeof content === "object" && content !== null) return content;
   if (typeof content !== "string") throw new Error("AI returned unexpected response format");
-
-  const attempts: string[] = [];
-  attempts.push(content);
-
+  const attempts: string[] = [content];
   const extracted = extractJsonCandidate(content);
   if (extracted !== content) attempts.push(extracted);
-
   const sanitized = sanitizeControlCharsInJson(content);
   if (sanitized !== content) attempts.push(sanitized);
-
   const extractedSanitized = sanitizeControlCharsInJson(extracted);
   if (!attempts.includes(extractedSanitized)) attempts.push(extractedSanitized);
-
   let lastErr: unknown = null;
   for (const candidate of attempts) {
-    try {
-      return JSON.parse(candidate);
-    } catch (e) {
-      lastErr = e;
-    }
+    try { return JSON.parse(candidate); } catch (e) { lastErr = e; }
   }
-
   throw new Error(`Unable to parse AI JSON response: ${lastErr instanceof Error ? lastErr.message : "Unknown parse error"}`);
 }
 
@@ -101,60 +63,60 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { roadmap_data, all_progress, new_timeline_weeks, new_hours_per_day, adjustment_type } = await req.json();
+    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    // Support both days and weeks input; prefer days
+    const totalDays = new_timeline_days != null ? Number(new_timeline_days) : (Number(new_timeline_weeks) * 7);
+    const totalAvailableHours = totalDays * Number(new_hours_per_day);
+
     const completedModules = all_progress?.filter((p: any) => p.status === "completed") || [];
 
-    const systemPrompt = `You are Pathfinder's replanning engine. The student's time constraints have changed and the roadmap needs to be restructured.
+    const systemPrompt = `You are a concise learning-plan optimizer. Speak directly to the user (use "you/your", never "the student"). Keep all text short and actionable — no filler.
 
 RULES:
-- Never remove or modify completed modules — they're done
-- Calculate remaining content vs remaining available hours
-- Always provide 2-3 realistic options for the student to choose from
-- Be honest about tradeoffs
+- Never remove or modify completed modules
+- The user has exactly ${totalDays} day(s) and ${new_hours_per_day} hour(s)/day = ${totalAvailableHours} total hours remaining
+- Provide 2-3 realistic options with clear tradeoffs
+- Keep analysis to 1-2 sentences max
+- Keep descriptions and tradeoffs to 1 sentence each
+- Use "timeline_days" (not weeks) in the response`;
 
-OPTION TYPES:
-- 'Keep Everything': Extend timeline or increase daily hours to fit all content
-- 'Focus on Essentials': Cut optional/advanced modules, keep core concepts
-- 'Balanced': Slight timeline extension + some scope reduction`;
-
-    const userPrompt = `Student has completed ${completedModules.length} of ${roadmap_data.modules.length} modules.
-New timeline: ${new_timeline_weeks} weeks
-New hours per day: ${new_hours_per_day}
+    const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules.
+Remaining time: ${totalDays} day(s), ${new_hours_per_day}h/day (${totalAvailableHours}h total).
 
 Current roadmap: ${JSON.stringify(roadmap_data)}
 Progress: ${JSON.stringify(all_progress)}
 
 Return ONLY valid JSON:
 {
-  "analysis": "brief assessment",
+  "analysis": "1-2 sentence summary addressing the user directly",
   "options": [
     {
       "id": "option_a",
       "label": "Keep Everything",
-      "description": "plain English description",
-      "timeline_weeks": number,
+      "description": "1 sentence",
+      "timeline_days": number,
       "hours_per_day": number,
       "total_remaining_hours": number,
       "modules_kept": number,
       "modules_removed": [],
       "modules_added": [],
-      "tradeoff": "what student gains/gives up",
+      "tradeoff": "1 sentence",
       "updated_roadmap": { full roadmap JSON with same structure }
     }
   ],
   "recommendation": "option_a|option_b|option_c",
-  "recommendation_reason": "why this is best"
+  "recommendation_reason": "1 sentence"
 }`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-flash-lite",
         messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
         response_format: { type: "json_object" },
       }),
@@ -171,27 +133,20 @@ Return ONLY valid JSON:
     let result: any;
     try {
       result = parseAiJson(content);
-    } catch (parseError) {
-      console.error("adapt-roadmap parse error:", parseError);
+    } catch {
       result = {
-        analysis: "Could not fully parse adaptation options, so we preserved your current roadmap as a safe fallback.",
-        options: [
-          {
-            id: "option_a",
-            label: "Keep Current Plan",
-            description: "Continue with your current roadmap and adjust later.",
-            timeline_weeks: Number(new_timeline_weeks ?? roadmap_data?.timeline_weeks ?? 0),
-            hours_per_day: Number(new_hours_per_day ?? roadmap_data?.hours_per_day ?? 0),
-            total_remaining_hours: 0,
-            modules_kept: Array.isArray(roadmap_data?.modules) ? roadmap_data.modules.length : 0,
-            modules_removed: [],
-            modules_added: [],
-            tradeoff: "No automatic scope adjustment was applied.",
-            updated_roadmap: roadmap_data,
-          },
-        ],
+        analysis: "Couldn't generate options automatically. Your current plan is preserved.",
+        options: [{
+          id: "option_a", label: "Keep Current Plan",
+          description: "Continue with your current roadmap.",
+          timeline_days: totalDays, hours_per_day: Number(new_hours_per_day),
+          total_remaining_hours: totalAvailableHours,
+          modules_kept: Array.isArray(roadmap_data?.modules) ? roadmap_data.modules.length : 0,
+          modules_removed: [], modules_added: [],
+          tradeoff: "No changes applied.", updated_roadmap: roadmap_data,
+        }],
         recommendation: "option_a",
-        recommendation_reason: "Fallback option to avoid interruption.",
+        recommendation_reason: "Fallback to avoid interruption.",
       };
     }
 
