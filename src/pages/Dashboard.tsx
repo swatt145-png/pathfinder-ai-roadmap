@@ -243,6 +243,14 @@ export default function Dashboard() {
     setReviewOpen(true);
   };
 
+  const handleArchiveAndNew = async () => {
+    if (!roadmap) return;
+    const confirmed = window.confirm("This will archive your current roadmap. You can't undo this. Continue?");
+    if (!confirmed) return;
+    await supabase.from("roadmaps").update({ status: "archived" }).eq("id", roadmap.id);
+    navigate("/new");
+  };
+
   const handleAdaptFromCompletion = () => {
     const suggested = completionActions?.suggestedAdaptation ?? null;
     setCompletionActions(null);
@@ -322,14 +330,20 @@ export default function Dashboard() {
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
-            <Button
-              type="button"
-              onClick={() => navigate("/new")}
-              className="w-full gradient-primary text-primary-foreground font-heading font-bold"
-            >
-              All Modules Complete. Build Your Next Roadmap
-              <Sparkles className="ml-2 h-4 w-4" />
-            </Button>
+          <div className="space-y-2">
+            <div className="glass-strong p-4 text-center">
+              <p className="font-heading font-bold text-success mb-2">🎉 All Modules Complete!</p>
+              <p className="text-sm text-muted-foreground mb-3">You've finished your entire roadmap. Ready for the next challenge?</p>
+              <Button
+                type="button"
+                onClick={handleArchiveAndNew}
+                className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+              >
+                Archive & Start New Roadmap
+                <Sparkles className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
           )}
         </div>
 
@@ -368,9 +382,16 @@ export default function Dashboard() {
         </div>
 
         {/* Bottom Actions */}
-        <div className="mt-8">
+        <div className="mt-8 space-y-3">
           <Button variant="outline" onClick={() => setAdaptOpen(true)} className="w-full border-white/10 hover:bg-white/5">
             <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={handleArchiveAndNew}
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-sm"
+          >
+            Abandon Roadmap & Start New
           </Button>
         </div>
       </div>
