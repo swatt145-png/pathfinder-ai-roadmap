@@ -367,7 +367,7 @@ export default function Dashboard() {
     <>
       <AppBar />
       <div className="min-h-screen pt-16 pb-24 px-4 md:px-8">
-        <div className="flex flex-col md:flex-row gap-6 max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row gap-4 max-w-6xl mx-auto">
         {/* Main content - 80% */}
         <div className="flex-1 min-w-0">
         {/* Summary Card */}
@@ -473,7 +473,7 @@ export default function Dashboard() {
         </div> {/* end main content */}
 
         {/* Right sidebar - actions */}
-        <div className="hidden md:flex flex-col gap-3 w-[220px] shrink-0 sticky top-20 self-center justify-center min-h-[300px]">
+        <div className="hidden md:flex flex-col gap-3 w-[200px] shrink-0 sticky top-20 self-center justify-center min-h-[300px]">
           <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11">
             <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
           </Button>
@@ -491,6 +491,12 @@ export default function Dashboard() {
             className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
           >
             Create New Roadmap
+          </Button>
+          <Button
+            onClick={() => navigate("/my-roadmaps")}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
+          >
+            <BookOpen className="mr-2 h-4 w-4" /> View My Roadmaps
           </Button>
         </div>
 
@@ -513,6 +519,12 @@ export default function Dashboard() {
             className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
           >
             Create New Roadmap
+          </Button>
+          <Button
+            onClick={() => navigate("/my-roadmaps")}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
+          >
+            <BookOpen className="mr-2 h-5 w-5" /> View My Roadmaps
           </Button>
         </div>
       </div> {/* end flex container */}
