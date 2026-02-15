@@ -153,6 +153,7 @@ export default function Dashboard() {
       quiz_score: quizScore, quiz_answers: quizAnswers,
       time_spent_minutes: null, completed_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
+      completed_resources: [], notes: "",
     });
 
     try {
@@ -413,13 +414,34 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Module Detail Slide-over */}
+      {/* Module Detail Full Page */}
       {selectedModule && (
         <ModuleDetail
           module={selectedModule}
           progress={progressMap[selectedModule.id]}
           onClose={() => setSelectedModule(null)}
           onComplete={handleModuleComplete}
+          onUpdateResourcesAndNotes={async (moduleId, completedResources, notes) => {
+            if (!user || !roadmap) return;
+            const existing = progressMap[moduleId];
+            if (existing) {
+              await supabase.from("progress").update({
+                completed_resources: completedResources,
+                notes,
+              }).eq("id", existing.id);
+            } else {
+              await supabase.from("progress").insert({
+                roadmap_id: roadmap.id,
+                user_id: user.id,
+                module_id: moduleId,
+                module_title: roadmapData?.modules.find(m => m.id === moduleId)?.title ?? null,
+                status: "in_progress",
+                completed_resources: completedResources,
+                notes,
+              });
+              fetchData();
+            }
+          }}
         />
       )}
 
