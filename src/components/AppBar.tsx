@@ -27,7 +27,7 @@ export function AppBar() {
     <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-background/80 backdrop-blur-lg">
       <Link
         to="/home"
-        className="flex items-center gap-2 font-heading font-bold text-lg gradient-text focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
+        className="flex items-center gap-2 font-heading font-bold text-xl md:text-2xl gradient-text focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
       >
         <img src={logo} alt="PathFinder logo" className="h-8 w-8 object-contain rounded-full ring-2 ring-white/80" />
         PathFinder

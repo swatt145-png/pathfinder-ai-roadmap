@@ -95,24 +95,24 @@ export default function MyRoadmaps() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <h3 className="font-heading font-bold text-lg">{rm.topic}</h3>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day
                       </p>
                     </div>
-                    <span className="px-2 py-0.5 text-xs font-heading rounded-full bg-primary/20 text-primary">
+                    <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">
                       {pct}%
                     </span>
                   </div>
 
                   {rd?.summary && (
-                    <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{rd.summary}</p>
+                    <p className="text-base text-muted-foreground mb-3 line-clamp-2">{rd.summary}</p>
                   )}
 
                   <div className="mb-3">
                     <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                       <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{completed} of {total} modules completed</p>
+                    <p className="text-sm text-muted-foreground mt-1">{completed} of {total} modules completed</p>
                   </div>
 
                   <div className="flex gap-2">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink, CheckSquare, Square } from "lucide-react";
+import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuizModal } from "@/components/QuizModal";
@@ -53,9 +53,8 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
   };
 
   const handleComplete = () => {
-    if (!selfReport) return;
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-    onComplete(module.id, selfReport, quizScore, quizAnswers);
+    onComplete(module.id, selfReport ?? "not_rated", quizScore, quizAnswers);
   };
 
   return (
@@ -156,16 +155,16 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
             <h4 className="font-heading font-semibold text-base">How did this module feel?</h4>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { value: "easy", emoji: "😊", label: "Easy", color: "bg-success/20 text-success border-success/30" },
-                { value: "medium", emoji: "😐", label: "Medium", color: "bg-warning/20 text-warning border-warning/30" },
-                { value: "hard", emoji: "😓", label: "Hard", color: "bg-destructive/20 text-destructive border-destructive/30" },
+                { value: "easy", icon: ThumbsUp, label: "Easy", color: "bg-success/20 text-success border-success/30" },
+                { value: "medium", icon: Minus, label: "Medium", color: "bg-warning/20 text-warning border-warning/30" },
+                { value: "hard", icon: ThumbsDown, label: "Hard", color: "bg-destructive/20 text-destructive border-destructive/30" },
               ].map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setSelfReport(opt.value)}
                   className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-white/5"}`}
                 >
-                  <span className="text-2xl block">{opt.emoji}</span>
+                  <opt.icon className="w-7 h-7 mx-auto" />
                   <span className="text-sm mt-1 block">{opt.label}</span>
                 </button>
               ))}
@@ -188,8 +187,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
             <Button
               onClick={handleComplete}
-              disabled={!selfReport}
-              className="w-full h-12 gradient-primary text-primary-foreground font-heading font-bold glow-primary disabled:opacity-50"
+              className="w-full h-12 gradient-primary text-primary-foreground font-heading font-bold glow-primary"
             >
               Complete Module ✅
             </Button>
