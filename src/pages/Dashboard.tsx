@@ -140,7 +140,22 @@ export default function Dashboard() {
       last_activity_date: today,
     }).eq("id", roadmap.id);
 
-    // Close module sheet and refresh persisted progress.
+    // Optimistically update local state so streak & count render immediately
+    setRoadmap((prev: any) => ({ ...prev, completed_modules: newCompleted, current_streak: newStreak, last_activity_date: today }));
+    setProgressMap((prev) => ({
+      ...prev,
+      [moduleId]: {
+        ...(prev[moduleId] || {}),
+        module_id: moduleId,
+        status: "completed",
+        self_report: selfReport as any,
+        quiz_score: quizScore,
+        quiz_answers: quizAnswers,
+        completed_at: new Date().toISOString(),
+      } as ModuleProgress,
+    }));
+
+    // Close module view and refresh persisted progress.
     setSelectedModule(null);
     await fetchData();
 
