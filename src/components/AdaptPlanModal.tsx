@@ -130,7 +130,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
               <button
                 key={opt.id}
                 onClick={() => setSelectedOption(opt.id)}
-                className={`w-full text-left glass p-4 transition-all ${selectedOption === opt.id ? "border-primary bg-primary/10 glow-primary" : "hover:bg-white/5"}`}
+                className={`w-full text-left glass p-4 transition-all rounded-xl border-2 ${selectedOption === opt.id ? "border-primary bg-primary/15 glow-primary shadow-lg shadow-primary/20" : "border-transparent hover:bg-white/5"}`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-heading font-bold text-sm">{opt.label}</span>

@@ -50,7 +50,7 @@ export function ModuleCompletionActionsModal({
             onClick={onAdaptRoadmap}
             className="w-full border-white/10 hover:bg-white/5"
           >
-            Review / Adapt New Roadmap
+            Adapt My Plan
           </Button>
         </div>
       </div>
