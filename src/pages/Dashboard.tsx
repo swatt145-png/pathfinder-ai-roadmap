@@ -393,7 +393,7 @@ export default function Dashboard() {
             <div className="glass p-3">
               <Flame className="w-4 h-4 mx-auto mb-1 text-warning" />
               <span className="text-xs text-muted-foreground">
-                {roadmap.current_streak > 0 ? `🔥 ${roadmap.current_streak} ${roadmap.current_streak === 1 ? "day active" : "day streak"}` : "Start your streak!"}
+                {(roadmap.current_streak ?? 0) > 1 ? `🔥 ${roadmap.current_streak}-day streak` : (roadmap.last_activity_date === new Date().toISOString().split("T")[0] ? "🔥 Active today" : "Start your streak!")}
               </span>
             </div>
           </div>

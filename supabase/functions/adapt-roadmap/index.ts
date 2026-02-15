@@ -88,9 +88,9 @@ RULES:
 - User wants to finish in ${displayDays} day(s) at ${hrsPerDay}h/day = ${totalAvailableHours}h available
 - Remaining content needs ~${remainingHours}h across ${remainingModules.length} modules
 - You MUST provide exactly 3 options with these strategies:
-  1. "Crash Course" — keep the user's chosen timeline, compress/prioritize remaining modules to fit
-  2. "Increase Daily Hours" — keep same number of days but increase hours/day to cover everything
-  3. "Extend Timeline" — keep hours/day the same but add more days to complete all modules properly
+  1. "Crash Course" — keep the user's chosen timeline, REPLACE remaining module resources with shorter/compressed alternatives that cover the same topics in less time. Find new resources (videos, articles, tutorials) that fit within the available hours. The updated_roadmap MUST have DIFFERENT resources with reduced estimated_hours matching available time.
+  2. "Increase Daily Hours" — keep same number of days but increase hours/day to cover everything with original content
+  3. "Extend Timeline" — keep hours/day the same but add more days to complete all modules properly with original content
 - Keep analysis to 1 sentence
 - Keep descriptions and tradeoffs to 1 sentence each
 - Calculate timeline_days using: ceil(remaining_hours / hours_per_day)
