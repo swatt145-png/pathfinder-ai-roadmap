@@ -88,6 +88,15 @@ export default function NewRoadmap() {
 
   const handleGenerate = async () => {
     if (!topic.trim() || !user || activeCount >= 5) return;
+    if (hardDeadline && deadlineDate) {
+      const selected = new Date(deadlineDate);
+      const minDate = new Date();
+      minDate.setDate(minDate.getDate() + timelineWeeks * 7);
+      if (selected < minDate) {
+        setError(`Please choose a date after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
+        return;
+      }
+    }
     setLoading(true);
     setError(null);
     setLoadingStep(0);
@@ -264,12 +273,28 @@ export default function NewRoadmap() {
               </div>
 
               {hardDeadline && (
-                <Input
-                  type="date"
-                  value={deadlineDate}
-                  onChange={(e) => setDeadlineDate(e.target.value)}
-                  className="bg-white/5 border-white/10"
-                />
+                <div>
+                  <Input
+                    type="date"
+                    value={deadlineDate}
+                    onChange={(e) => {
+                      const selected = new Date(e.target.value);
+                      const minDate = new Date();
+                      minDate.setDate(minDate.getDate() + timelineWeeks * 7);
+                      if (selected < minDate) {
+                        setError(`Please choose a date after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
+                        setDeadlineDate(e.target.value);
+                      } else {
+                        setError(null);
+                        setDeadlineDate(e.target.value);
+                      }
+                    }}
+                    className="bg-white/5 border-white/10"
+                  />
+                  {error && error.includes("choose a date") && (
+                    <p className="text-destructive text-sm mt-1">{error}</p>
+                  )}
+                </div>
               )}
 
               <div className="flex items-center justify-between glass p-4">

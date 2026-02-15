@@ -366,7 +366,10 @@ export default function Dashboard() {
   return (
     <>
       <AppBar />
-      <div className="min-h-screen pt-16 pb-24 px-4 max-w-2xl mx-auto">
+      <div className="min-h-screen pt-16 pb-24 px-4 md:px-8">
+        <div className="flex gap-6 max-w-6xl mx-auto">
+        {/* Main content - 80% */}
+        <div className="flex-1 min-w-0">
         {/* Summary Card */}
         <div className="glass-strong p-6 mb-6 animate-fade-in">
           <h2 className="font-heading text-xl md:text-2xl font-bold mb-1">{roadmapData.topic}</h2>
@@ -467,8 +470,33 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Bottom Actions */}
-        <div className="mt-8 space-y-3">
+        </div> {/* end main content */}
+
+        {/* Right sidebar - actions */}
+        <div className="hidden md:flex flex-col gap-3 w-[220px] shrink-0 pt-1 sticky top-20 self-start">
+          <Button variant="outline" onClick={() => setAdaptOpen(true)} className="w-full border-white/10 hover:bg-white/5 text-sm h-11">
+            <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
+          </Button>
+          <Button variant="outline" onClick={() => setRevertConfirmOpen(true)} className="w-full border-white/10 hover:bg-white/5 text-sm h-11">
+            Revert to Previous Plan
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setArchiveConfirmOpen(true)}
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-sm h-11"
+          >
+            Archive Roadmap
+          </Button>
+          <Button
+            onClick={() => navigate("/new")}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
+          >
+            Create New Roadmap
+          </Button>
+        </div>
+
+        {/* Mobile bottom actions */}
+        <div className="md:hidden mt-8 space-y-3">
           <Button variant="outline" onClick={() => setAdaptOpen(true)} className="w-full border-white/10 hover:bg-white/5 text-base h-12">
             <Settings2 className="mr-2 h-5 w-5" /> Adapt My Plan
           </Button>
@@ -480,9 +508,16 @@ export default function Dashboard() {
             onClick={() => setArchiveConfirmOpen(true)}
             className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-lg h-12"
           >
-            Start New Roadmap
+            Archive Roadmap
+          </Button>
+          <Button
+            onClick={() => navigate("/new")}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
+          >
+            Create New Roadmap
           </Button>
         </div>
+      </div> {/* end flex container */}
       </div>
 
       {/* Module Detail Full Page */}
