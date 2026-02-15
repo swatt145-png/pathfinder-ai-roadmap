@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, ArrowRight, RotateCcw, Plus, Archive } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
 import type { RoadmapData, Module } from "@/lib/types";
 
 interface FlashCard {
@@ -54,7 +54,7 @@ function FlashcardDeck({ rm }: { rm: RoadmapRow }) {
   const card = cards[index];
 
   return (
-    <div className="glass-strong p-5">
+    <div className="glass-blue p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="font-heading font-bold text-lg">{rm.topic}</h3>
@@ -70,7 +70,7 @@ function FlashcardDeck({ rm }: { rm: RoadmapRow }) {
       <p className="text-xs text-muted-foreground mb-2">{card.module}</p>
       <button
         onClick={() => setFlipped(!flipped)}
-        className="w-full min-h-[140px] glass p-6 text-center transition-all hover:bg-white/5 cursor-pointer flex items-center justify-center"
+        className="w-full min-h-[140px] glass-blue p-6 text-center transition-all hover:bg-accent/10 cursor-pointer flex items-center justify-center"
       >
         <p className="text-base whitespace-pre-line">
           {flipped ? card.back : card.front}
@@ -150,19 +150,11 @@ export default function Flashcards() {
     <>
       <AppBar />
       <div className="min-h-screen pt-20 pb-10 px-4 max-w-2xl mx-auto animate-fade-in">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h2 className="font-heading text-2xl md:text-3xl font-bold">Flashcards</h2>
-          </div>
-          <Button
-            onClick={() => navigate("/new")}
-            className="gradient-primary text-primary-foreground font-heading font-bold"
-          >
-            <Plus className="mr-2 h-4 w-4" /> New Roadmap
+        <div className="flex items-center gap-3 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
+            <ArrowLeft className="h-5 w-5" />
           </Button>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold">Flashcards</h2>
         </div>
 
         {roadmaps.length === 0 ? (
