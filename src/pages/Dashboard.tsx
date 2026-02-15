@@ -475,7 +475,7 @@ export default function Dashboard() {
             onClick={() => setArchiveConfirmOpen(true)}
             className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-sm"
           >
-            Abandon Roadmap & Start New
+            Start New Roadmap
           </Button>
         </div>
       </div>
