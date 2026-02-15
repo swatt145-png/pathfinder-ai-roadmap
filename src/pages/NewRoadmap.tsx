@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,11 +32,17 @@ const LOADING_STEPS = [
   "Finalizing your personalized roadmap...",
 ];
 
-const LOADING_MESSAGES = [
-  "Great things take a moment...",
-  "Your roadmap is being personalized...",
-  "Almost there...",
-];
+const getTopicMessages = (topic: string, skillLevel: string) => {
+  const t = topic.toLowerCase();
+  const level = skillLevel === "beginner" ? "from the ground up" : skillLevel === "advanced" ? "at an advanced level" : "with practical depth";
+  return [
+    `Great choice to learn ${topic}! 🎯`,
+    `We're crafting your personalized ${topic} roadmap ${level}...`,
+    `Finding the best ${topic} resources from top educators...`,
+    `Building quizzes to test your ${topic} knowledge...`,
+    `Almost done — your ${topic} learning journey is taking shape! ✨`,
+  ];
+};
 
 export default function NewRoadmap() {
   const { user, profile } = useAuth();
@@ -50,12 +56,36 @@ export default function NewRoadmap() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [hasActiveRoadmap, setHasActiveRoadmap] = useState(false);
+  const [checkingActive, setCheckingActive] = useState(true);
+
+  useEffect(() => {
+    const checkActive = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("roadmaps")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .limit(1);
+      setHasActiveRoadmap((data?.length ?? 0) > 0);
+      setCheckingActive(false);
+    };
+    checkActive();
+  }, [user]);
 
   const applyQuickStart = (qs: typeof QUICK_STARTS[0]) => {
     setTopic(qs.topic);
     setTimelineWeeks(qs.weeks);
     setHoursPerDay(qs.hours);
     setSkillLevel(qs.skill);
+  };
+
+  const handleArchiveAndGenerate = async () => {
+    if (!user) return;
+    await supabase.from("roadmaps").update({ status: "archived" }).eq("user_id", user.id).eq("status", "active");
+    setHasActiveRoadmap(false);
+    handleGenerate();
   };
 
   const handleGenerate = async () => {
@@ -103,6 +133,19 @@ export default function NewRoadmap() {
     }
   };
 
+  const topicMessages = getTopicMessages(topic, skillLevel);
+
+  if (checkingActive) {
+    return (
+      <>
+        <AppBar />
+        <div className="flex min-h-screen items-center justify-center pt-14">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>
+      </>
+    );
+  }
+
   if (loading) {
     return (
       <>
@@ -110,6 +153,12 @@ export default function NewRoadmap() {
         <div className="flex min-h-screen items-center justify-center px-4 pt-14">
           <div className="text-center max-w-md animate-fade-in">
             <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-8" />
+
+            {/* Topic-specific engaging message */}
+            <p className="text-primary font-heading font-semibold text-base mb-6 animate-breathe">
+              {topicMessages[Math.min(loadingStep, topicMessages.length - 1)]}
+            </p>
+
             <div className="space-y-3 mb-8">
               {LOADING_STEPS.map((step, i) => (
                 <p
@@ -120,9 +169,6 @@ export default function NewRoadmap() {
                 </p>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground animate-breathe">
-              {LOADING_MESSAGES[loadingStep % LOADING_MESSAGES.length]}
-            </p>
           </div>
         </div>
       </>
@@ -209,13 +255,29 @@ export default function NewRoadmap() {
 
           {error && <p className="text-destructive text-sm">{error}</p>}
 
-          <Button
-            onClick={handleGenerate}
-            disabled={!topic.trim()}
-            className="w-full h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
-          >
-            Generate My Roadmap ✨
-          </Button>
+          {hasActiveRoadmap && (
+            <div className="glass p-4 border-warning/30 bg-warning/5">
+              <p className="text-sm text-warning font-medium mb-2">⚠️ You already have an active roadmap</p>
+              <p className="text-xs text-muted-foreground mb-3">Generating a new one will archive your current roadmap. This can't be undone.</p>
+              <Button
+                onClick={handleArchiveAndGenerate}
+                disabled={!topic.trim()}
+                className="w-full h-14 text-lg font-heading font-bold bg-warning text-warning-foreground hover:bg-warning/90 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              >
+                Archive Current & Generate New ✨
+              </Button>
+            </div>
+          )}
+
+          {!hasActiveRoadmap && (
+            <Button
+              onClick={handleGenerate}
+              disabled={!topic.trim()}
+              className="w-full h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+            >
+              Generate My Roadmap ✨
+            </Button>
+          )}
 
           <div>
             <p className="text-xs text-muted-foreground mb-3">Quick start:</p>
