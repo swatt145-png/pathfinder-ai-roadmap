@@ -48,9 +48,9 @@ export function QuizModal({ quiz, moduleTitle, onClose, onDone }: QuizModalProps
           <div className="text-center mb-6">
             <p className="text-5xl font-heading font-extrabold gradient-text mb-2">{score}%</p>
             <p className="text-sm text-muted-foreground">
-              {score >= 80 ? "Great job! You've got a solid understanding. 🎉" :
-               score >= 60 ? "Good effort! A few concepts to review. 📖" :
-               "Some concepts need more attention. Pathfinder will help adjust your plan. 🔄"}
+              {score >= 80 ? "Great job! You've got a solid understanding." :
+               score >= 60 ? "Good effort! A few concepts to review." :
+               "Some concepts need more attention. Pathfinder will help adjust your plan."}
             </p>
           </div>
 

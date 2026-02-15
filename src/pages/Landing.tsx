@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { AuthModal } from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
+import { Compass, BarChart3, Zap } from "lucide-react";
 import logo from "@/assets/logo.png";
 
 export default function Landing() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"signin" | "signup">("signup");
+
+  const features = [
+    { icon: Compass, text: "Personalized roadmaps for any tech skill" },
+    { icon: BarChart3, text: "Adapts based on your actual progress" },
+    { icon: Zap, text: "Real resources, real quizzes, real results" },
+  ];
 
   return (
     <>
@@ -20,13 +27,9 @@ export default function Landing() {
           </p>
 
           <div className="space-y-4 mb-10">
-            {[
-              { icon: "🎯", text: "Personalized roadmaps for any tech skill" },
-              { icon: "📊", text: "Adapts based on your actual progress" },
-              { icon: "⚡", text: "Real resources, real quizzes, real results" },
-            ].map((f) => (
+            {features.map((f) => (
               <div key={f.text} className="flex items-center gap-3 glass px-4 py-3 text-left">
-                <span className="text-xl">{f.icon}</span>
+                <f.icon className="w-5 h-5 text-primary shrink-0" />
                 <span className="text-sm text-foreground/90">{f.text}</span>
               </div>
             ))}
