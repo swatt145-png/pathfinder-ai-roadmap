@@ -1,14 +1,28 @@
 import { useState } from "react";
 import { AuthModal } from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { AppBar } from "@/components/AppBar";
+import { Loader2 } from "lucide-react";
 
 export default function Landing() {
+  const { user, loading } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"signin" | "signup">("signup");
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="text-center max-w-lg animate-fade-in">
+    <>
+      {user && <AppBar />}
+      <div className={`flex min-h-screen items-center justify-center px-4 ${user ? "pt-14" : ""}`}>
+        <div className="text-center max-w-lg animate-fade-in">
         <h1 className="font-heading text-5xl md:text-6xl font-extrabold gradient-text mb-4">
           🧭 Pathfinder
         </h1>
@@ -29,25 +43,30 @@ export default function Landing() {
           ))}
         </div>
 
-        <Button
-          onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-          className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-105"
-        >
-          Get Started
-        </Button>
+        {!user && (
+          <>
+            <Button
+              onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
+              className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-105"
+            >
+              Get Started
+            </Button>
 
-        <p className="mt-4 text-sm text-muted-foreground">
-          Already have an account?{" "}
-          <button
-            onClick={() => { setAuthTab("signin"); setAuthOpen(true); }}
-            className="text-primary hover:underline font-medium"
-          >
-            Sign In
-          </button>
-        </p>
+            <p className="mt-4 text-sm text-muted-foreground">
+              Already have an account?{" "}
+              <button
+                onClick={() => { setAuthTab("signin"); setAuthOpen(true); }}
+                className="text-primary hover:underline font-medium"
+              >
+                Sign In
+              </button>
+            </p>
+          </>
+        )}
+      </div>
       </div>
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
-    </div>
+    </>
   );
 }
