@@ -6,9 +6,17 @@ import { AppBar } from "@/components/AppBar";
 import { ModuleDetail } from "@/components/ModuleDetail";
 import { AdaptPlanModal } from "@/components/AdaptPlanModal";
 import { AdaptationNotification } from "@/components/AdaptationNotification";
+import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActionsModal";
+import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
 import { Loader2, Flame, Clock, BookOpen, Settings2 } from "lucide-react";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
+
+interface CompletionActionState {
+  completedModuleTitle: string;
+  nextModule: Module | null;
+  suggestedAdaptation: AdaptationResult | null;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -21,6 +29,8 @@ export default function Dashboard() {
   const [adaptOpen, setAdaptOpen] = useState(false);
   const [adaptationNotif, setAdaptationNotif] = useState<AdaptationResult | null>(null);
   const [applyingAdaptation, setApplyingAdaptation] = useState(false);
+  const [completionActions, setCompletionActions] = useState<CompletionActionState | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
@@ -65,6 +75,8 @@ export default function Dashboard() {
     if (!user || !roadmap || !roadmapData) return;
 
     const mod = roadmapData.modules.find((m) => m.id === moduleId);
+    const currentModuleIndex = roadmapData.modules.findIndex((m) => m.id === moduleId);
+    const nextModule = currentModuleIndex >= 0 ? (roadmapData.modules[currentModuleIndex + 1] ?? null) : null;
 
     // Upsert progress
     const existing = progressMap[moduleId];
@@ -110,9 +122,9 @@ export default function Dashboard() {
       last_activity_date: today,
     }).eq("id", roadmap.id);
 
-    // Close immediately after completion so hard/easy/medium feel consistent.
+    // Close module sheet and refresh persisted progress.
     setSelectedModule(null);
-    fetchData();
+    await fetchData();
 
     // Call check-in
     const allProg = Object.values(progressMap);
@@ -138,11 +150,22 @@ export default function Dashboard() {
         },
       });
 
-      if (checkInResult?.needs_adaptation && checkInResult?.updated_roadmap) {
-        setAdaptationNotif(checkInResult as AdaptationResult);
-      }
+      const suggestion = checkInResult?.needs_adaptation && checkInResult?.updated_roadmap
+        ? (checkInResult as AdaptationResult)
+        : null;
+
+      setCompletionActions({
+        completedModuleTitle: mod?.title ?? "this module",
+        nextModule,
+        suggestedAdaptation: suggestion,
+      });
     } catch (e) {
       console.error("Check-in error:", e);
+      setCompletionActions({
+        completedModuleTitle: mod?.title ?? "this module",
+        nextModule,
+        suggestedAdaptation: null,
+      });
     }
   };
 
@@ -168,16 +191,24 @@ export default function Dashboard() {
     fetchData();
   };
 
-  const handleAcceptCheckInAdaptation = async () => {
+  const handleAcceptCheckInAdaptation = async (preserveSchedule = false) => {
     if (!adaptationNotif?.updated_roadmap || !roadmap || !user || !roadmapData) return;
     setApplyingAdaptation(true);
-    const updatedRoadmap = adaptationNotif.updated_roadmap;
+    const suggestedRoadmap = adaptationNotif.updated_roadmap;
+    const updatedRoadmap: RoadmapData = preserveSchedule
+      ? {
+          ...suggestedRoadmap,
+          timeline_weeks: roadmapData.timeline_weeks,
+        }
+      : suggestedRoadmap;
     try {
       await supabase.from("adaptations").insert({
         roadmap_id: roadmap.id,
         user_id: user.id,
-        trigger_reason: `self_report_adaptation`,
-        changes_summary: adaptationNotif.changes_summary,
+        trigger_reason: preserveSchedule ? "self_report_adaptation_no_schedule_change" : "self_report_adaptation",
+        changes_summary: preserveSchedule
+          ? `${adaptationNotif.changes_summary} (Accepted with no schedule change)`
+          : adaptationNotif.changes_summary,
         previous_roadmap: roadmapData as any,
         new_roadmap: updatedRoadmap as any,
       });
@@ -190,6 +221,7 @@ export default function Dashboard() {
       }).eq("id", roadmap.id);
 
       setAdaptationNotif(null);
+      setCompletionActions(null);
       fetchData();
     } finally {
       setApplyingAdaptation(false);
@@ -198,6 +230,27 @@ export default function Dashboard() {
 
   const handleKeepCurrentRoadmap = () => {
     setAdaptationNotif(null);
+  };
+
+  const handleProceedToNextModule = () => {
+    const nextModule = completionActions?.nextModule ?? null;
+    setCompletionActions(null);
+    if (nextModule) setSelectedModule(nextModule);
+  };
+
+  const handleReviewCurrentRoadmap = () => {
+    setCompletionActions(null);
+    setReviewOpen(true);
+  };
+
+  const handleAdaptFromCompletion = () => {
+    const suggested = completionActions?.suggestedAdaptation ?? null;
+    setCompletionActions(null);
+    if (suggested?.updated_roadmap) {
+      setAdaptationNotif(suggested);
+      return;
+    }
+    setAdaptOpen(true);
   };
 
   if (loading) {
@@ -325,9 +378,30 @@ export default function Dashboard() {
         <AdaptationNotification
           result={adaptationNotif}
           currentRoadmap={roadmapData}
-          onAccept={handleAcceptCheckInAdaptation}
+          onAccept={() => handleAcceptCheckInAdaptation(false)}
+          onAcceptNoScheduleChange={() => handleAcceptCheckInAdaptation(true)}
           onKeepCurrent={handleKeepCurrentRoadmap}
           saving={applyingAdaptation}
+        />
+      )}
+
+      {completionActions && (
+        <ModuleCompletionActionsModal
+          completedModuleTitle={completionActions.completedModuleTitle}
+          nextModule={completionActions.nextModule}
+          onProceedNext={handleProceedToNextModule}
+          onReviewRoadmap={handleReviewCurrentRoadmap}
+          onAdaptRoadmap={handleAdaptFromCompletion}
+          onClose={() => setCompletionActions(null)}
+        />
+      )}
+
+      {reviewOpen && roadmapData && roadmap && (
+        <RoadmapReviewModal
+          roadmapData={roadmapData}
+          completedCount={completedCount}
+          createdAt={roadmap.created_at}
+          onClose={() => setReviewOpen(false)}
         />
       )}
     </>
