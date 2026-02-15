@@ -469,16 +469,16 @@ export default function Dashboard() {
 
         {/* Bottom Actions */}
         <div className="mt-8 space-y-3">
-          <Button variant="outline" onClick={() => setAdaptOpen(true)} className="w-full border-white/10 hover:bg-white/5">
-            <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
+          <Button variant="outline" onClick={() => setAdaptOpen(true)} className="w-full border-white/10 hover:bg-white/5 text-base h-12">
+            <Settings2 className="mr-2 h-5 w-5" /> Adapt My Plan
           </Button>
-          <Button variant="outline" onClick={() => setRevertConfirmOpen(true)} className="w-full border-white/10 hover:bg-white/5">
+          <Button variant="outline" onClick={() => setRevertConfirmOpen(true)} className="w-full border-white/10 hover:bg-white/5 text-base h-12">
             Revert to Previous Plan
           </Button>
           <Button
             variant="ghost"
             onClick={() => setArchiveConfirmOpen(true)}
-            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-base"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-lg h-12"
           >
             Start New Roadmap
           </Button>
@@ -492,6 +492,17 @@ export default function Dashboard() {
           progress={progressMap[selectedModule.id]}
           onClose={() => setSelectedModule(null)}
           onComplete={handleModuleComplete}
+          onUpdateCompletedModule={async (moduleId, selfReport, updatedNotes) => {
+            if (!user || !roadmap) return;
+            const existing = progressMap[moduleId];
+            if (existing) {
+              await supabase.from("progress").update({
+                self_report: selfReport,
+                notes: updatedNotes,
+              }).eq("id", existing.id);
+              fetchData();
+            }
+          }}
           onUpdateResourcesAndNotes={async (moduleId, completedResources, notes) => {
             if (!user || !roadmap) return;
             const existing = progressMap[moduleId];
@@ -555,6 +566,7 @@ export default function Dashboard() {
           roadmapData={roadmapData}
           completedCount={completedCount}
           createdAt={roadmap.created_at}
+          progressMap={progressMap}
           onClose={() => setReviewOpen(false)}
         />
       )}
