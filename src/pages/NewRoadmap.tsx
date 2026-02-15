@@ -54,6 +54,7 @@ export default function NewRoadmap() {
   const [hoursPerDay, setHoursPerDay] = useState(1);
   const [hardDeadline, setHardDeadline] = useState(false);
   const [deadlineDate, setDeadlineDate] = useState("");
+  const [includeWeekends, setIncludeWeekends] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +98,7 @@ export default function NewRoadmap() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
-        body: { topic, skill_level: skillLevel, timeline_weeks: timelineWeeks, hours_per_day: hoursPerDay, hard_deadline: hardDeadline, deadline_date: deadlineDate || null },
+        body: { topic, skill_level: skillLevel, timeline_weeks: timelineWeeks, hours_per_day: hoursPerDay, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends },
       });
 
       clearInterval(stepInterval);
@@ -196,7 +197,7 @@ export default function NewRoadmap() {
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g., SQL, Python, Cybersecurity, Docker, React..."
-                  className="h-14 text-lg bg-white/5 border-white/10 focus:border-primary font-body"
+                  className="h-14 text-xl bg-white/5 border-white/10 focus:border-primary font-body"
                 />
               </div>
 
@@ -270,6 +271,14 @@ export default function NewRoadmap() {
                   className="bg-white/5 border-white/10"
                 />
               )}
+
+              <div className="flex items-center justify-between glass p-4">
+                <div>
+                  <Label className="text-base">Include weekends?</Label>
+                  <p className="text-sm text-muted-foreground mt-0.5">Study on Saturday & Sunday too</p>
+                </div>
+                <Switch checked={includeWeekends} onCheckedChange={setIncludeWeekends} />
+              </div>
 
               {error && <p className="text-destructive text-base">{error}</p>}
 

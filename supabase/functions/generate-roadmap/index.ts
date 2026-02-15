@@ -9,8 +9,10 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { topic, skill_level, timeline_weeks, hours_per_day, hard_deadline, deadline_date } = await req.json();
-    const total_hours = timeline_weeks * 7 * hours_per_day;
+    const { topic, skill_level, timeline_weeks, hours_per_day, hard_deadline, deadline_date, include_weekends } = await req.json();
+    const days_in_timeline = timeline_weeks * 7;
+    const study_days = include_weekends === false ? Math.round(days_in_timeline * 5 / 7) : days_in_timeline;
+    const total_hours = study_days * hours_per_day;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -35,7 +37,7 @@ SKILL LEVEL GUIDE:
 
     const userPrompt = `Create a learning roadmap for: "${topic}"
 Skill level: ${skill_level}
-Timeline: ${timeline_weeks} weeks
+Timeline: ${timeline_weeks} weeks (${study_days} study days${include_weekends === false ? ", weekends excluded" : ", including weekends"})
 Hours per day: ${hours_per_day}
 Total available hours: ${total_hours}
 ${hard_deadline && deadline_date ? `Hard deadline: ${deadline_date}` : ""}
