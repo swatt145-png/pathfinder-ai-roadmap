@@ -49,7 +49,8 @@ export default function NewRoadmap() {
   const navigate = useNavigate();
   const [topic, setTopic] = useState("");
   const [skillLevel, setSkillLevel] = useState("beginner");
-  const [timelineWeeks, setTimelineWeeks] = useState(4);
+  const [timelineUnit, setTimelineUnit] = useState<"weeks" | "days">("weeks");
+  const [timelineValue, setTimelineValue] = useState(4);
   const [hoursPerDay, setHoursPerDay] = useState(1);
   const [hardDeadline, setHardDeadline] = useState(false);
   const [deadlineDate, setDeadlineDate] = useState("");
@@ -73,9 +74,12 @@ export default function NewRoadmap() {
     checkActive();
   }, [user]);
 
+  const timelineWeeks = timelineUnit === "weeks" ? timelineValue : Math.ceil(timelineValue / 7);
+
   const applyQuickStart = (qs: typeof QUICK_STARTS[0]) => {
     setTopic(qs.topic);
-    setTimelineWeeks(qs.weeks);
+    setTimelineUnit("weeks");
+    setTimelineValue(qs.weeks);
     setHoursPerDay(qs.hours);
     setSkillLevel(qs.skill);
   };
@@ -213,15 +217,27 @@ export default function NewRoadmap() {
           </div>
 
           <div>
-            <Label className="text-muted-foreground text-sm mb-2 block">
-              How many weeks? <span className="text-primary font-heading font-bold">{timelineWeeks}</span>
-            </Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-muted-foreground text-sm">
+                How many {timelineUnit}? <span className="text-primary font-heading font-bold">{timelineValue}</span>
+              </Label>
+              <div className="flex rounded-lg overflow-hidden border border-white/10">
+                <button
+                  onClick={() => { setTimelineUnit("days"); setTimelineValue(7); }}
+                  className={`px-3 py-1 text-xs font-heading transition-colors ${timelineUnit === "days" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                >Days</button>
+                <button
+                  onClick={() => { setTimelineUnit("weeks"); setTimelineValue(4); }}
+                  className={`px-3 py-1 text-xs font-heading transition-colors ${timelineUnit === "weeks" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                >Weeks</button>
+              </div>
+            </div>
             <input
               type="range"
-              min={1}
-              max={12}
-              value={timelineWeeks}
-              onChange={(e) => setTimelineWeeks(Number(e.target.value))}
+              min={timelineUnit === "days" ? 1 : 1}
+              max={timelineUnit === "days" ? 90 : 12}
+              value={timelineValue}
+              onChange={(e) => setTimelineValue(Number(e.target.value))}
               className="w-full accent-primary"
             />
           </div>
@@ -233,7 +249,7 @@ export default function NewRoadmap() {
             <input
               type="range"
               min={0.5}
-              max={4}
+              max={8}
               step={0.5}
               value={hoursPerDay}
               onChange={(e) => setHoursPerDay(Number(e.target.value))}

@@ -52,6 +52,8 @@ export interface ModuleProgress {
   time_spent_minutes: number | null;
   completed_at: string | null;
   created_at: string;
+  completed_resources: string[];
+  notes: string;
 }
 
 export interface AdaptationResult {
