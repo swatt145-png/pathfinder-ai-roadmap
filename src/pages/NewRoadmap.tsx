@@ -305,8 +305,8 @@ export default function NewRoadmap() {
             </div>
           </div>
 
-          {/* Right sidebar - 15% */}
-          <div className="hidden md:flex flex-col gap-3 w-[15%] min-w-[160px] pt-1">
+          {/* Right sidebar - 20% */}
+          <div className="hidden md:flex flex-col gap-3 w-[20%] min-w-[180px] pt-1">
             {activeCount > 0 && (
               <Button
                 onClick={() => navigate("/my-roadmaps")}
