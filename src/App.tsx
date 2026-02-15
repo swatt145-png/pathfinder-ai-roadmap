@@ -35,6 +35,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<HomeRedirect />} />
+            <Route path="/home" element={<Landing />} />
             <Route path="/new" element={<ProtectedRoute><NewRoadmap /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
