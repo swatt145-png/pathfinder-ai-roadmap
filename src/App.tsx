@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Landing from "./pages/Landing";
 import NewRoadmap from "./pages/NewRoadmap";
 import Dashboard from "./pages/Dashboard";
+import MyRoadmaps from "./pages/MyRoadmaps";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -37,6 +38,8 @@ const App = () => (
             <Route path="/" element={<HomeRedirect />} />
             <Route path="/home" element={<Landing />} />
             <Route path="/new" element={<ProtectedRoute><NewRoadmap /></ProtectedRoute>} />
+            <Route path="/my-roadmaps" element={<ProtectedRoute><MyRoadmaps /></ProtectedRoute>} />
+            <Route path="/dashboard/:roadmapId" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

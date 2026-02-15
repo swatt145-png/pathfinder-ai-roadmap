@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
@@ -21,6 +21,7 @@ interface CompletionActionState {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { roadmapId } = useParams<{ roadmapId?: string }>();
   const [roadmap, setRoadmap] = useState<any>(null);
   const [roadmapData, setRoadmapData] = useState<RoadmapData | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, ModuleProgress>>({});
@@ -34,15 +35,30 @@ export default function Dashboard() {
 
   const fetchData = async () => {
     if (!user) return;
-    const { data: rm } = await supabase
-      .from("roadmaps")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .single();
+
+    let rm: any = null;
+    if (roadmapId) {
+      const { data } = await supabase
+        .from("roadmaps")
+        .select("*")
+        .eq("id", roadmapId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      rm = data;
+    } else {
+      // Legacy fallback: pick the most recent active roadmap
+      const { data } = await supabase
+        .from("roadmaps")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      rm = data?.[0] ?? null;
+    }
 
     if (!rm) {
-      navigate("/new");
+      navigate("/my-roadmaps");
       return;
     }
 
@@ -248,7 +264,7 @@ export default function Dashboard() {
     const confirmed = window.confirm("This will archive your current roadmap. You can't undo this. Continue?");
     if (!confirmed) return;
     await supabase.from("roadmaps").update({ status: "archived" }).eq("id", roadmap.id);
-    navigate("/new");
+    navigate("/my-roadmaps");
   };
 
   const handleAdaptFromCompletion = () => {

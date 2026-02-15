@@ -56,7 +56,7 @@ export default function NewRoadmap() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [hasActiveRoadmap, setHasActiveRoadmap] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
   const [checkingActive, setCheckingActive] = useState(true);
 
   useEffect(() => {
@@ -66,9 +66,8 @@ export default function NewRoadmap() {
         .from("roadmaps")
         .select("id")
         .eq("user_id", user.id)
-        .eq("status", "active")
-        .limit(1);
-      setHasActiveRoadmap((data?.length ?? 0) > 0);
+        .eq("status", "active");
+      setActiveCount(data?.length ?? 0);
       setCheckingActive(false);
     };
     checkActive();
@@ -81,15 +80,8 @@ export default function NewRoadmap() {
     setSkillLevel(qs.skill);
   };
 
-  const handleArchiveAndGenerate = async () => {
-    if (!user) return;
-    await supabase.from("roadmaps").update({ status: "archived" }).eq("user_id", user.id).eq("status", "active");
-    setHasActiveRoadmap(false);
-    handleGenerate();
-  };
-
   const handleGenerate = async () => {
-    if (!topic.trim() || !user) return;
+    if (!topic.trim() || !user || activeCount >= 5) return;
     setLoading(true);
     setError(null);
     setLoadingStep(0);
@@ -125,7 +117,17 @@ export default function NewRoadmap() {
       });
 
       if (insertError) throw insertError;
-      navigate("/dashboard");
+
+      // Navigate to the new roadmap's dashboard
+      const { data: newRm } = await supabase
+        .from("roadmaps")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const newId = newRm?.[0]?.id;
+      navigate(newId ? `/dashboard/${newId}` : "/my-roadmaps");
     } catch (err: any) {
       clearInterval(stepInterval);
       setError(err.message || "Failed to generate roadmap");
@@ -255,28 +257,18 @@ export default function NewRoadmap() {
 
           {error && <p className="text-destructive text-sm">{error}</p>}
 
-          {hasActiveRoadmap && (
+          {activeCount >= 5 ? (
             <div className="glass p-4 border-warning/30 bg-warning/5">
-              <p className="text-sm text-warning font-medium mb-2">⚠️ You already have an active roadmap</p>
-              <p className="text-xs text-muted-foreground mb-3">Generating a new one will archive your current roadmap. This can't be undone.</p>
+              <p className="text-sm text-warning font-medium mb-2">⚠️ You've reached the limit of 5 active roadmaps</p>
+              <p className="text-xs text-muted-foreground mb-3">Archive an existing roadmap to create a new one.</p>
               <Button
-                onClick={() => navigate("/dashboard")}
-                className="w-full h-12 mb-2 font-heading font-bold gradient-primary text-primary-foreground glow-primary"
+                onClick={() => navigate("/my-roadmaps")}
+                className="w-full h-12 font-heading font-bold gradient-primary text-primary-foreground glow-primary"
               >
-                Go to My Current Roadmap →
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleArchiveAndGenerate}
-                disabled={!topic.trim()}
-                className="w-full h-12 border-warning/30 text-warning hover:bg-warning/10"
-              >
-                Archive Current & Generate New ✨
+                Manage My Roadmaps →
               </Button>
             </div>
-          )}
-
-          {!hasActiveRoadmap && (
+          ) : (
             <Button
               onClick={handleGenerate}
               disabled={!topic.trim()}
