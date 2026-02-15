@@ -260,9 +260,16 @@ export default function NewRoadmap() {
               <p className="text-sm text-warning font-medium mb-2">⚠️ You already have an active roadmap</p>
               <p className="text-xs text-muted-foreground mb-3">Generating a new one will archive your current roadmap. This can't be undone.</p>
               <Button
+                onClick={() => navigate("/dashboard")}
+                className="w-full h-12 mb-2 font-heading font-bold gradient-primary text-primary-foreground glow-primary"
+              >
+                Go to My Current Roadmap →
+              </Button>
+              <Button
+                variant="outline"
                 onClick={handleArchiveAndGenerate}
                 disabled={!topic.trim()}
-                className="w-full h-14 text-lg font-heading font-bold bg-warning text-warning-foreground hover:bg-warning/90 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                className="w-full h-12 border-warning/30 text-warning hover:bg-warning/10"
               >
                 Archive Current & Generate New ✨
               </Button>
