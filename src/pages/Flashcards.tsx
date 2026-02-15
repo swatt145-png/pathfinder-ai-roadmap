@@ -15,17 +15,17 @@ interface FlashCard {
 
 function generateFlashcards(roadmap: RoadmapData): FlashCard[] {
   const cards: FlashCard[] = [];
-  for (const mod of roadmap.modules) {
+  for (const mod of (roadmap.modules ?? [])) {
     // One card per learning objective
-    for (const obj of mod.learning_objectives) {
+    for (const obj of (mod.learning_objectives ?? [])) {
       cards.push({
         front: obj,
-        back: `Key concept from "${mod.title}" — ${mod.description.slice(0, 120)}${mod.description.length > 120 ? "…" : ""}`,
+        back: `Key concept from "${mod.title}" — ${(mod.description ?? "").slice(0, 120)}${(mod.description ?? "").length > 120 ? "…" : ""}`,
         module: mod.title,
       });
     }
     // One card per quiz question
-    for (const q of mod.quiz) {
+    for (const q of (mod.quiz ?? [])) {
       cards.push({
         front: q.question,
         back: `${q.correct_answer}\n\n${q.explanation}`,
