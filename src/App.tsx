@@ -24,7 +24,7 @@ function HomeRedirect() {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>;
   if (!user) return <Landing />;
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to="/home" replace />;
 }
 
 const App = () => (
@@ -36,7 +36,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<HomeRedirect />} />
-            <Route path="/home" element={<Landing />} />
+            <Route path="/home" element={<ProtectedRoute><NewRoadmap /></ProtectedRoute>} />
             <Route path="/new" element={<ProtectedRoute><NewRoadmap /></ProtectedRoute>} />
             <Route path="/my-roadmaps" element={<ProtectedRoute><MyRoadmaps /></ProtectedRoute>} />
             <Route path="/dashboard/:roadmapId" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
