@@ -405,10 +405,10 @@ export default function Dashboard() {
             <Button
               type="button"
               onClick={() => setSelectedModule(firstIncomplete)}
-              className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+              className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate overflow-hidden"
             >
-              Continue to Next Module: {firstIncomplete.title}
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <span className="truncate min-w-0">Continue to Next Module: {firstIncomplete.title}</span>
+              <ArrowRight className="ml-2 h-4 w-4 shrink-0" />
             </Button>
           ) : (
           <div className="space-y-2">
