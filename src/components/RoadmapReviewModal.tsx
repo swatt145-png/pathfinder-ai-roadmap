@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
-import type { RoadmapData } from "@/lib/types";
+import type { RoadmapData, ModuleProgress } from "@/lib/types";
 
 interface Props {
   roadmapData: RoadmapData;
   completedCount: number;
   createdAt: string;
+  progressMap: Record<string, ModuleProgress>;
   onClose: () => void;
 }
 
@@ -16,7 +17,7 @@ function formatDate(date: Date) {
   });
 }
 
-export function RoadmapReviewModal({ roadmapData, completedCount, createdAt, onClose }: Props) {
+export function RoadmapReviewModal({ roadmapData, completedCount, createdAt, progressMap, onClose }: Props) {
   const totalModules = roadmapData.modules.length;
   const remainingModules = Math.max(totalModules - completedCount, 0);
   const totalDays = roadmapData.timeline_weeks * 7;
@@ -29,6 +30,11 @@ export function RoadmapReviewModal({ roadmapData, completedCount, createdAt, onC
 
   const estimatedCompletionDate = new Date(startDate);
   estimatedCompletionDate.setDate(startDate.getDate() + totalDays);
+
+  // Find the first incomplete module to highlight as "next"
+  const firstIncompleteId = roadmapData.modules.find(
+    (m) => (progressMap[m.id]?.status ?? "not_started") !== "completed"
+  )?.id;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -45,17 +51,40 @@ export function RoadmapReviewModal({ roadmapData, completedCount, createdAt, onC
         </div>
 
         <div className="space-y-2 mb-5">
-          {roadmapData.modules.map((module, index) => (
-            <div key={module.id} className="glass p-3">
-              <p className="text-sm font-heading font-semibold">
-                {index + 1}. {module.title}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Week {module.week} · Days {module.day_start}-{module.day_end} · {module.estimated_hours}h
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">{module.description}</p>
-            </div>
-          ))}
+          {roadmapData.modules.map((module, index) => {
+            const status = progressMap[module.id]?.status ?? "not_started";
+            const isCompleted = status === "completed";
+            const isNext = module.id === firstIncompleteId;
+            return (
+              <div
+                key={module.id}
+                className={`glass p-3 transition-all ${
+                  isNext
+                    ? "border-2 border-primary/60 bg-primary/10 shadow-lg shadow-primary/20 ring-1 ring-primary/30"
+                    : isCompleted
+                    ? "opacity-60 border border-transparent"
+                    : "border border-transparent"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-heading font-semibold">
+                    {index + 1}. {module.title}
+                  </p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-heading font-semibold shrink-0 ml-2 ${
+                    isCompleted ? "bg-success/20 text-success" :
+                    isNext ? "bg-primary/20 text-primary border border-primary/40" :
+                    "bg-white/5 text-muted-foreground"
+                  }`}>
+                    {isCompleted ? "Completed ✓" : isNext ? "Up Next →" : "Pending"}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Week {module.week} · Days {module.day_start}-{module.day_end} · {module.estimated_hours}h
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">{module.description}</p>
+              </div>
+            );
+          })}
         </div>
 
         <Button type="button" variant="outline" onClick={onClose} className="w-full border-white/10 hover:bg-white/5">

@@ -102,15 +102,15 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
               </div>
               {timelineUnit === "days" ? (
                 <>
-                  <Label className="text-sm text-muted-foreground mb-2 block">
-                    Number of days: <span className="text-primary font-heading font-bold">{newDays}</span>
+              <Label className="text-sm text-muted-foreground mb-2 block">
+                    Days remaining: <span className="text-primary font-heading font-bold">{newDays}</span>
                   </Label>
                   <input type="range" min={0} max={90} value={newDays} onChange={(e) => setNewDays(Number(e.target.value))} className="w-full accent-primary" />
                 </>
               ) : (
                 <>
-                  <Label className="text-sm text-muted-foreground mb-2 block">
-                    Number of weeks: <span className="text-primary font-heading font-bold">{newWeeks}</span>
+              <Label className="text-sm text-muted-foreground mb-2 block">
+                    Weeks remaining: <span className="text-primary font-heading font-bold">{newWeeks}</span>
                   </Label>
                   <input type="range" min={1} max={16} value={newWeeks} onChange={(e) => setNewWeeks(Number(e.target.value))} className="w-full accent-primary" />
                 </>

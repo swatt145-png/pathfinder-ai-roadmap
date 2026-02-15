@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown } from "lucide-react";
+import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuizModal } from "@/components/QuizModal";
@@ -12,13 +12,14 @@ interface ModuleDetailProps {
   onClose: () => void;
   onComplete: (moduleId: string, selfReport: string, quizScore: number | null, quizAnswers: any) => void;
   onUpdateResourcesAndNotes?: (moduleId: string, completedResources: string[], notes: string) => void;
+  onUpdateCompletedModule?: (moduleId: string, selfReport: string, notes: string) => void;
 }
 
 const RESOURCE_ICONS: Record<string, string> = {
   video: "🎬", article: "📄", documentation: "📚", tutorial: "💻", practice: "🏋️",
 };
 
-export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateResourcesAndNotes }: ModuleDetailProps) {
+export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateResourcesAndNotes, onUpdateCompletedModule }: ModuleDetailProps) {
   const [selfReport, setSelfReport] = useState<string | null>(progress?.self_report ?? null);
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizScore, setQuizScore] = useState<number | null>(progress?.quiz_score ?? null);
@@ -26,6 +27,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
   const [completedResources, setCompletedResources] = useState<string[]>(progress?.completed_resources ?? []);
   const [notes, setNotes] = useState<string>(progress?.notes ?? "");
   const isCompleted = progress?.status === "completed";
+  const [saved, setSaved] = useState(false);
 
   const resources = module.resources ?? [];
   const learningObjectives = module.learning_objectives ?? [];
@@ -45,7 +47,6 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
   const handleNotesChange = (value: string) => {
     setNotes(value);
-    // Debounce-like: save on blur instead
   };
 
   const handleNotesSave = () => {
@@ -55,6 +56,13 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
   const handleComplete = () => {
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     onComplete(module.id, selfReport ?? "not_rated", quizScore, quizAnswers);
+  };
+
+  const handleSaveCompletedModule = () => {
+    onUpdateCompletedModule?.(module.id, selfReport ?? "not_rated", notes);
+    onUpdateResourcesAndNotes?.(module.id, completedResources, notes);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   return (
@@ -144,11 +152,39 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
         {/* Check-in */}
         {isCompleted ? (
-          <div className="glass p-4">
-            <p className="text-base text-muted-foreground">
-              Completed · Felt: <span className="font-medium text-foreground">{progress?.self_report}</span>
-              {progress?.quiz_score != null && <> · Quiz: <span className="font-medium text-foreground">{progress.quiz_score}%</span></>}
-            </p>
+          <div className="space-y-4">
+            <div className="glass p-4">
+              <p className="text-base text-muted-foreground mb-3">
+                Completed · Felt: <span className="font-medium text-foreground">{progress?.self_report ?? "not rated"}</span>
+                {progress?.quiz_score != null && <> · Quiz: <span className="font-medium text-foreground">{progress.quiz_score}%</span></>}
+              </p>
+            </div>
+
+            <h4 className="font-heading font-semibold text-base">Update difficulty rating</h4>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: "easy", icon: ThumbsUp, label: "Easy", color: "bg-success/20 text-success border-success/30" },
+                { value: "medium", icon: Minus, label: "Medium", color: "bg-warning/20 text-warning border-warning/30" },
+                { value: "hard", icon: ThumbsDown, label: "Hard", color: "bg-destructive/20 text-destructive border-destructive/30" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSelfReport(opt.value)}
+                  className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-white/5"}`}
+                >
+                  <opt.icon className="w-7 h-7 mx-auto" />
+                  <span className="text-sm mt-1 block">{opt.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <Button
+              onClick={handleSaveCompletedModule}
+              className="w-full h-12 gradient-primary text-primary-foreground font-heading font-bold"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {saved ? "Saved ✓" : "Save Changes"}
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
