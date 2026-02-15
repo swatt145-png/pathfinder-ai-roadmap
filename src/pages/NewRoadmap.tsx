@@ -181,11 +181,10 @@ export default function NewRoadmap() {
   return (
     <>
       <AppBar />
-      <div className="min-h-screen pt-20 pb-10 px-4">
-        <div className="max-w-lg mx-auto animate-fade-in">
-
-
-          <div>
+      <div className="min-h-screen pt-20 pb-10 px-4 md:px-8">
+        <div className="flex gap-6 animate-fade-in">
+          {/* Main content - 80% */}
+          <div className="flex-1 min-w-0">
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
               Hey {profile?.display_name ?? "there"}! 👋
             </h2>
@@ -306,6 +305,19 @@ export default function NewRoadmap() {
             </div>
           </div>
 
+          {/* Right sidebar - action buttons */}
+          <div className="hidden md:flex flex-col gap-3 w-[20%] min-w-[180px] max-w-[240px] pt-1">
+            {activeCount > 0 && (
+              <Button
+                onClick={() => navigate("/my-roadmaps")}
+                className="w-full h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+              >
+                <BookOpen className="mr-2 h-4 w-4" />
+                My Roadmaps ({activeCount})
+              </Button>
+            )}
+            {/* Future buttons go here */}
+          </div>
         </div>
       </div>
     </>
