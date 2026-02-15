@@ -87,7 +87,7 @@ export default function NewRoadmap() {
 
 
   const handleGenerate = async () => {
-    if (!topic.trim() || !user || activeCount >= 5) return;
+    if (!topic.trim() || !user || activeCount >= 10) return;
     if (hardDeadline && deadlineDate) {
       const selected = new Date(deadlineDate);
       const minDate = new Date();
@@ -194,9 +194,9 @@ export default function NewRoadmap() {
     <>
       <AppBar />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-8">
-        <div className="flex justify-between animate-fade-in">
+        <div className="flex flex-col md:flex-row justify-between gap-6 animate-fade-in">
           {/* Main content - 70% */}
-          <div className="w-[70%]">
+          <div className="w-full md:w-[70%]">
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
               Hey {profile?.display_name ?? "there"}! 👋
             </h2>
@@ -311,9 +311,9 @@ export default function NewRoadmap() {
 
               {error && <p className="text-destructive text-base">{error}</p>}
 
-              {activeCount >= 5 ? (
+              {activeCount >= 10 ? (
                 <div className="glass-blue p-4 border-warning/30 bg-warning/5">
-                  <p className="text-base text-warning font-medium mb-2">⚠️ You've reached the limit of 5 active roadmaps</p>
+                  <p className="text-base text-warning font-medium mb-2">⚠️ You've reached the limit of 10 active roadmaps</p>
                   <p className="text-sm text-muted-foreground mb-3">Archive an existing roadmap to create a new one.</p>
                 </div>
               ) : (

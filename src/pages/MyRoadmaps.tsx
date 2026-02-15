@@ -65,7 +65,7 @@ export default function MyRoadmaps() {
       <div className="min-h-screen pt-20 pb-10 px-4 max-w-2xl mx-auto animate-fade-in">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-heading text-2xl md:text-3xl font-bold">My Roadmaps</h2>
-          {roadmaps.length < 5 && (
+          {roadmaps.length < 10 && (
             <Button
               onClick={() => navigate("/new")}
               className="gradient-primary text-primary-foreground font-heading font-bold"
@@ -136,9 +136,9 @@ export default function MyRoadmaps() {
           </div>
         )}
 
-        {roadmaps.length >= 5 && (
+        {roadmaps.length >= 10 && (
           <p className="text-sm text-muted-foreground text-center mt-4">
-            You've reached the maximum of 5 active roadmaps. Archive one to create a new one.
+            You've reached the maximum of 10 active roadmaps. Archive one to create a new one.
           </p>
         )}
       </div>

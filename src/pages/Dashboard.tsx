@@ -367,7 +367,7 @@ export default function Dashboard() {
     <>
       <AppBar />
       <div className="min-h-screen pt-16 pb-24 px-4 md:px-8">
-        <div className="flex gap-6 max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row gap-6 max-w-6xl mx-auto">
         {/* Main content - 80% */}
         <div className="flex-1 min-w-0">
         {/* Summary Card */}
