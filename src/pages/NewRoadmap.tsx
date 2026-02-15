@@ -186,7 +186,7 @@ export default function NewRoadmap() {
           {/* Main content - 70% */}
           <div className="w-[70%]">
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
-              Hey {profile?.display_name ?? "there"}! 👋
+              Hey {profile?.display_name ?? "there"}!
             </h2>
             <p className="text-muted-foreground mb-6">What do you want to learn?</p>
 
