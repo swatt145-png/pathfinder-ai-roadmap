@@ -371,7 +371,7 @@ export default function Dashboard() {
         {/* Main content - 80% */}
         <div className="flex-1 min-w-0">
         {/* Summary Card */}
-        <div className="glass-strong p-6 mb-6 animate-fade-in">
+        <div className="glass-blue p-6 mb-6 animate-fade-in">
           <h2 className="font-heading text-xl md:text-2xl font-bold mb-1">{roadmapData.topic}</h2>
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
@@ -389,15 +389,15 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-3 gap-3 text-center text-base">
-            <div className="glass p-3">
+            <div className="glass-blue p-3">
               <Clock className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">{completedHours.toFixed(0)}h / {totalHours.toFixed(0)}h</span>
             </div>
-            <div className="glass p-3">
+            <div className="glass-blue p-3">
               <BookOpen className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">Week {Math.min(Math.ceil((Date.now() - new Date(roadmap.created_at).getTime()) / 604800000) || 1, roadmapData.timeline_weeks)} of {roadmapData.timeline_weeks}</span>
             </div>
-            <div className="glass p-3">
+            <div className="glass-blue p-3">
               <Flame className="w-5 h-5 mx-auto mb-1 text-warning" />
               <span className="text-sm text-muted-foreground">
                 {completedCount > 0 ? `${completedCount}-day streak` : "Start your streak!"}
@@ -419,7 +419,7 @@ export default function Dashboard() {
             </Button>
           ) : (
           <div className="space-y-2">
-            <div className="glass-strong p-4 text-center">
+            <div className="glass-blue p-4 text-center">
               <p className="font-heading font-bold text-success mb-2">All Modules Complete!</p>
               <p className="text-base text-muted-foreground mb-3">You've finished your entire roadmap. Ready for the next challenge?</p>
               <Button
