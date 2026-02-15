@@ -159,14 +159,14 @@ export default function NewRoadmap() {
         <div className="flex min-h-screen items-center justify-center px-4 pt-14">
           <div className="text-center max-w-md animate-fade-in">
             <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-8" />
-            <p className="text-primary font-heading font-semibold text-base mb-6 animate-breathe">
+            <p className="text-primary font-heading font-semibold text-lg mb-6 animate-breathe">
               {topicMessages[Math.min(loadingStep, topicMessages.length - 1)]}
             </p>
             <div className="space-y-3 mb-8">
               {LOADING_STEPS.map((step, i) => (
                 <p
                   key={step}
-                  className={`text-sm transition-all duration-500 ${i === loadingStep ? "text-foreground animate-breathe font-medium" : i < loadingStep ? "text-muted-foreground/50" : "text-muted-foreground/20"}`}
+                  className={`text-base transition-all duration-500 ${i === loadingStep ? "text-foreground animate-breathe font-medium" : i < loadingStep ? "text-muted-foreground/50" : "text-muted-foreground/20"}`}
                 >
                   {i < loadingStep ? "✓ " : i === loadingStep ? "● " : "○ "}{step}
                 </p>
@@ -188,7 +188,7 @@ export default function NewRoadmap() {
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
               Hey {profile?.display_name ?? "there"}! 👋
             </h2>
-            <p className="text-muted-foreground mb-6">What do you want to learn?</p>
+            <p className="text-muted-foreground text-base mb-6">What do you want to learn?</p>
 
             <div className="space-y-6">
               <div>
@@ -201,7 +201,7 @@ export default function NewRoadmap() {
               </div>
 
               <div>
-                <Label className="text-muted-foreground text-sm mb-3 block">Skill Level</Label>
+                <Label className="text-muted-foreground text-base mb-3 block">Skill Level</Label>
                 <div className="grid grid-cols-3 gap-2">
                   {SKILLS.map((s) => (
                     <button
@@ -210,7 +210,7 @@ export default function NewRoadmap() {
                       className={`glass p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-white/5"}`}
                     >
                       <span className="block text-base font-heading font-semibold">{s.label}</span>
-                      {skillLevel === s.value && <span className="block text-xs text-muted-foreground mt-1">{s.desc}</span>}
+                      {skillLevel === s.value && <span className="block text-sm text-muted-foreground mt-1">{s.desc}</span>}
                     </button>
                   ))}
                 </div>
@@ -218,17 +218,17 @@ export default function NewRoadmap() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <Label className="text-muted-foreground text-sm">
+                  <Label className="text-muted-foreground text-base">
                     How many {timelineUnit}? <span className="text-primary font-heading font-bold">{timelineValue}</span>
                   </Label>
                   <div className="flex rounded-lg overflow-hidden border border-white/10">
                     <button
                       onClick={() => { setTimelineUnit("days"); setTimelineValue(7); }}
-                      className={`px-3 py-1 text-xs font-heading transition-colors ${timelineUnit === "days" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "days" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
                     >Days</button>
                     <button
                       onClick={() => { setTimelineUnit("weeks"); setTimelineValue(4); }}
-                      className={`px-3 py-1 text-xs font-heading transition-colors ${timelineUnit === "weeks" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "weeks" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
                     >Weeks</button>
                   </div>
                 </div>
@@ -243,7 +243,7 @@ export default function NewRoadmap() {
               </div>
 
               <div>
-                <Label className="text-muted-foreground text-sm mb-2 block">
+                <Label className="text-muted-foreground text-base mb-2 block">
                   Hours per day? <span className="text-primary font-heading font-bold">{hoursPerDay}</span>
                 </Label>
                 <input
@@ -258,7 +258,7 @@ export default function NewRoadmap() {
               </div>
 
               <div className="flex items-center justify-between glass p-4">
-                <Label className="text-sm">Is this a hard deadline?</Label>
+                <Label className="text-base">Is this a hard deadline?</Label>
                 <Switch checked={hardDeadline} onCheckedChange={setHardDeadline} />
               </div>
 
@@ -271,12 +271,12 @@ export default function NewRoadmap() {
                 />
               )}
 
-              {error && <p className="text-destructive text-sm">{error}</p>}
+              {error && <p className="text-destructive text-base">{error}</p>}
 
               {activeCount >= 5 ? (
                 <div className="glass p-4 border-warning/30 bg-warning/5">
-                  <p className="text-sm text-warning font-medium mb-2">⚠️ You've reached the limit of 5 active roadmaps</p>
-                  <p className="text-xs text-muted-foreground mb-3">Archive an existing roadmap to create a new one.</p>
+                  <p className="text-base text-warning font-medium mb-2">⚠️ You've reached the limit of 5 active roadmaps</p>
+                  <p className="text-sm text-muted-foreground mb-3">Archive an existing roadmap to create a new one.</p>
                 </div>
               ) : (
                 <Button
@@ -289,13 +289,13 @@ export default function NewRoadmap() {
               )}
 
               <div>
-                <p className="text-xs text-muted-foreground mb-3">Quick start:</p>
+                <p className="text-sm text-muted-foreground mb-3">Quick start:</p>
                 <div className="flex flex-wrap gap-2">
                   {QUICK_STARTS.map((qs) => (
                     <button
                       key={qs.label}
                       onClick={() => applyQuickStart(qs)}
-                      className="glass px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all"
+                      className="glass px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all"
                     >
                       {qs.label}
                     </button>

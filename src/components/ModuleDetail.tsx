@@ -67,19 +67,19 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         </button>
         <div className="flex-1 min-w-0">
           <h3 className="font-heading font-bold text-lg truncate">{module.title}</h3>
-          <p className="text-xs text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h</p>
+          <p className="text-sm text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h</p>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-8">
-        <p className="text-sm text-muted-foreground">{module.description}</p>
+        <p className="text-base text-muted-foreground">{module.description}</p>
 
         {/* Learning Objectives */}
         <div>
-          <h4 className="font-heading font-semibold text-sm mb-2">Learning Objectives</h4>
+          <h4 className="font-heading font-semibold text-base mb-2">Learning Objectives</h4>
           <ul className="space-y-1">
             {learningObjectives.map((obj, i) => (
-              <li key={i} className="text-sm text-muted-foreground flex gap-2">
+              <li key={i} className="text-base text-muted-foreground flex gap-2">
                 <span className="text-primary">•</span> {obj}
               </li>
             ))}
@@ -89,9 +89,9 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         {/* Resources with checkboxes */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h4 className="font-heading font-semibold text-sm">Resources</h4>
+            <h4 className="font-heading font-semibold text-base">Resources</h4>
             {resources.length > 0 && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {completedResources.length}/{resources.length} done
                 {resourceProgress > 0 && ` · ${resourceProgress}%`}
               </span>
@@ -117,11 +117,11 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                     rel="noopener noreferrer"
                     className="flex-1 min-w-0 hover:opacity-80 transition-opacity"
                   >
-                    <p className={`text-sm font-medium flex items-center gap-1 ${isChecked ? "line-through" : ""}`}>
+                    <p className={`text-base font-medium flex items-center gap-1 ${isChecked ? "line-through" : ""}`}>
                       <span>{RESOURCE_ICONS[r.type] ?? "📄"}</span>
                       {r.title} <ExternalLink className="w-3 h-3 text-muted-foreground" />
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">~{r.estimated_minutes} min · {r.description}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">~{r.estimated_minutes} min · {r.description}</p>
                   </a>
                 </div>
               );
@@ -131,7 +131,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
         {/* Notes */}
         <div>
-          <h4 className="font-heading font-semibold text-sm mb-2">Your Notes</h4>
+          <h4 className="font-heading font-semibold text-base mb-2">Your Notes</h4>
           <Textarea
             value={notes}
             onChange={(e) => handleNotesChange(e.target.value)}
@@ -146,14 +146,14 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         {/* Check-in */}
         {isCompleted ? (
           <div className="glass p-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               Completed · Felt: <span className="font-medium text-foreground">{progress?.self_report}</span>
               {progress?.quiz_score != null && <> · Quiz: <span className="font-medium text-foreground">{progress.quiz_score}%</span></>}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            <h4 className="font-heading font-semibold text-sm">How did this module feel?</h4>
+            <h4 className="font-heading font-semibold text-base">How did this module feel?</h4>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { value: "easy", emoji: "😊", label: "Easy", color: "bg-success/20 text-success border-success/30" },
@@ -166,7 +166,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                   className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-white/5"}`}
                 >
                   <span className="text-2xl block">{opt.emoji}</span>
-                  <span className="text-xs mt-1 block">{opt.label}</span>
+                  <span className="text-sm mt-1 block">{opt.label}</span>
                 </button>
               ))}
             </div>
@@ -180,7 +180,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                 >
                   {quizScore != null ? `Quiz Score: ${quizScore}% — Retake` : "Take Quiz"}
                 </Button>
-                <p className="text-xs text-muted-foreground mt-1 text-center">
+                <p className="text-sm text-muted-foreground mt-1 text-center">
                   Taking the quiz helps Pathfinder adapt better to your needs
                 </p>
               </div>
