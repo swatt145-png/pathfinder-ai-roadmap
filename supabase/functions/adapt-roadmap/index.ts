@@ -69,34 +69,46 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     // Support both days and weeks input; prefer days
-    const totalDays = new_timeline_days != null ? Number(new_timeline_days) : (Number(new_timeline_weeks) * 7);
-    const totalAvailableHours = totalDays * Number(new_hours_per_day);
+    // 0 days means "finish today" — user still has hours available today
+    const rawDays = new_timeline_days != null ? Number(new_timeline_days) : (Number(new_timeline_weeks) * 7);
+    const hrsPerDay = Number(new_hours_per_day);
+    const totalAvailableHours = rawDays === 0 ? hrsPerDay : rawDays * hrsPerDay;
+    const displayDays = rawDays === 0 ? 1 : rawDays; // "today" counts as 1 day of work
 
     const completedModules = all_progress?.filter((p: any) => p.status === "completed") || [];
+    const remainingModules = roadmap_data.modules.filter((m: any) =>
+      !completedModules.some((p: any) => p.module_id === m.id)
+    );
+    const remainingHours = remainingModules.reduce((sum: number, m: any) => sum + (m.estimated_hours || 0), 0);
 
-    const systemPrompt = `You are a concise learning-plan optimizer. Speak directly to the user (use "you/your", never "the student"). Keep all text short and actionable — no filler.
+    const systemPrompt = `You are a concise learning-plan optimizer. Address the user directly ("you/your"). Keep all text crisp — no filler.
 
 RULES:
 - Never remove or modify completed modules
-- The user has exactly ${totalDays} day(s) and ${new_hours_per_day} hour(s)/day = ${totalAvailableHours} total hours remaining
-- Provide 2-3 realistic options with clear tradeoffs
-- Keep analysis to 1-2 sentences max
+- User wants to finish in ${displayDays} day(s) at ${hrsPerDay}h/day = ${totalAvailableHours}h available
+- Remaining content needs ~${remainingHours}h across ${remainingModules.length} modules
+- You MUST provide exactly 3 options with these strategies:
+  1. "Crash Course" — keep the user's chosen timeline, compress/prioritize remaining modules to fit
+  2. "Increase Daily Hours" — keep same number of days but increase hours/day to cover everything
+  3. "Extend Timeline" — keep hours/day the same but add more days to complete all modules properly
+- Keep analysis to 1 sentence
 - Keep descriptions and tradeoffs to 1 sentence each
-- Use "timeline_days" (not weeks) in the response`;
+- Calculate timeline_days using: ceil(remaining_hours / hours_per_day)
+- Use "timeline_days" in the response (not weeks)`;
 
-    const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules.
-Remaining time: ${totalDays} day(s), ${new_hours_per_day}h/day (${totalAvailableHours}h total).
+    const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules (${remainingModules.length} remaining, ~${remainingHours}h of content).
+Available: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours}h total).
 
 Current roadmap: ${JSON.stringify(roadmap_data)}
 Progress: ${JSON.stringify(all_progress)}
 
 Return ONLY valid JSON:
 {
-  "analysis": "1-2 sentence summary addressing the user directly",
+  "analysis": "1 sentence summary",
   "options": [
     {
-      "id": "option_a",
-      "label": "Keep Everything",
+      "id": "crash_course",
+      "label": "Crash Course",
       "description": "1 sentence",
       "timeline_days": number,
       "hours_per_day": number,
@@ -106,9 +118,35 @@ Return ONLY valid JSON:
       "modules_added": [],
       "tradeoff": "1 sentence",
       "updated_roadmap": { full roadmap JSON with same structure }
+    },
+    {
+      "id": "increase_hours",
+      "label": "Increase Daily Hours",
+      "description": "1 sentence",
+      "timeline_days": number,
+      "hours_per_day": number,
+      "total_remaining_hours": number,
+      "modules_kept": number,
+      "modules_removed": [],
+      "modules_added": [],
+      "tradeoff": "1 sentence",
+      "updated_roadmap": { full roadmap JSON }
+    },
+    {
+      "id": "extend_timeline",
+      "label": "Extend Timeline",
+      "description": "1 sentence",
+      "timeline_days": number,
+      "hours_per_day": number,
+      "total_remaining_hours": number,
+      "modules_kept": number,
+      "modules_removed": [],
+      "modules_added": [],
+      "tradeoff": "1 sentence",
+      "updated_roadmap": { full roadmap JSON }
     }
   ],
-  "recommendation": "option_a|option_b|option_c",
+  "recommendation": "crash_course|increase_hours|extend_timeline",
   "recommendation_reason": "1 sentence"
 }`;
 
