@@ -91,7 +91,7 @@ export default function MyRoadmaps() {
               const rd = rm.roadmap_data as unknown as RoadmapData;
 
               return (
-                <div key={rm.id} className="glass-strong p-5">
+                <div key={rm.id} className="glass-blue p-5">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <h3 className="font-heading font-bold text-lg">{rm.topic}</h3>

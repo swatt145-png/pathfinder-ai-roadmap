@@ -444,7 +444,7 @@ export default function Dashboard() {
               <button
                 key={mod.id}
                 onClick={() => setSelectedModule(mod)}
-                className={`w-full text-left glass p-4 flex items-center gap-4 transition-all hover:bg-white/5 ${isUpNext ? "border-2 border-primary/60 bg-primary/10 shadow-lg shadow-primary/20 ring-1 ring-primary/30" : "border border-transparent"} ${status === "completed" ? "opacity-60" : ""}`}
+                className={`w-full text-left glass-blue p-4 flex items-center gap-4 transition-all hover:bg-accent/10 ${isUpNext ? "border-2 border-primary/60 bg-primary/10 shadow-lg shadow-primary/20 ring-1 ring-primary/30" : ""} ${status === "completed" ? "opacity-60" : ""}`}
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-heading font-bold shrink-0 ${
                   status === "completed" ? "bg-success/20 text-success" :
