@@ -21,11 +21,10 @@ export function ModuleCompletionActionsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative glass-strong max-w-lg w-full p-6 animate-fade-in">
-        <h3 className="font-heading font-bold text-lg mb-2">Module Completed</h3>
+      <div className="relative glass-strong max-w-lg w-full p-6 animate-fade-in rounded-xl">
+        <h3 className="font-heading font-bold text-lg mb-1">Module Completed 🎉</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          You completed <span className="text-foreground font-medium">{completedModuleTitle}</span>.
-          Choose what to do next.
+          <span className="text-foreground font-medium">{completedModuleTitle}</span>
         </p>
 
         <div className="space-y-2">
@@ -33,9 +32,9 @@ export function ModuleCompletionActionsModal({
             type="button"
             onClick={onProceedNext}
             disabled={!nextModule}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate"
           >
-            {nextModule ? `Proceed to Next Module: ${nextModule.title}` : "No Next Module Available"}
+            {nextModule ? `Next: ${nextModule.title}` : "No Next Module"}
           </Button>
           <Button
             type="button"
