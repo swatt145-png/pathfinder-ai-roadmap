@@ -87,24 +87,47 @@ serve(async (req) => {
     const totalCompletedHours = completedModulesData.reduce((sum: number, m: any) => sum + (m.estimated_hours || 0), 0);
     const totalDaysCompleted = completedModulesData.length; // 1 module ≈ 1 day
 
+    // Determine the adaptation strategy deterministically in code
+    const isCrashCourse = totalAvailableHours < remainingHours;
+    const isSplit = !isCrashCourse && hrsPerDay < remainingHours && displayDays > 1;
+    // isCrashCourse: user has LESS total time → condense resources
+    // isSplit: user has enough total time but fewer hrs/day → split modules into daily chunks
+    // else: just redistribute
+
+    let strategyInstruction: string;
+    if (isCrashCourse) {
+      strategyInstruction = `STRATEGY: CRASH COURSE (user has ${totalAvailableHours}h but needs ${remainingHours}h — LESS time available).
+You MUST condense all remaining modules to fit within exactly ${totalAvailableHours}h total.
+- REPLACE the resources in each remaining module with shorter crash-course alternatives (summary videos, cheat sheets, quick tutorials) covering the SAME topics.
+- The total estimated_hours of ALL remaining modules combined MUST equal ${totalAvailableHours}h (not more).
+- The number of remaining modules stays the SAME (${remainingModules.length}) — do NOT split or add modules.
+- Each remaining module fits within ${displayDays} day(s) at ${hrsPerDay}h/day.
+- timeline_days in the response = ${totalDaysCompleted + displayDays}.`;
+    } else if (isSplit) {
+      const numChunks = Math.ceil(remainingHours / hrsPerDay);
+      strategyInstruction = `STRATEGY: SPLIT MODULES (user has ${totalAvailableHours}h across ${displayDays} days at ${hrsPerDay}h/day — enough time but fewer hours per day).
+- SPLIT each remaining module into daily chunks of ${hrsPerDay}h each.
+- A ${remainingHours}h module becomes ${numChunks} modules of ~${hrsPerDay}h each.
+- Give each split module a unique id (original_id + "_part1", "_part2", etc.) and its own subset of resources.
+- Day numbering for adapted modules starts at day ${totalDaysCompleted + 1}.
+- timeline_days in the response = ${totalDaysCompleted + numChunks}.`;
+    } else {
+      strategyInstruction = `STRATEGY: REDISTRIBUTE (user has enough time — ${totalAvailableHours}h available for ${remainingHours}h of content).
+- Keep existing modules and resources as-is, just update day_start/day_end/week fields.
+- timeline_days in the response = ${totalDaysCompleted + displayDays}.`;
+    }
+
     const systemPrompt = `You are a concise learning-plan optimizer. Address the user directly ("you/your"). Keep all text crisp — no filler.
 
 RULES:
 - The updated_roadmap MUST include ALL modules: both completed and adapted. Do NOT omit completed modules.
 - Completed modules (IDs: ${JSON.stringify(completedModuleIds)}) MUST appear first in the modules array, completely unchanged — same id, title, resources, estimated_hours, day_start, day_end, week.
-- User wants to finish REMAINING content in ${displayDays} day(s) at ${hrsPerDay}h/day = ${totalAvailableHours}h available
-- Remaining content needs ~${remainingHours}h across ${remainingModules.length} module(s)
-- You MUST provide exactly 1 option: "Adapted Plan"
-- ADAPTATION LOGIC:
-  A) If totalAvailableHours < remainingHours (user has LESS time): REPLACE remaining module resources with shorter, condensed alternatives (crash courses, summary videos, quick tutorials) that cover the SAME topics but fit within the available hours. Each module's estimated_hours and resources MUST be updated to fit.
-  B) If user has MORE days but FEWER hours/day: SPLIT remaining modules into smaller daily chunks. For example, a 3h module at ${hrsPerDay}h/day becomes ${Math.ceil(remainingHours / hrsPerDay)} modules of ${hrsPerDay}h each, each with its own subset of resources covering part of the material. Give each split module a unique id (e.g. original_id + "_part1", "_part2"). Update day_start, day_end, week fields accordingly. The day numbering for adapted modules starts AFTER the last completed module's day (day ${totalDaysCompleted + 1}).
-  C) If totalAvailableHours >= remainingHours and hours/day is same or more: Just redistribute the existing modules across the new timeline.
+${strategyInstruction}
 - total_hours in updated_roadmap = ${totalCompletedHours} (completed) + adapted remaining hours
-- timeline_weeks = ceil(total_days / 7) where total_days = ${totalDaysCompleted} + ${displayDays}
+- timeline_weeks = ceil(total_days / 7)
 - hours_per_day = ${hrsPerDay}
 - modules_kept = total number of modules in the final roadmap (completed + adapted)
-- Keep analysis to 1-2 sentences
-- Use "timeline_days" in the response (= ${totalDaysCompleted + displayDays} total days)`;
+- Keep analysis to 1-2 sentences`;
 
     const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules (${remainingModules.length} remaining, ~${remainingHours}h of content).
 Available: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours}h total).
