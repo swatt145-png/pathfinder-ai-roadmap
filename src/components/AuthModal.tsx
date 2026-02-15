@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 
@@ -17,10 +18,24 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
   const { signUp, signIn } = useAuth();
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("rememberedCredentials");
+    if (saved) {
+      try {
+        const { email: savedEmail, password: savedPassword } = JSON.parse(saved);
+        setEmail(savedEmail || "");
+        setPassword(savedPassword || "");
+        setRememberMe(true);
+      } catch {}
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +53,16 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
       else setSignUpSuccess(true);
     } else {
       const { error } = await signIn(email, password);
-      if (error) setError(error);
-      else onOpenChange(false);
+      if (error) {
+        setError(error);
+      } else {
+        if (rememberMe) {
+          localStorage.setItem("rememberedCredentials", JSON.stringify({ email, password }));
+        } else {
+          localStorage.removeItem("rememberedCredentials");
+        }
+        onOpenChange(false);
+      }
     }
     setLoading(false);
   };
@@ -114,6 +137,18 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                   className="bg-white/5 border-white/10 focus:border-primary"
                 />
               </div>
+              {tab === "signin" && (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="remember"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                  />
+                  <Label htmlFor="remember" className="text-muted-foreground text-sm cursor-pointer">
+                    Remember me
+                  </Label>
+                </div>
+              )}
               {error && <p className="text-destructive text-sm">{error}</p>}
               <Button type="submit" disabled={loading} className="w-full gradient-primary text-primary-foreground font-heading font-semibold h-12">
                 {loading ? <Loader2 className="animate-spin" /> : tab === "signup" ? "Create Account" : "Sign In"}
