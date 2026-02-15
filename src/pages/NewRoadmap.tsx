@@ -182,9 +182,20 @@ export default function NewRoadmap() {
     <>
       <AppBar />
       <div className="min-h-screen pt-20 pb-10 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8 animate-fade-in">
-          {/* Main: Roadmap Generator */}
-          <div className="flex-1 max-w-lg">
+        <div className="max-w-lg mx-auto animate-fade-in">
+          {/* My Roadmaps button */}
+          {activeCount > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => navigate("/my-roadmaps")}
+              className="mb-6 border-white/10 hover:bg-white/5 font-heading"
+            >
+              <BookOpen className="mr-2 h-4 w-4" />
+              My Roadmaps ({activeCount})
+            </Button>
+          )}
+
+          <div>
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
               Hey {profile?.display_name ?? "there"}! 👋
             </h2>
@@ -305,20 +316,6 @@ export default function NewRoadmap() {
             </div>
           </div>
 
-          {/* Right Sidebar: My Roadmaps Button */}
-          {activeCount > 0 && (
-            <div className="hidden lg:flex lg:w-16 shrink-0 flex-col items-center pt-2">
-              <Button
-                variant="outline"
-                onClick={() => navigate("/my-roadmaps")}
-                className="w-14 h-14 rounded-xl border-white/10 hover:bg-white/5 flex flex-col items-center justify-center gap-1 p-0"
-                title="My Roadmaps"
-              >
-                <BookOpen className="h-5 w-5 text-primary" />
-                <span className="text-[10px] text-muted-foreground font-heading">{activeCount}</span>
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </>
