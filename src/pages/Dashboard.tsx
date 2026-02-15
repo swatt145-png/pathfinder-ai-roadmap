@@ -9,7 +9,7 @@ import { AdaptationNotification } from "@/components/AdaptationNotification";
 import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActionsModal";
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
-import { Loader2, Flame, Clock, BookOpen, Settings2 } from "lucide-react";
+import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles } from "lucide-react";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
 interface CompletionActionState {
@@ -308,6 +308,29 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Next Step */}
+        <div className="mb-6">
+          {firstIncomplete ? (
+            <Button
+              type="button"
+              onClick={() => setSelectedModule(firstIncomplete)}
+              className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+            >
+              Continue to Next Module: {firstIncomplete.title}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => navigate("/new")}
+              className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+            >
+              All Modules Complete. Build Your Next Roadmap
+              <Sparkles className="ml-2 h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         {/* Module List */}
