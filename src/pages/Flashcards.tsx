@@ -202,8 +202,8 @@ export default function Flashcards() {
                     onClick={() => setSelectedRoadmap(rm)}
                     className="group rounded-xl overflow-hidden bg-card border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
                   >
-                    <div className={`bg-gradient-to-r ${grad} px-5 py-4`}>
-                      <h3 className="font-heading font-bold text-lg text-white">{rm.topic}</h3>
+                    <div className={`bg-gradient-to-r ${grad} px-5 py-4 h-16 flex items-center`}>
+                      <h3 className="font-heading font-bold text-lg text-white line-clamp-2">{rm.topic}</h3>
                     </div>
                     <div className="p-5">
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
