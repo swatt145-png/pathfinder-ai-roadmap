@@ -45,96 +45,14 @@ const CARD_COLORS = [
   "from-lime-500/80 to-green-400/80",
 ];
 
-function FlashcardGrid({ rm, colorIndex }: { rm: RoadmapRow; colorIndex: number }) {
-  const rd = rm.roadmap_data as unknown as RoadmapData;
-  const cards = generateFlashcards(rd);
-  const [selectedCard, setSelectedCard] = useState<number | null>(null);
-  const [flipped, setFlipped] = useState(false);
-  const gradient = CARD_COLORS[colorIndex % CARD_COLORS.length];
-
-  if (cards.length === 0) return null;
-
-  // If a card is selected, show the focused view
-  if (selectedCard !== null) {
-    const card = cards[selectedCard];
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => { setSelectedCard(null); setFlipped(false); }}>
-            <ChevronLeft className="h-4 w-4 mr-1" /> Back to deck
-          </Button>
-          <h3 className="font-heading font-bold text-lg">{rm.topic}</h3>
-          <span className="text-sm text-muted-foreground ml-auto">{selectedCard + 1} / {cards.length}</span>
-        </div>
-        <p className="text-xs text-muted-foreground">{card.module}</p>
-        <button
-          onClick={() => setFlipped(!flipped)}
-          className="w-full min-h-[200px] glass-blue p-8 text-center transition-all hover:bg-accent/10 cursor-pointer flex items-center justify-center rounded-xl"
-        >
-          <p className="text-lg whitespace-pre-line">{flipped ? card.back : card.front}</p>
-        </button>
-        <p className="text-xs text-center text-muted-foreground">
-          {flipped ? "Answer" : "Question"} — tap to flip
-        </p>
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" disabled={selectedCard === 0}
-            onClick={() => { setSelectedCard(selectedCard - 1); setFlipped(false); }}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Prev
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => { setSelectedCard(0); setFlipped(false); }} className="text-muted-foreground">
-            <RotateCcw className="h-3 w-3 mr-1" /> Reset
-          </Button>
-          <Button variant="ghost" size="sm" disabled={selectedCard === cards.length - 1}
-            onClick={() => { setSelectedCard(selectedCard + 1); setFlipped(false); }}>
-            Next <ArrowRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Grid view of cards
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-heading font-bold text-xl">{rm.topic}</h3>
-        <span className="px-3 py-1 text-sm font-heading rounded-full bg-primary/20 text-primary">
-          {cards.length} cards
-        </span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map((card, i) => (
-          <button
-            key={i}
-            onClick={() => { setSelectedCard(i); setFlipped(false); }}
-            className="group relative rounded-xl overflow-hidden bg-card border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
-          >
-            {/* Gradient header */}
-            <div className={`bg-gradient-to-r ${gradient} px-4 py-2.5 flex items-center justify-between`}>
-              <span className="text-sm font-heading font-bold text-white truncate max-w-[70%]">{card.module}</span>
-              <span className="text-xs text-white/70 shrink-0">#{i + 1}</span>
-            </div>
-            {/* Card body */}
-            <div className="p-4 min-h-[100px] flex flex-col justify-between">
-              <p className="font-heading font-semibold text-sm text-foreground line-clamp-3 mb-3">
-                {card.front}
-              </p>
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {card.back.split("\n")[0]}
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function Flashcards() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [roadmaps, setRoadmaps] = useState<RoadmapRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRoadmap, setSelectedRoadmap] = useState<RoadmapRow | null>(null);
+  const [selectedCard, setSelectedCard] = useState<number | null>(null);
+  const [flipped, setFlipped] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -161,10 +79,102 @@ export default function Flashcards() {
     );
   }
 
+  const cards = selectedRoadmap
+    ? generateFlashcards(selectedRoadmap.roadmap_data as unknown as RoadmapData)
+    : [];
+  const colorIndex = selectedRoadmap ? roadmaps.findIndex(r => r.id === selectedRoadmap.id) : 0;
+  const gradient = CARD_COLORS[colorIndex % CARD_COLORS.length];
+
+  // === View 3: Single card focused ===
+  if (selectedRoadmap && selectedCard !== null) {
+    const card = cards[selectedCard];
+    return (
+      <>
+        <AppBar />
+        <div className="min-h-screen pt-20 pb-10 px-4 max-w-3xl mx-auto animate-fade-in">
+          <div className="flex items-center gap-3 mb-6">
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedCard(null); setFlipped(false); }}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Back to deck
+            </Button>
+            <span className="text-sm text-muted-foreground ml-auto">{selectedCard + 1} / {cards.length}</span>
+          </div>
+          <p className="text-xs text-muted-foreground mb-2">{card.module}</p>
+          <button
+            onClick={() => setFlipped(!flipped)}
+            className="w-full min-h-[220px] glass-blue p-8 text-center transition-all hover:bg-accent/10 cursor-pointer flex items-center justify-center rounded-xl"
+          >
+            <p className="text-lg whitespace-pre-line">{flipped ? card.back : card.front}</p>
+          </button>
+          <p className="text-xs text-center text-muted-foreground mt-3">
+            {flipped ? "Answer" : "Question"} — tap to flip
+          </p>
+          <div className="flex items-center justify-between mt-4">
+            <Button variant="ghost" size="sm" disabled={selectedCard === 0}
+              onClick={() => { setSelectedCard(selectedCard - 1); setFlipped(false); }}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> Prev
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedCard(0); setFlipped(false); }} className="text-muted-foreground">
+              <RotateCcw className="h-3 w-3 mr-1" /> Reset
+            </Button>
+            <Button variant="ghost" size="sm" disabled={selectedCard === cards.length - 1}
+              onClick={() => { setSelectedCard(selectedCard + 1); setFlipped(false); }}>
+              Next <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // === View 2: Cards grid for selected roadmap ===
+  if (selectedRoadmap) {
+    return (
+      <>
+        <AppBar />
+        <div className="min-h-screen pt-20 pb-10 px-4 max-w-5xl mx-auto animate-fade-in">
+          <div className="flex items-center gap-3 mb-8">
+            <Button variant="ghost" size="icon" onClick={() => setSelectedRoadmap(null)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h2 className="font-heading text-2xl md:text-3xl font-bold">{selectedRoadmap.topic}</h2>
+              <p className="text-sm text-muted-foreground">{cards.length} flashcards · {selectedRoadmap.skill_level}</p>
+            </div>
+          </div>
+          {cards.length === 0 ? (
+            <div className="glass-blue p-8 text-center">
+              <p className="text-muted-foreground">No flashcards available for this roadmap yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {cards.map((card, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setSelectedCard(i); setFlipped(false); }}
+                  className="group relative rounded-xl overflow-hidden bg-card border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
+                >
+                  <div className={`bg-gradient-to-r ${gradient} px-4 py-2.5 flex items-center justify-between`}>
+                    <span className="text-sm font-heading font-bold text-white truncate max-w-[70%]">{card.module}</span>
+                    <span className="text-xs text-white/70 shrink-0">#{i + 1}</span>
+                  </div>
+                  <div className="p-4 min-h-[100px] flex flex-col justify-between">
+                    <p className="font-heading font-semibold text-sm text-foreground line-clamp-3 mb-3">{card.front}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{card.back.split("\n")[0]}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // === View 1: Roadmap/topic picker ===
   return (
     <>
       <AppBar />
-      <div className="min-h-screen pt-20 pb-10 px-4 max-w-5xl mx-auto animate-fade-in">
+      <div className="min-h-screen pt-20 pb-10 px-4 max-w-4xl mx-auto animate-fade-in">
         <div className="flex items-center gap-3 mb-8">
           <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
             <ArrowLeft className="h-5 w-5" />
@@ -180,11 +190,34 @@ export default function Flashcards() {
             </Button>
           </div>
         ) : (
-          <div className="space-y-10">
-            {roadmaps.map((rm, i) => (
-              <FlashcardGrid key={rm.id} rm={rm} colorIndex={i} />
-            ))}
-          </div>
+          <>
+            <p className="text-muted-foreground mb-6">Choose a roadmap to study its flashcards</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {roadmaps.map((rm, i) => {
+                const cardCount = generateFlashcards(rm.roadmap_data as unknown as RoadmapData).length;
+                const grad = CARD_COLORS[i % CARD_COLORS.length];
+                return (
+                  <button
+                    key={rm.id}
+                    onClick={() => setSelectedRoadmap(rm)}
+                    className="group rounded-xl overflow-hidden bg-card border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
+                  >
+                    <div className={`bg-gradient-to-r ${grad} px-5 py-4`}>
+                      <h3 className="font-heading font-bold text-lg text-white">{rm.topic}</h3>
+                    </div>
+                    <div className="p-5">
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>{rm.skill_level} · {rm.timeline_weeks}w · {rm.hours_per_day}h/day</span>
+                        <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading font-semibold">
+                          {cardCount} cards
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </>
