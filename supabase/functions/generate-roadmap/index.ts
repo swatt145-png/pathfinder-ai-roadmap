@@ -5,6 +5,105 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface SerperWebResult {
+  title: string;
+  link: string;
+  snippet: string;
+}
+
+interface SerperVideoResult {
+  title: string;
+  link: string;
+  duration?: string;
+}
+
+function detectResourceType(url: string): "article" | "documentation" | "tutorial" {
+  const docDomains = ["docs.", "developer.", "devdocs.", "wiki.", "reference."];
+  const tutorialDomains = ["freecodecamp", "w3schools", "tutorialspoint", "geeksforgeeks", "codecademy", "khanacademy"];
+  const lower = url.toLowerCase();
+  if (docDomains.some(d => lower.includes(d))) return "documentation";
+  if (tutorialDomains.some(d => lower.includes(d))) return "tutorial";
+  return "article";
+}
+
+function parseDurationToMinutes(duration?: string): number {
+  if (!duration) return 15;
+  // Formats like "12:34" or "1:02:30" or "12 minutes"
+  const hmsMatch = duration.match(/(\d+):(\d+):(\d+)/);
+  if (hmsMatch) return parseInt(hmsMatch[1]) * 60 + parseInt(hmsMatch[2]);
+  const msMatch = duration.match(/(\d+):(\d+)/);
+  if (msMatch) return parseInt(msMatch[1]);
+  const minMatch = duration.match(/(\d+)\s*min/i);
+  if (minMatch) return parseInt(minMatch[1]);
+  return 15;
+}
+
+async function searchSerper(query: string, apiKey: string, type: "search" | "videos", num: number) {
+  const url = type === "videos"
+    ? "https://google.serper.dev/videos"
+    : "https://google.serper.dev/search";
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ q: query, num }),
+    });
+    if (!res.ok) {
+      console.error(`Serper ${type} error: ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    return type === "videos" ? (data.videos || []) : (data.organic || []);
+  } catch (e) {
+    console.error(`Serper ${type} fetch failed:`, e);
+    return [];
+  }
+}
+
+async function fetchResourcesForModule(
+  moduleTitle: string,
+  topic: string,
+  skillLevel: string,
+  apiKey: string
+) {
+  const webQuery = `learn ${moduleTitle} ${topic} ${skillLevel} tutorial`;
+  const videoQuery = `${moduleTitle} ${topic} tutorial ${skillLevel}`;
+
+  const [webResults, videoResults] = await Promise.all([
+    searchSerper(webQuery, apiKey, "search", 3),
+    searchSerper(videoQuery, apiKey, "videos", 2),
+  ]);
+
+  const resources: any[] = [];
+
+  for (const r of webResults as SerperWebResult[]) {
+    if (r.link) {
+      resources.push({
+        title: r.title || "Learning Resource",
+        url: r.link,
+        type: detectResourceType(r.link),
+        estimated_minutes: 20,
+        description: r.snippet || `Resource for learning ${moduleTitle}`,
+      });
+    }
+  }
+
+  for (const v of videoResults as SerperVideoResult[]) {
+    if (v.link) {
+      resources.push({
+        title: v.title || "Video Tutorial",
+        url: v.link,
+        type: "video",
+        estimated_minutes: parseDurationToMinutes(v.duration),
+        description: `Video tutorial on ${moduleTitle}`,
+      });
+    }
+  }
+
+  return resources;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -17,14 +116,17 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY");
+    if (!SERPER_API_KEY) throw new Error("SERPER_API_KEY not configured");
+
+    // Step 1: AI generates curriculum structure WITHOUT resource URLs
     const systemPrompt = `You are Pathfinder, an expert learning curriculum designer for technical topics. You create personalized, structured, and realistic learning roadmaps. Given a topic, skill level, timeline, and available hours, design a comprehensive learning path.
 
 RULES:
 - Break the topic into 5-8 sequential modules depending on complexity and timeline
 - Each module must logically build on the previous one
 - Total estimated hours across all modules must not exceed the student's available hours (${total_hours} hours)
-- For each module, recommend 2-4 specific, real learning resources from well-known sources
-- Include actual URLs you are confident exist
+- DO NOT include any resources or URLs - leave resources as empty arrays. Resources will be fetched separately.
 - Generate 3-5 multiple-choice quiz questions per module that test conceptual understanding
 - Each quiz question must have exactly 4 options with one correct answer and a clear explanation
 - Assign each module to specific days within the timeline
@@ -61,9 +163,7 @@ Return ONLY valid JSON with this exact structure:
       "week": number,
       "prerequisites": [],
       "learning_objectives": ["objective 1", "objective 2"],
-      "resources": [
-        { "title": "name", "url": "https://...", "type": "video|article|documentation|tutorial|practice", "estimated_minutes": number, "description": "why recommended" }
-      ],
+      "resources": [],
       "quiz": [
         { "id": "q1", "question": "question text", "options": ["A", "B", "C", "D"], "correct_answer": "exact text of correct option", "explanation": "why correct" }
       ]
@@ -105,6 +205,21 @@ Return ONLY valid JSON with this exact structure:
     if (!content) throw new Error("No response from AI");
 
     const roadmap = JSON.parse(content);
+
+    // Step 2: Fetch real resources via Serper API (parallelized across all modules)
+    console.log(`Fetching resources for ${roadmap.modules?.length || 0} modules via Serper...`);
+
+    const resourcePromises = (roadmap.modules || []).map((mod: any) =>
+      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY)
+    );
+    const allResources = await Promise.all(resourcePromises);
+
+    // Step 3: Inject resources into modules
+    for (let i = 0; i < (roadmap.modules || []).length; i++) {
+      roadmap.modules[i].resources = allResources[i] || [];
+    }
+
+    console.log("Roadmap generation with real resources complete.");
     return new Response(JSON.stringify(roadmap), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("generate-roadmap error:", e);
