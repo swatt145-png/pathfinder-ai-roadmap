@@ -340,7 +340,7 @@ export default function NewRoadmap() {
           </div>
 
           {/* Right sidebar - 20% */}
-          <div className="hidden md:flex flex-col gap-3 w-[20%] min-w-[180px] pt-1">
+          <div className="hidden md:flex flex-col gap-3 w-[20%] min-w-[180px] justify-center">
             {activeCount > 0 && (
               <Button
                 onClick={() => navigate("/my-roadmaps")}
@@ -350,7 +350,12 @@ export default function NewRoadmap() {
                 My Roadmaps ({activeCount})
               </Button>
             )}
-            {/* Future buttons go here */}
+            <Button
+              onClick={() => navigate("/flashcards")}
+              className="w-full h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+            >
+              Flashcards
+            </Button>
           </div>
         </div>
       </div>
