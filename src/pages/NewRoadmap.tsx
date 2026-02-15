@@ -188,7 +188,17 @@ export default function NewRoadmap() {
         <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
           Hey {profile?.display_name ?? "there"}! 👋
         </h2>
-        <p className="text-muted-foreground mb-8">What do you want to learn?</p>
+        <p className="text-muted-foreground mb-4">What do you want to learn?</p>
+
+        {activeCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => navigate("/my-roadmaps")}
+            className="mb-8 border-white/10 hover:bg-white/5"
+          >
+            View Existing Roadmaps ({activeCount})
+          </Button>
+        )}
 
         <div className="space-y-6">
           <div>
