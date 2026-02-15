@@ -14,7 +14,7 @@ export function AppBar() {
         to="/home"
         className="flex items-center gap-2 font-heading font-bold text-lg gradient-text focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
       >
-        <img src={logo} alt="PathFinder logo" className="h-8 w-8 object-contain" />
+        <img src={logo} alt="PathFinder logo" className="h-8 w-8 object-contain rounded-full ring-2 ring-white/80" />
         PathFinder
       </Link>
       <DropdownMenu>
