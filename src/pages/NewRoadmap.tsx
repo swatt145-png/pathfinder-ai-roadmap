@@ -208,7 +208,7 @@ export default function NewRoadmap() {
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g., SQL, Python, Cybersecurity, Docker, React..."
-                  className="h-14 text-xl bg-white/5 border-white/10 focus:border-primary font-body"
+                  className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
               </div>
 
