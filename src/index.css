@@ -103,4 +103,65 @@
     content: '';
     @apply absolute w-2 h-2 rounded-full bg-primary;
   }
+
+  /* Neon glow on focus for interactive elements */
+  .neon-focus {
+    @apply transition-shadow duration-200;
+  }
+  .neon-focus:hover {
+    box-shadow: 0 0 12px hsl(var(--ring) / 0.25), 0 0 24px hsl(var(--ring) / 0.1);
+  }
+  .neon-focus:focus,
+  .neon-focus:focus-within,
+  .neon-focus:focus-visible {
+    box-shadow: 0 0 6px 2px hsl(var(--ring) / 0.7), 0 0 14px 4px hsl(var(--ring) / 0.35);
+    outline: none;
+  }
+}
+
+/* Global neon glow for all interactive elements */
+button:not([disabled]),
+[role="button"],
+input:not([type="hidden"]),
+textarea,
+select,
+[role="radio"],
+[role="checkbox"],
+[role="tab"],
+[role="option"],
+[data-slot="control"] {
+  @apply transition-shadow duration-200;
+}
+
+button:not([disabled]):hover,
+[role="button"]:hover,
+input:not([type="hidden"]):hover,
+textarea:hover,
+select:hover,
+[role="radio"]:hover,
+[role="checkbox"]:hover,
+[data-slot="control"]:hover {
+  box-shadow: 0 0 12px hsl(160 100% 45% / 0.2), 0 0 24px hsl(160 100% 45% / 0.08);
+}
+
+button:not([disabled]):focus,
+button:not([disabled]):focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible,
+input:not([type="hidden"]):focus,
+input:not([type="hidden"]):focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible,
+[role="radio"]:focus,
+[role="radio"]:focus-visible,
+[role="radio"][data-state="checked"],
+[role="checkbox"]:focus,
+[role="checkbox"]:focus-visible,
+[role="tab"][data-state="active"],
+[role="option"][data-state="checked"],
+[data-slot="control"]:focus-within {
+  box-shadow: 0 0 4px 1px hsl(160 100% 45% / 0.7), 0 0 10px 3px hsl(160 100% 45% / 0.35);
+  outline: none;
 }
