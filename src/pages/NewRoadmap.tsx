@@ -232,8 +232,8 @@ export default function NewRoadmap() {
                       onClick={() => setSkillLevel(s.value)}
                       className={`glass-blue p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-accent/10"}`}
                     >
-                      <span className="block text-base font-heading font-semibold">{s.label}</span>
-                      {skillLevel === s.value && <span className="block text-sm text-muted-foreground mt-1">{s.desc}</span>}
+                      <span className="block text-xs sm:text-base font-heading font-semibold truncate">{s.label}</span>
+                      {skillLevel === s.value && <span className="block text-xs sm:text-sm text-muted-foreground mt-1">{s.desc}</span>}
                     </button>
                   ))}
                 </div>
@@ -357,8 +357,7 @@ export default function NewRoadmap() {
                 {activeCount > 0 && (
                   <Button
                     onClick={() => navigate("/my-roadmaps")}
-                    variant="outline"
-                    className="flex-1 h-12 text-sm font-heading font-bold"
+                    className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
                   >
                     <BookOpen className="mr-2 h-4 w-4" />
                     My Roadmaps
@@ -366,8 +365,7 @@ export default function NewRoadmap() {
                 )}
                 <Button
                   onClick={() => navigate("/flashcards")}
-                  variant="outline"
-                  className="flex-1 h-12 text-sm font-heading font-bold"
+                  className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
                 >
                   <Layers className="mr-2 h-4 w-4" />
                   Flashcards

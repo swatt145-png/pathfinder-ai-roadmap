@@ -65,7 +65,7 @@ export default function MyRoadmaps() {
       <div className="min-h-screen pt-20 pb-10 px-4 max-w-2xl mx-auto animate-fade-in">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <h2 className="font-heading text-2xl md:text-3xl font-bold">My Roadmaps</h2>
