@@ -52,7 +52,25 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
   const handleApply = () => {
     if (!result || !selectedOption) return;
     const opt = result.options.find((o) => o.id === selectedOption);
-    if (opt) onApply(opt.updated_roadmap);
+    if (!opt) return;
+
+    // Safety net: ensure completed modules are always preserved in the final roadmap
+    const completedModuleIds = new Set(
+      Object.values(progressMap)
+        .filter((p) => p.status === "completed")
+        .map((p) => p.module_id)
+    );
+    const originalCompletedModules = roadmapData.modules.filter((m) => completedModuleIds.has(m.id));
+    const aiAdaptedModules = (opt.updated_roadmap.modules || []).filter(
+      (m: any) => !completedModuleIds.has(m.id)
+    );
+
+    const mergedRoadmap: RoadmapData = {
+      ...opt.updated_roadmap,
+      modules: [...originalCompletedModules, ...aiAdaptedModules],
+    };
+
+    onApply(mergedRoadmap);
   };
 
   return (

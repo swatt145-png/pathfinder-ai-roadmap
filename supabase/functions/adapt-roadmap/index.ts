@@ -81,20 +81,30 @@ serve(async (req) => {
     );
     const remainingHours = remainingModules.reduce((sum: number, m: any) => sum + (m.estimated_hours || 0), 0);
 
+    // Build the list of completed module IDs for the prompt
+    const completedModuleIds = completedModules.map((p: any) => p.module_id);
+    const completedModulesData = roadmap_data.modules.filter((m: any) => completedModuleIds.includes(m.id));
+    const totalCompletedHours = completedModulesData.reduce((sum: number, m: any) => sum + (m.estimated_hours || 0), 0);
+    const totalDaysCompleted = completedModulesData.length; // 1 module ≈ 1 day
+
     const systemPrompt = `You are a concise learning-plan optimizer. Address the user directly ("you/your"). Keep all text crisp — no filler.
 
 RULES:
-- Never remove or modify completed modules
-- User wants to finish in ${displayDays} day(s) at ${hrsPerDay}h/day = ${totalAvailableHours}h available
-- Remaining content needs ~${remainingHours}h across ${remainingModules.length} modules
+- The updated_roadmap MUST include ALL modules: both completed and adapted. Do NOT omit completed modules.
+- Completed modules (IDs: ${JSON.stringify(completedModuleIds)}) MUST appear first in the modules array, completely unchanged — same id, title, resources, estimated_hours, day_start, day_end, week.
+- User wants to finish REMAINING content in ${displayDays} day(s) at ${hrsPerDay}h/day = ${totalAvailableHours}h available
+- Remaining content needs ~${remainingHours}h across ${remainingModules.length} module(s)
 - You MUST provide exactly 1 option: "Adapted Plan"
 - ADAPTATION LOGIC:
   A) If totalAvailableHours < remainingHours (user has LESS time): REPLACE remaining module resources with shorter, condensed alternatives (crash courses, summary videos, quick tutorials) that cover the SAME topics but fit within the available hours. Each module's estimated_hours and resources MUST be updated to fit.
-  B) If user has MORE days but FEWER hours/day: SPLIT remaining modules into smaller daily chunks. For example, a 3h module at 1.5h/day becomes 2 modules of 1.5h each covering the same material across 2 days. Update day_start, day_end, week fields.
+  B) If user has MORE days but FEWER hours/day: SPLIT remaining modules into smaller daily chunks. For example, a 3h module at ${hrsPerDay}h/day becomes ${Math.ceil(remainingHours / hrsPerDay)} modules of ${hrsPerDay}h each, each with its own subset of resources covering part of the material. Give each split module a unique id (e.g. original_id + "_part1", "_part2"). Update day_start, day_end, week fields accordingly. The day numbering for adapted modules starts AFTER the last completed module's day (day ${totalDaysCompleted + 1}).
   C) If totalAvailableHours >= remainingHours and hours/day is same or more: Just redistribute the existing modules across the new timeline.
-- In ALL cases, the updated_roadmap MUST reflect the new timeline_weeks (ceil(displayDays/7)), hours_per_day, and total_hours accurately.
+- total_hours in updated_roadmap = ${totalCompletedHours} (completed) + adapted remaining hours
+- timeline_weeks = ceil(total_days / 7) where total_days = ${totalDaysCompleted} + ${displayDays}
+- hours_per_day = ${hrsPerDay}
+- modules_kept = total number of modules in the final roadmap (completed + adapted)
 - Keep analysis to 1-2 sentences
-- Use "timeline_days" in the response (not weeks)`;
+- Use "timeline_days" in the response (= ${totalDaysCompleted + displayDays} total days)`;
 
     const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules (${remainingModules.length} remaining, ~${remainingHours}h of content).
 Available: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours}h total).
@@ -150,7 +160,7 @@ Return ONLY valid JSON:
         options: [{
           id: "option_a", label: "Keep Current Plan",
           description: "Continue with your current roadmap.",
-          timeline_days: totalDays, hours_per_day: Number(new_hours_per_day),
+          timeline_days: displayDays, hours_per_day: Number(new_hours_per_day),
           total_remaining_hours: totalAvailableHours,
           modules_kept: Array.isArray(roadmap_data?.modules) ? roadmap_data.modules.length : 0,
           modules_removed: [], modules_added: [],
