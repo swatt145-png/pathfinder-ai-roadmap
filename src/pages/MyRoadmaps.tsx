@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
-import { Loader2, Plus, ArrowRight, Archive } from "lucide-react";
+import { Loader2, Plus, ArrowRight, Archive, ArrowLeft } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
 interface RoadmapRow {
@@ -64,7 +64,12 @@ export default function MyRoadmaps() {
       <AppBar />
       <div className="min-h-screen pt-20 pb-10 px-4 max-w-2xl mx-auto animate-fade-in">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-heading text-2xl md:text-3xl font-bold">My Roadmaps</h2>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h2 className="font-heading text-2xl md:text-3xl font-bold">My Roadmaps</h2>
+          </div>
           {roadmaps.length < 10 && (
             <Button
               onClick={() => navigate("/new")}

@@ -37,12 +37,12 @@ interface RoadmapRow {
 }
 
 const CARD_COLORS = [
-  "from-emerald-500/80 to-teal-400/80",
-  "from-cyan-500/80 to-blue-400/80",
-  "from-violet-500/80 to-purple-400/80",
-  "from-amber-500/80 to-orange-400/80",
-  "from-rose-500/80 to-pink-400/80",
-  "from-lime-500/80 to-green-400/80",
+  "from-primary/80 to-emerald-400/80",
+  "from-primary/60 to-cyan-500/80",
+  "from-accent/80 to-primary/60",
+  "from-emerald-500/80 to-primary/80",
+  "from-cyan-400/80 to-primary/60",
+  "from-primary/70 to-teal-400/80",
 ];
 
 export default function Flashcards() {
