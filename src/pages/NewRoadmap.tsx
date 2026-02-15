@@ -351,6 +351,28 @@ export default function NewRoadmap() {
                   ))}
                 </div>
               </div>
+
+              {/* Mobile navigation buttons */}
+              <div className="flex md:hidden gap-2">
+                {activeCount > 0 && (
+                  <Button
+                    onClick={() => navigate("/my-roadmaps")}
+                    variant="outline"
+                    className="flex-1 h-12 text-sm font-heading font-bold"
+                  >
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    My Roadmaps
+                  </Button>
+                )}
+                <Button
+                  onClick={() => navigate("/flashcards")}
+                  variant="outline"
+                  className="flex-1 h-12 text-sm font-heading font-bold"
+                >
+                  <Layers className="mr-2 h-4 w-4" />
+                  Flashcards
+                </Button>
+              </div>
             </div>
           </div>
 
