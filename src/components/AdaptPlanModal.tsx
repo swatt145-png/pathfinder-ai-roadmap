@@ -148,10 +148,10 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
               <button
                 key={opt.id}
                 onClick={() => setSelectedOption(opt.id)}
-                className={`w-full text-left glass p-4 transition-all rounded-xl border-2 ${selectedOption === opt.id ? "border-primary bg-primary/15 glow-primary shadow-lg shadow-primary/20" : "border-transparent hover:bg-white/5"}`}
+                className={`w-full text-left p-4 transition-all rounded-xl border-2 ${selectedOption === opt.id ? "border-primary bg-primary/20 shadow-lg shadow-primary/30 ring-2 ring-primary/40" : "glass border-transparent hover:bg-white/5"}`}
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-heading font-bold text-sm">{opt.label}</span>
+                  <span className={`font-heading font-bold text-sm ${selectedOption === opt.id ? "text-primary" : ""}`}>{opt.label}</span>
                   {opt.id === result.recommendation && <Star className="w-4 h-4 text-warning fill-warning" />}
                 </div>
                 <p className="text-xs text-muted-foreground mb-2">{opt.description}</p>
@@ -167,9 +167,9 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
             {/* Keep Current Plan option */}
             <button
               onClick={() => setSelectedOption("keep_current")}
-              className={`w-full text-left glass p-4 transition-all rounded-xl border-2 ${selectedOption === "keep_current" ? "border-primary bg-primary/15 glow-primary shadow-lg shadow-primary/20" : "border-transparent hover:bg-white/5"}`}
+              className={`w-full text-left p-4 transition-all rounded-xl border-2 ${selectedOption === "keep_current" ? "border-primary bg-primary/20 shadow-lg shadow-primary/30 ring-2 ring-primary/40" : "glass border-transparent hover:bg-white/5"}`}
             >
-              <span className="font-heading font-bold text-sm">Keep Current Plan</span>
+              <span className={`font-heading font-bold text-sm ${selectedOption === "keep_current" ? "text-primary" : ""}`}>Keep Current Plan</span>
               <p className="text-xs text-muted-foreground mt-1">No changes — continue with your existing roadmap as-is.</p>
             </button>
 

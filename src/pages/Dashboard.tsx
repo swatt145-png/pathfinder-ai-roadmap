@@ -437,7 +437,7 @@ export default function Dashboard() {
               <button
                 key={mod.id}
                 onClick={() => setSelectedModule(mod)}
-                className={`w-full text-left glass p-4 flex items-center gap-4 transition-all hover:bg-white/5 ${isUpNext ? "border-primary/40 glow-primary" : ""} ${status === "completed" ? "opacity-60" : ""}`}
+                className={`w-full text-left glass p-4 flex items-center gap-4 transition-all hover:bg-white/5 ${isUpNext ? "border-2 border-primary/60 bg-primary/10 shadow-lg shadow-primary/20 ring-1 ring-primary/30" : "border border-transparent"} ${status === "completed" ? "opacity-60" : ""}`}
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-heading font-bold shrink-0 ${
                   status === "completed" ? "bg-success/20 text-success" :
@@ -450,12 +450,13 @@ export default function Dashboard() {
                   <p className="font-heading font-semibold text-sm truncate">{mod.title}</p>
                   <p className="text-xs text-muted-foreground">Day {mod.day_start}-{mod.day_end} · {mod.estimated_hours}h · {mod.resources.length} resources</p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full shrink-0 font-heading ${
+                <span className={`text-xs px-2 py-1 rounded-full shrink-0 font-heading font-semibold ${
                   status === "completed" ? "bg-success/20 text-success" :
+                  isUpNext ? "bg-primary/20 text-primary border border-primary/40" :
                   status === "in_progress" ? "bg-primary/20 text-primary" :
                   "bg-white/5 text-muted-foreground"
                 }`}>
-                  {status === "completed" ? "Completed ✓" : status === "in_progress" ? "In Progress" : isUpNext ? "Up Next" : "Not Started"}
+                  {status === "completed" ? "Completed ✓" : isUpNext ? "Up Next →" : status === "in_progress" ? "In Progress" : "Not Started"}
                 </span>
               </button>
             );
