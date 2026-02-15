@@ -9,6 +9,7 @@ import { AdaptationNotification } from "@/components/AdaptationNotification";
 import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActionsModal";
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles } from "lucide-react";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [applyingAdaptation, setApplyingAdaptation] = useState(false);
   const [completionActions, setCompletionActions] = useState<CompletionActionState | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
@@ -261,9 +263,8 @@ export default function Dashboard() {
 
   const handleArchiveAndNew = async () => {
     if (!roadmap) return;
-    const confirmed = window.confirm("This will archive your current roadmap. You can't undo this. Continue?");
-    if (!confirmed) return;
     await supabase.from("roadmaps").update({ status: "archived" }).eq("id", roadmap.id);
+    setArchiveConfirmOpen(false);
     navigate("/my-roadmaps");
   };
 
@@ -352,7 +353,7 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground mb-3">You've finished your entire roadmap. Ready for the next challenge?</p>
               <Button
                 type="button"
-                onClick={handleArchiveAndNew}
+                onClick={() => setArchiveConfirmOpen(true)}
                 className="w-full gradient-primary text-primary-foreground font-heading font-bold"
               >
                 Archive & Start New Roadmap
@@ -404,7 +405,7 @@ export default function Dashboard() {
           </Button>
           <Button
             variant="ghost"
-            onClick={handleArchiveAndNew}
+            onClick={() => setArchiveConfirmOpen(true)}
             className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 text-sm"
           >
             Abandon Roadmap & Start New
@@ -464,6 +465,25 @@ export default function Dashboard() {
           onClose={() => setReviewOpen(false)}
         />
       )}
+
+      <Dialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
+        <DialogContent className="glass-strong border-white/10">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Archive this roadmap?</DialogTitle>
+            <DialogDescription>
+              This will archive your current roadmap. You can't undo this.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setArchiveConfirmOpen(false)} className="border-white/10">
+              Cancel
+            </Button>
+            <Button onClick={handleArchiveAndNew} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Archive & Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
