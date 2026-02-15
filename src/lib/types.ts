@@ -70,6 +70,7 @@ export interface AdaptOption {
   label: string;
   description: string;
   timeline_weeks: number;
+  timeline_days?: number;
   hours_per_day: number;
   total_remaining_hours: number;
   modules_kept: number;
