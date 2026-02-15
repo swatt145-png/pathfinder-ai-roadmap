@@ -205,7 +205,7 @@ export default function NewRoadmap() {
     <>
       <AppBar />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-8">
-        <div className="flex flex-col md:flex-row justify-between gap-6 animate-fade-in">
+        <div className="flex flex-col md:flex-row justify-between gap-4 animate-fade-in">
           {/* Main content - 70% */}
           <div className="w-full md:w-[70%]">
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
@@ -377,7 +377,7 @@ export default function NewRoadmap() {
           </div>
 
           {/* Right sidebar - 20% */}
-          <div className="hidden md:flex flex-col gap-3 w-[20%] min-w-[180px] justify-center">
+          <div className="hidden md:flex flex-col gap-3 w-[200px] min-w-[180px] justify-center">
             {activeCount > 0 && (
               <Button
                 onClick={() => navigate("/my-roadmaps")}
