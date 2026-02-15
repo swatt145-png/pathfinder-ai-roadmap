@@ -39,20 +39,16 @@ export function AdaptationNotification({
   saving = false,
 }: Props) {
   const proposed = result.updated_roadmap;
-  const currentTimelineWeeks = toNumber(currentRoadmap.timeline_weeks, 0);
-  const currentTimelineDays = currentTimelineWeeks * 7;
-  const proposedTimelineWeeks = toNumber(proposed?.timeline_weeks, currentTimelineWeeks);
-  const proposedTimelineDays = proposedTimelineWeeks * 7;
-  const timelineDeltaDays = proposedTimelineDays - currentTimelineDays;
+  const baseHoursPerDay = Math.max(toNumber(currentRoadmap.hours_per_day, 1), 0.1);
 
   const currentTotalHours = getTotalHours(currentRoadmap);
   const proposedTotalHours = getTotalHours(proposed ?? currentRoadmap);
   const totalHoursDelta = Number((proposedTotalHours - currentTotalHours).toFixed(2));
 
-  const baseHoursPerDay = toNumber(currentRoadmap.hours_per_day, 0);
-  const currentDaysForDailyLoad = Math.max(currentTimelineDays, 1);
-  const requiredHoursPerDayNoSchedule = Number((proposedTotalHours / currentDaysForDailyLoad).toFixed(2));
-  const extraDailyHoursNoSchedule = Number((requiredHoursPerDayNoSchedule - baseHoursPerDay).toFixed(2));
+  // Compute timeline from hours, not from AI's timeline_weeks
+  const currentTimelineDays = Math.ceil(currentTotalHours / baseHoursPerDay);
+  const proposedTimelineDays = Math.ceil(proposedTotalHours / baseHoursPerDay);
+  const timelineDeltaDays = proposedTimelineDays - currentTimelineDays;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

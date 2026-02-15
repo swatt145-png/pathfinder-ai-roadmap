@@ -130,7 +130,17 @@ ADAPTATION LOGIC:
 - If the module was HARD but quiz score >= 60%: Add 1-2 supplementary resources to next module. No structural change.
 - If the module was EASY and quiz score > 90%: Check if next modules can be compressed.
 
-CRITICAL RULES:
+TIMELINE CALCULATION (CRITICAL - you MUST follow this):
+- The roadmap has a fixed hours_per_day the student can dedicate.
+- new_total_hours = sum of all module estimated_hours (including any added modules).
+- new_timeline_days = ceil(new_total_hours / hours_per_day).
+- new_timeline_weeks = ceil(new_timeline_days / 7).
+- Example: 14h total at 1h/day = 14 days. Add 3h review module → 17h at 1h/day = 17 days = 3 weeks.
+- Example: 14h total at 2h/day = 7 days. Add 3h → 17h at 2h/day = 9 days = 2 weeks.
+- NEVER just add a full week for small changes. Always derive timeline from total_hours / hours_per_day.
+- Update total_hours in the roadmap to match the sum of all module estimated_hours.
+
+OTHER RULES:
 - Never modify completed modules
 - Keep total hours realistic
 - Maintain the same JSON structure as the original roadmap
