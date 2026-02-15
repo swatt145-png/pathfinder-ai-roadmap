@@ -1,14 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AuthModal } from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
-import { Loader2 } from "lucide-react";
+import { Loader2, BookOpen, Plus } from "lucide-react";
 
 export default function Landing() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"signin" | "signup">("signup");
+  const [activeCount, setActiveCount] = useState(0);
+  const [checkingRoadmaps, setCheckingRoadmaps] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setCheckingRoadmaps(true);
+    supabase
+      .from("roadmaps")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .then(({ data }) => {
+        setActiveCount(data?.length ?? 0);
+        setCheckingRoadmaps(false);
+      });
+  }, [user]);
 
   if (loading) {
     return (
@@ -42,6 +61,37 @@ export default function Landing() {
             </div>
           ))}
         </div>
+
+        {user && !checkingRoadmaps && (
+          <div className="space-y-3">
+            {activeCount > 0 && (
+              <Button
+                onClick={() => navigate("/my-roadmaps")}
+                className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-105"
+              >
+                <BookOpen className="mr-2 h-5 w-5" />
+                View My Roadmaps ({activeCount})
+              </Button>
+            )}
+            {activeCount < 5 && (
+              <Button
+                onClick={() => navigate("/new")}
+                variant={activeCount > 0 ? "outline" : "default"}
+                className={`w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold transition-all hover:scale-105 ${
+                  activeCount === 0
+                    ? "gradient-primary text-primary-foreground glow-primary"
+                    : "border-white/10 hover:bg-white/5"
+                }`}
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                Generate New Roadmap
+              </Button>
+            )}
+            {activeCount >= 5 && (
+              <p className="text-sm text-muted-foreground">You've reached the maximum of 5 active roadmaps. Archive one to create a new one.</p>
+            )}
+          </div>
+        )}
 
         {!user && (
           <>
