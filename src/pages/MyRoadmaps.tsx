@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, ArrowRight, Archive, ArrowLeft } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
@@ -25,26 +26,44 @@ export default function MyRoadmaps() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [roadmaps, setRoadmaps] = useState<RoadmapRow[]>([]);
+  const [archivedRoadmaps, setArchivedRoadmaps] = useState<RoadmapRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
+  const [unarchiveConfirmId, setUnarchiveConfirmId] = useState<string | null>(null);
 
   const fetchRoadmaps = async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("roadmaps")
-      .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
-    setRoadmaps((data as RoadmapRow[]) ?? []);
+    const [{ data: active }, { data: archived }] = await Promise.all([
+      supabase
+        .from("roadmaps")
+        .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("roadmaps")
+        .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
+        .eq("user_id", user.id)
+        .eq("status", "archived")
+        .order("created_at", { ascending: false }),
+    ]);
+    setRoadmaps((active as RoadmapRow[]) ?? []);
+    setArchivedRoadmaps((archived as RoadmapRow[]) ?? []);
     setLoading(false);
   };
 
   useEffect(() => { fetchRoadmaps(); }, [user]);
 
   const handleArchive = async (id: string) => {
-    const confirmed = window.confirm("Archive this roadmap? This can't be undone.");
+    const confirmed = window.confirm("Archive this roadmap? You can still access it from the Archived section.");
     if (!confirmed) return;
     await supabase.from("roadmaps").update({ status: "archived" }).eq("id", id);
+    fetchRoadmaps();
+  };
+
+  const handleUnarchive = async (id: string) => {
+    await supabase.from("roadmaps").update({ status: "active" }).eq("id", id);
+    setUnarchiveConfirmId(null);
     fetchRoadmaps();
   };
 
@@ -59,6 +78,8 @@ export default function MyRoadmaps() {
     );
   }
 
+  const displayRoadmaps = showArchived ? archivedRoadmaps : roadmaps;
+
   return (
     <>
       <AppBar />
@@ -68,28 +89,46 @@ export default function MyRoadmaps() {
             <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <h2 className="font-heading text-2xl md:text-3xl font-bold">My Roadmaps</h2>
+            <h2 className="font-heading text-2xl md:text-3xl font-bold">
+              {showArchived ? "Archived Roadmaps" : "My Roadmaps"}
+            </h2>
           </div>
-          {roadmaps.length < 10 && (
-            <Button
-              onClick={() => navigate("/new")}
-              className="gradient-primary text-primary-foreground font-heading font-bold"
-            >
-              <Plus className="mr-2 h-4 w-4" /> New Roadmap
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {archivedRoadmaps.length > 0 && (
+              <Button
+                variant={showArchived ? "default" : "outline"}
+                onClick={() => setShowArchived(!showArchived)}
+                className={showArchived ? "gradient-primary text-primary-foreground font-heading font-bold" : "border-white/10 font-heading font-bold"}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                {showArchived ? "Active" : "Archived"}
+              </Button>
+            )}
+            {!showArchived && roadmaps.length < 10 && (
+              <Button
+                onClick={() => navigate("/new")}
+                className="gradient-primary text-primary-foreground font-heading font-bold"
+              >
+                <Plus className="mr-2 h-4 w-4" /> New Roadmap
+              </Button>
+            )}
+          </div>
         </div>
 
-        {roadmaps.length === 0 ? (
+        {displayRoadmaps.length === 0 ? (
           <div className="glass-strong p-8 text-center">
-            <p className="text-muted-foreground mb-4">You don't have any active roadmaps yet.</p>
-            <Button onClick={() => navigate("/new")} className="gradient-primary text-primary-foreground font-heading font-bold">
-              <Plus className="mr-2 h-4 w-4" /> Create Your First Roadmap
-            </Button>
+            <p className="text-muted-foreground mb-4">
+              {showArchived ? "You don't have any archived roadmaps." : "You don't have any active roadmaps yet."}
+            </p>
+            {!showArchived && (
+              <Button onClick={() => navigate("/new")} className="gradient-primary text-primary-foreground font-heading font-bold">
+                <Plus className="mr-2 h-4 w-4" /> Create Your First Roadmap
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
-            {roadmaps.map((rm) => {
+            {displayRoadmaps.map((rm) => {
               const completed = rm.completed_modules ?? 0;
               const total = rm.total_modules ?? 0;
               const pct = total ? Math.round((completed / total) * 100) : 0;
@@ -121,19 +160,40 @@ export default function MyRoadmaps() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button
-                      onClick={() => navigate(`/dashboard/${rm.id}`)}
-                      className="flex-1 gradient-primary text-primary-foreground font-heading font-bold"
-                    >
-                      Continue <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleArchive(rm.id)}
-                      className="border-white/10 hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Archive className="h-4 w-4" />
-                    </Button>
+                    {showArchived ? (
+                      <>
+                        <Button
+                          onClick={() => navigate(`/dashboard/${rm.id}`)}
+                          variant="outline"
+                          className="flex-1 border-white/10 font-heading font-bold"
+                        >
+                          View <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setUnarchiveConfirmId(rm.id)}
+                          className="border-white/10 hover:bg-primary/10 hover:text-primary"
+                        >
+                          Restore
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          onClick={() => navigate(`/dashboard/${rm.id}`)}
+                          className="flex-1 gradient-primary text-primary-foreground font-heading font-bold"
+                        >
+                          Continue <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleArchive(rm.id)}
+                          className="border-white/10 hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Archive className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -141,12 +201,31 @@ export default function MyRoadmaps() {
           </div>
         )}
 
-        {roadmaps.length >= 10 && (
+        {!showArchived && roadmaps.length >= 10 && (
           <p className="text-sm text-muted-foreground text-center mt-4">
             You've reached the maximum of 10 active roadmaps. Archive one to create a new one.
           </p>
         )}
       </div>
+
+      <Dialog open={!!unarchiveConfirmId} onOpenChange={() => setUnarchiveConfirmId(null)}>
+        <DialogContent className="glass-strong border-white/10">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Restore this roadmap?</DialogTitle>
+            <DialogDescription>
+              This will move the roadmap back to your active list.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setUnarchiveConfirmId(null)} className="border-white/10">
+              Cancel
+            </Button>
+            <Button onClick={() => unarchiveConfirmId && handleUnarchive(unarchiveConfirmId)} className="gradient-primary text-primary-foreground font-heading font-bold">
+              Restore
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

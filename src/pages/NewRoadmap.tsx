@@ -186,8 +186,8 @@ export default function NewRoadmap() {
     return (
       <>
         <AppBar />
-        <div className="flex min-h-screen items-center justify-center px-4 pt-14">
-          <div className="text-center max-w-md animate-fade-in">
+        <div className="flex min-h-screen items-center justify-center px-6 pt-14 overflow-hidden">
+          <div className="text-center w-full max-w-md animate-fade-in">
             {/* Learning animation - floating books/neurons */}
             <div className="relative w-24 h-24 mx-auto mb-8">
               <div className="absolute inset-0 rounded-full border-2 border-primary/30 animate-spin" style={{ animationDuration: '3s' }} />
