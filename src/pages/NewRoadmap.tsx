@@ -205,13 +205,38 @@ export default function NewRoadmap() {
     <>
       <AppBar />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row gap-8 animate-fade-in">
-          {/* Main content */}
-          <div className="w-full md:flex-1">
-            <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
-              Hey {profile?.display_name ?? "there"}!
-            </h2>
-            <p className="text-muted-foreground text-base mb-6">What do you want to learn?</p>
+        <div className="animate-fade-in">
+          {/* Header row with greeting + nav buttons */}
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
+                Hey {profile?.display_name ?? "there"}!
+              </h2>
+              <p className="text-muted-foreground text-base">What do you want to learn?</p>
+            </div>
+            {/* Desktop navigation buttons - horizontal, right-aligned */}
+            <div className="hidden md:flex items-center gap-3">
+              {activeCount > 0 && (
+                <Button
+                  onClick={() => navigate("/my-roadmaps")}
+                  className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  My Roadmaps
+                </Button>
+              )}
+              <Button
+                onClick={() => navigate("/flashcards")}
+                className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+              >
+                <Layers className="mr-2 h-4 w-4" />
+                Flashcards
+              </Button>
+            </div>
+          </div>
+
+          {/* Main content - full width */}
+          <div className="w-full">
 
             <div className="space-y-6">
               <div>
@@ -372,26 +397,6 @@ export default function NewRoadmap() {
                 </Button>
               </div>
             </div>
-          </div>
-
-          {/* Right sidebar - 20% */}
-          <div className="hidden md:flex flex-col gap-3 w-[160px] min-w-[140px] shrink-0 justify-center">
-            {activeCount > 0 && (
-              <Button
-                onClick={() => navigate("/my-roadmaps")}
-                className="w-full h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
-              >
-                <BookOpen className="mr-2 h-4 w-4" />
-                My Roadmaps
-              </Button>
-            )}
-            <Button
-              onClick={() => navigate("/flashcards")}
-              className="w-full h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
-            >
-              <Layers className="mr-2 h-4 w-4" />
-              Flashcards
-            </Button>
           </div>
         </div>
       </div>
