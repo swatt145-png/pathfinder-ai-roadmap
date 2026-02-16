@@ -42,17 +42,13 @@ const extractTopicKeywords = (input: string): string => {
   return cleaned || input;
 };
 
-const getTopicMessages = (topic: string, skillLevel: string) => {
-  const keywords = extractTopicKeywords(topic);
-  const level = skillLevel === "beginner" ? "from the ground up" : skillLevel === "advanced" ? "at an advanced level" : "with practical depth";
-  return [
-    `Great choice to learn ${keywords}!`,
-    `We're crafting your personalized ${keywords} roadmap ${level}...`,
-    `Finding the best ${keywords} resources from top educators...`,
-    `Building quizzes to test your ${keywords} knowledge...`,
-    `Almost done — your ${keywords} learning journey is taking shape! ✨`,
-  ];
-};
+const LOADING_MESSAGES = [
+  "Great choice! Let's build your roadmap 🚀",
+  "Crafting a personalized curriculum just for you...",
+  "Finding the best resources from top educators...",
+  "Building assessment quizzes to track your progress...",
+  "Almost done — your learning journey is taking shape! ✨",
+];
 
 
 export default function NewRoadmap() {
@@ -162,7 +158,7 @@ export default function NewRoadmap() {
     }
   };
 
-  const topicMessages = getTopicMessages(topic, skillLevel);
+  // (removed - no longer needed)
 
   if (checkingActive) {
     return (
@@ -181,9 +177,21 @@ export default function NewRoadmap() {
         <AppBar />
         <div className="flex min-h-screen items-center justify-center px-4 pt-14">
           <div className="text-center max-w-md animate-fade-in">
-            <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-8" />
+            {/* Learning animation - floating books/neurons */}
+            <div className="relative w-24 h-24 mx-auto mb-8">
+              <div className="absolute inset-0 rounded-full border-2 border-primary/30 animate-spin" style={{ animationDuration: '3s' }} />
+              <div className="absolute inset-2 rounded-full border-2 border-secondary/30 animate-spin" style={{ animationDuration: '2s', animationDirection: 'reverse' }} />
+              <div className="absolute inset-4 rounded-full border-2 border-accent/30 animate-spin" style={{ animationDuration: '4s' }} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-4 h-4 rounded-full bg-primary animate-pulse shadow-[0_0_12px_hsl(var(--primary))]" />
+              </div>
+              {/* Orbiting dots */}
+              <div className="absolute w-2.5 h-2.5 rounded-full bg-secondary top-0 left-1/2 -translate-x-1/2 animate-pulse shadow-[0_0_8px_hsl(var(--secondary))]" style={{ animationDelay: '0.5s' }} />
+              <div className="absolute w-2.5 h-2.5 rounded-full bg-accent bottom-0 left-1/2 -translate-x-1/2 animate-pulse shadow-[0_0_8px_hsl(var(--accent))]" style={{ animationDelay: '1s' }} />
+              <div className="absolute w-2 h-2 rounded-full bg-primary right-0 top-1/2 -translate-y-1/2 animate-pulse shadow-[0_0_8px_hsl(var(--primary))]" style={{ animationDelay: '1.5s' }} />
+            </div>
             <p className="text-primary font-heading font-semibold text-lg mb-6 animate-breathe">
-              {topicMessages[Math.min(loadingStep, topicMessages.length - 1)]}
+              {LOADING_MESSAGES[Math.min(loadingStep, LOADING_MESSAGES.length - 1)]}
             </p>
             <div className="space-y-3 mb-8">
               {LOADING_STEPS.map((step, i) => (
