@@ -93,6 +93,10 @@
     box-shadow: 0 0 20px hsl(152 100% 50% / 0.6), 0 0 60px hsl(152 100% 50% / 0.3), 0 0 120px hsl(152 100% 50% / 0.1);
   }
 
+  .hover\:glow-primary:hover {
+    box-shadow: 0 0 20px hsl(152 100% 50% / 0.6), 0 0 60px hsl(152 100% 50% / 0.3), 0 0 120px hsl(152 100% 50% / 0.1);
+  }
+
   .glow-success {
     box-shadow: 0 0 20px hsl(152 100% 50% / 0.6), 0 0 60px hsl(152 100% 50% / 0.2);
   }

@@ -219,7 +219,7 @@ export default function NewRoadmap() {
               {activeCount > 0 && (
                 <Button
                   onClick={() => navigate("/my-roadmaps")}
-                  className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+                  className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
                 >
                   <BookOpen className="mr-2 h-4 w-4" />
                   My Roadmaps
@@ -227,7 +227,7 @@ export default function NewRoadmap() {
               )}
               <Button
                 onClick={() => navigate("/flashcards")}
-                className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+                className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
               >
                 <Layers className="mr-2 h-4 w-4" />
                 Flashcards
@@ -382,7 +382,7 @@ export default function NewRoadmap() {
                 {activeCount > 0 && (
                   <Button
                     onClick={() => navigate("/my-roadmaps")}
-                    className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+                    className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
                   >
                     <BookOpen className="mr-2 h-4 w-4" />
                     My Roadmaps
@@ -390,7 +390,7 @@ export default function NewRoadmap() {
                 )}
                 <Button
                   onClick={() => navigate("/flashcards")}
-                  className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02]"
+                  className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
                 >
                   <Layers className="mr-2 h-4 w-4" />
                   Flashcards
