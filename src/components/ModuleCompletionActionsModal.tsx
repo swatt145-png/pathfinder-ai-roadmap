@@ -5,8 +5,6 @@ interface Props {
   completedModuleTitle: string;
   nextModule: Module | null;
   onProceedNext: () => void;
-  onReviewRoadmap: () => void;
-  onAdaptRoadmap: () => void;
   onClose: () => void;
 }
 
@@ -14,8 +12,6 @@ export function ModuleCompletionActionsModal({
   completedModuleTitle,
   nextModule,
   onProceedNext,
-  onReviewRoadmap,
-  onAdaptRoadmap,
   onClose,
 }: Props) {
   return (
@@ -27,32 +23,14 @@ export function ModuleCompletionActionsModal({
           <span className="text-foreground font-medium">{completedModuleTitle}</span>
         </p>
 
-        <div className="space-y-2">
-          <Button
-            type="button"
-            onClick={onProceedNext}
-            disabled={!nextModule}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate"
-          >
-            {nextModule ? `Next: ${nextModule.title}` : "No Next Module"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onReviewRoadmap}
-            className="w-full border-white/10 hover:bg-white/5"
-          >
-            Review Current Roadmap
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onAdaptRoadmap}
-            className="w-full border-white/10 hover:bg-white/5"
-          >
-            Adapt My Plan
-          </Button>
-        </div>
+        <Button
+          type="button"
+          onClick={onProceedNext}
+          disabled={!nextModule}
+          className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate"
+        >
+          {nextModule ? `Next: ${nextModule.title}` : "No Next Module"}
+        </Button>
       </div>
     </div>
   );
