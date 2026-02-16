@@ -53,7 +53,7 @@ const LOADING_MESSAGES = [
 
 
 export default function NewRoadmap() {
-  const { user, profile } = useAuth();
+  const { user, profile, isGuest } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const reviseState = location.state as {
@@ -111,11 +111,11 @@ export default function NewRoadmap() {
     if (hardDeadline && deadlineDate) {
       const selected = new Date(deadlineDate);
       const minDate = new Date();
-      minDate.setDate(minDate.getDate() + timelineDays);
+      minDate.setDate(minDate.getDate() + timelineDays - 1);
       minDate.setHours(0, 0, 0, 0);
       selected.setHours(0, 0, 0, 0);
       if (selected < minDate) {
-        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from now), or reduce your target timeline.`);
+        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from today, inclusive), or reduce your target timeline.`);
         return;
       }
     }
@@ -219,7 +219,7 @@ export default function NewRoadmap() {
           <div className="flex items-start justify-between mb-6">
             <div>
               <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
-                Hey {profile?.display_name ?? "there"}!
+                Hey {isGuest ? "there" : (profile?.display_name ?? "there")}!
               </h2>
               <p className="text-muted-foreground text-base">What do you want to learn?</p>
             </div>
@@ -327,11 +327,11 @@ export default function NewRoadmap() {
                     onChange={(e) => {
                       const selected = new Date(e.target.value);
                       const minDate = new Date();
-                      minDate.setDate(minDate.getDate() + timelineDays);
+                      minDate.setDate(minDate.getDate() + timelineDays - 1);
                       minDate.setHours(0, 0, 0, 0);
                       selected.setHours(0, 0, 0, 0);
                       if (selected < minDate) {
-                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from now), or reduce your target timeline.`);
+                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from today, inclusive), or reduce your target timeline.`);
                         setDeadlineDate(e.target.value);
                       } else {
                         setError(null);
