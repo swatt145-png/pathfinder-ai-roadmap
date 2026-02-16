@@ -204,10 +204,10 @@ export default function NewRoadmap() {
   return (
     <>
       <AppBar />
-      <div className="min-h-screen pt-20 pb-10 px-4 md:px-8">
-        <div className="flex flex-col md:flex-row justify-between gap-4 animate-fade-in">
-          {/* Main content - 70% */}
-          <div className="w-full md:w-[80%] md:mx-auto">
+      <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row gap-8 animate-fade-in">
+          {/* Main content */}
+          <div className="w-full md:flex-1">
             <h2 className="font-heading text-2xl md:text-3xl font-bold mb-2">
               Hey {profile?.display_name ?? "there"}!
             </h2>
