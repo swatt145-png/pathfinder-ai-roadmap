@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell } from "lucide-react";
+import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuizModal } from "@/components/QuizModal";
@@ -13,6 +13,7 @@ interface ModuleDetailProps {
   onComplete: (moduleId: string, selfReport: string, quizScore: number | null, quizAnswers: any) => void;
   onUpdateResourcesAndNotes?: (moduleId: string, completedResources: string[], notes: string) => void;
   onUpdateCompletedModule?: (moduleId: string, selfReport: string, notes: string) => void;
+  onMarkNotComplete?: (moduleId: string) => void;
 }
 
 const RESOURCE_ICONS: Record<string, React.ElementType> = {
@@ -31,7 +32,7 @@ const RESOURCE_COLORS: Record<string, string> = {
   practice: "text-success",
 };
 
-export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateResourcesAndNotes, onUpdateCompletedModule }: ModuleDetailProps) {
+export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateResourcesAndNotes, onUpdateCompletedModule, onMarkNotComplete }: ModuleDetailProps) {
   const [selfReport, setSelfReport] = useState<string | null>(progress?.self_report ?? null);
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizScore, setQuizScore] = useState<number | null>(progress?.quiz_score ?? null);
@@ -213,6 +214,15 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
             >
               <Save className="mr-2 h-4 w-4" />
               {saved ? "Saved ✓" : "Save Changes"}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => onMarkNotComplete?.(module.id)}
+              className="w-full border-white/10 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 text-muted-foreground"
+            >
+              <Undo2 className="mr-2 h-4 w-4" />
+              Mark Not Complete
             </Button>
           </div>
         ) : (
