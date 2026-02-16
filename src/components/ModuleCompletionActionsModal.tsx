@@ -5,6 +5,7 @@ interface Props {
   completedModuleTitle: string;
   nextModule: Module | null;
   onProceedNext: () => void;
+  onReturnToRoadmap: () => void;
   onClose: () => void;
 }
 
@@ -12,6 +13,7 @@ export function ModuleCompletionActionsModal({
   completedModuleTitle,
   nextModule,
   onProceedNext,
+  onReturnToRoadmap,
   onClose,
 }: Props) {
   return (
@@ -23,14 +25,24 @@ export function ModuleCompletionActionsModal({
           <span className="text-foreground font-medium">{completedModuleTitle}</span>
         </p>
 
-        <Button
-          type="button"
-          onClick={onProceedNext}
-          disabled={!nextModule}
-          className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate"
-        >
-          {nextModule ? `Next: ${nextModule.title}` : "No Next Module"}
-        </Button>
+        <div className="space-y-2">
+          <Button
+            type="button"
+            onClick={onProceedNext}
+            disabled={!nextModule}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate"
+          >
+            {nextModule ? `Next: ${nextModule.title}` : "No Next Module"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onReturnToRoadmap}
+            className="w-full border-white/10 hover:bg-white/5"
+          >
+            Return to Roadmap
+          </Button>
+        </div>
       </div>
     </div>
   );
