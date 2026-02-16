@@ -37,6 +37,8 @@ export default function Dashboard() {
   const [revertConfirmOpen, setRevertConfirmOpen] = useState(false);
   const [reverting, setReverting] = useState(false);
   const [reviseConfirmOpen, setReviseConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
@@ -292,6 +294,21 @@ export default function Dashboard() {
     navigate("/my-roadmaps");
   };
 
+  const handleDeleteRoadmap = async () => {
+    if (!roadmap || !user) return;
+    setDeleting(true);
+    try {
+      // Delete progress first, then the roadmap
+      await supabase.from("progress").delete().eq("roadmap_id", roadmap.id);
+      await supabase.from("adaptations").delete().eq("roadmap_id", roadmap.id);
+      await supabase.from("roadmaps").delete().eq("id", roadmap.id);
+      setDeleteConfirmOpen(false);
+      navigate("/my-roadmaps");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleRevertToPreviousPlan = async () => {
     if (!roadmap || !user) return;
     setReverting(true);
@@ -495,6 +512,9 @@ export default function Dashboard() {
           <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11">
             Create New Roadmap
           </Button>
+          <Button onClick={() => setDeleteConfirmOpen(true)} className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-sm h-11">
+            Delete Roadmap
+          </Button>
         </div>
 
         {/* Mobile bottom actions */}
@@ -513,6 +533,9 @@ export default function Dashboard() {
           </Button>
           <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12">
             Create New Roadmap
+          </Button>
+          <Button onClick={() => setDeleteConfirmOpen(true)} className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-base h-12">
+            Delete Roadmap
           </Button>
         </div>
       </div> {/* end flex container */}
@@ -672,6 +695,25 @@ export default function Dashboard() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete & Revise
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="glass-strong border-white/10">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Permanently delete this roadmap?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the roadmap and all its progress. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} className="border-white/10" disabled={deleting}>
+              Cancel
+            </Button>
+            <Button onClick={handleDeleteRoadmap} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? "Deleting..." : "Delete Permanently"}
             </Button>
           </DialogFooter>
         </DialogContent>
