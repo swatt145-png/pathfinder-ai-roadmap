@@ -10,7 +10,7 @@ import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActio
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles } from "lucide-react";
+import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
 interface CompletionActionState {
@@ -373,7 +373,12 @@ export default function Dashboard() {
         <div className="flex-1 min-w-0">
         {/* Summary Card */}
         <div className="glass-blue p-6 mb-6 animate-fade-in">
-          <h2 className="font-heading text-xl md:text-2xl font-bold mb-1">{roadmapData.topic}</h2>
+          <div className="flex items-center gap-3 mb-1">
+            <button onClick={() => navigate("/my-roadmaps")} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h2 className="font-heading text-xl md:text-2xl font-bold">{roadmapData.topic}</h2>
+          </div>
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
           </div>
@@ -481,29 +486,14 @@ export default function Dashboard() {
           <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11">
             Revert to Previous Plan
           </Button>
-          <Button
-            onClick={() => setArchiveConfirmOpen(true)}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
-          >
-            Archive Roadmap
-          </Button>
-          <Button
-            onClick={() => setReviseConfirmOpen(true)}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
-          >
+          <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11">
             Revise My Roadmap
           </Button>
-          <Button
-            onClick={() => navigate("/new")}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
-          >
-            Create New Roadmap
+          <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11">
+            Archive Roadmap
           </Button>
-          <Button
-            onClick={() => navigate("/my-roadmaps")}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
-          >
-            <BookOpen className="mr-2 h-4 w-4" /> View My Roadmaps
+          <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11">
+            Create New Roadmap
           </Button>
         </div>
 
@@ -515,29 +505,14 @@ export default function Dashboard() {
           <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12">
             Revert to Previous Plan
           </Button>
-          <Button
-            onClick={() => setArchiveConfirmOpen(true)}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
-          >
-            Archive Roadmap
-          </Button>
-          <Button
-            onClick={() => setReviseConfirmOpen(true)}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
-          >
+          <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12">
             Revise My Roadmap
           </Button>
-          <Button
-            onClick={() => navigate("/new")}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
-          >
-            Create New Roadmap
+          <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12">
+            Archive Roadmap
           </Button>
-          <Button
-            onClick={() => navigate("/my-roadmaps")}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
-          >
-            <BookOpen className="mr-2 h-5 w-5" /> View My Roadmaps
+          <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12">
+            Create New Roadmap
           </Button>
         </div>
       </div> {/* end flex container */}
