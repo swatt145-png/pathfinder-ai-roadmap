@@ -374,9 +374,9 @@ export default function Dashboard() {
         {/* Summary Card */}
         <div className="glass-blue p-6 mb-6 animate-fade-in">
           <div className="flex items-center gap-3 mb-1">
-            <button onClick={() => navigate("/my-roadmaps")} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/my-roadmaps")}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <h2 className="font-heading text-xl md:text-2xl font-bold">{roadmapData.topic}</h2>
           </div>
           <div className="flex flex-wrap gap-2 mb-4">
