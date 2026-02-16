@@ -61,47 +61,88 @@ async function searchSerper(query: string, apiKey: string, type: "search" | "vid
   }
 }
 
+function isLikelyCourseOrPlaylist(title: string, url: string): boolean {
+  const courseKeywords = /\b(full course|complete course|crash course|bootcamp|playlist|lessons? \d+-\d+|parts? \d+-\d+|\d+ lessons|\d+ hours)\b/i;
+  return courseKeywords.test(title) || url.includes("playlist") || url.includes("/learn/");
+}
+
+function estimateArticleMinutes(snippet: string): number {
+  // Estimate reading time: ~200 words/min, snippet hints at length
+  const wordCount = snippet ? snippet.split(/\s+/).length : 0;
+  if (wordCount > 80) return 15;
+  return 10;
+}
+
 async function fetchResourcesForModule(
   moduleTitle: string,
   topic: string,
   skillLevel: string,
-  apiKey: string
+  apiKey: string,
+  moduleHours: number
 ) {
-  const webQuery = `learn ${moduleTitle} ${topic} ${skillLevel} tutorial`;
-  const videoQuery = `${moduleTitle} ${topic} tutorial ${skillLevel}`;
+  const maxMinutes = Math.floor(moduleHours * 60);
+  // Request fewer results to stay focused
+  const webQuery = `${moduleTitle} ${topic} ${skillLevel} tutorial`;
+  const videoQuery = `${moduleTitle} ${topic} tutorial ${skillLevel} short`;
 
   const [webResults, videoResults] = await Promise.all([
-    searchSerper(webQuery, apiKey, "search", 3),
-    searchSerper(videoQuery, apiKey, "videos", 2),
+    searchSerper(webQuery, apiKey, "search", 4),
+    searchSerper(videoQuery, apiKey, "videos", 4),
   ]);
 
-  const resources: any[] = [];
-
-  for (const r of webResults as SerperWebResult[]) {
-    if (r.link) {
-      resources.push({
-        title: r.title || "Learning Resource",
-        url: r.link,
-        type: detectResourceType(r.link),
-        estimated_minutes: 20,
-        description: r.snippet || `Resource for learning ${moduleTitle}`,
-      });
-    }
-  }
+  const candidates: any[] = [];
 
   for (const v of videoResults as SerperVideoResult[]) {
-    if (v.link) {
-      resources.push({
-        title: v.title || "Video Tutorial",
-        url: v.link,
-        type: "video",
-        estimated_minutes: parseDurationToMinutes(v.duration),
-        description: `Video tutorial on ${moduleTitle}`,
-      });
-    }
+    if (!v.link) continue;
+    const mins = parseDurationToMinutes(v.duration);
+    const title = v.title || "Video Tutorial";
+    // Skip full courses/playlists and very long videos
+    if (isLikelyCourseOrPlaylist(title, v.link)) continue;
+    if (mins > maxMinutes * 0.8) continue; // single resource shouldn't exceed 80% of budget
+    candidates.push({
+      title,
+      url: v.link,
+      type: "video" as const,
+      estimated_minutes: mins,
+      description: `Video tutorial on ${moduleTitle}`,
+    });
   }
 
-  return resources;
+  for (const r of webResults as SerperWebResult[]) {
+    if (!r.link) continue;
+    const title = r.title || "Learning Resource";
+    if (isLikelyCourseOrPlaylist(title, r.link)) continue;
+    const mins = estimateArticleMinutes(r.snippet || "");
+    candidates.push({
+      title,
+      url: r.link,
+      type: detectResourceType(r.link),
+      estimated_minutes: mins,
+      description: r.snippet || `Resource for learning ${moduleTitle}`,
+    });
+  }
+
+  // Sort by duration ascending — prefer shorter, focused resources
+  candidates.sort((a, b) => a.estimated_minutes - b.estimated_minutes);
+
+  // Greedily pick resources that fit within the time budget
+  const selected: any[] = [];
+  let totalMinutes = 0;
+  for (const res of candidates) {
+    if (totalMinutes + res.estimated_minutes > maxMinutes) continue;
+    selected.push(res);
+    totalMinutes += res.estimated_minutes;
+    if (selected.length >= 5) break; // max 5 resources per module
+  }
+
+  // If nothing fit, take the single shortest candidate
+  if (selected.length === 0 && candidates.length > 0) {
+    const shortest = candidates[0];
+    shortest.estimated_minutes = Math.min(shortest.estimated_minutes, maxMinutes);
+    selected.push(shortest);
+  }
+
+  return selected;
 }
 
 serve(async (req) => {
@@ -210,7 +251,7 @@ Return ONLY valid JSON with this exact structure:
     console.log(`Fetching resources for ${roadmap.modules?.length || 0} modules via Serper...`);
 
     const resourcePromises = (roadmap.modules || []).map((mod: any) =>
-      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY)
+      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day)
     );
     const allResources = await Promise.all(resourcePromises);
 
