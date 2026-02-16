@@ -663,6 +663,7 @@ export default function Dashboard() {
           completedModuleTitle={completionActions.completedModuleTitle}
           nextModule={completionActions.nextModule}
           onProceedNext={handleProceedToNextModule}
+          onReturnToRoadmap={() => { setCompletionActions(null); setSelectedModule(null); }}
           onClose={() => setCompletionActions(null)}
         />
       )}
