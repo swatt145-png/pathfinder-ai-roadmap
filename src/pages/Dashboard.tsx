@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [revertConfirmOpen, setRevertConfirmOpen] = useState(false);
   const [reverting, setReverting] = useState(false);
+  const [reviseConfirmOpen, setReviseConfirmOpen] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
@@ -487,6 +488,12 @@ export default function Dashboard() {
             Archive Roadmap
           </Button>
           <Button
+            onClick={() => setReviseConfirmOpen(true)}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
+          >
+            Revise My Roadmap
+          </Button>
+          <Button
             onClick={() => navigate("/new")}
             className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11"
           >
@@ -513,6 +520,12 @@ export default function Dashboard() {
             className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
           >
             Archive Roadmap
+          </Button>
+          <Button
+            onClick={() => setReviseConfirmOpen(true)}
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12"
+          >
+            Revise My Roadmap
           </Button>
           <Button
             onClick={() => navigate("/new")}
@@ -649,6 +662,41 @@ export default function Dashboard() {
             </Button>
             <Button onClick={handleRevertToPreviousPlan} disabled={reverting} className="gradient-primary text-primary-foreground font-heading font-bold">
               {reverting ? "Reverting..." : "Revert Plan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reviseConfirmOpen} onOpenChange={setReviseConfirmOpen}>
+        <DialogContent className="glass-strong border-white/10">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Revise this roadmap?</DialogTitle>
+            <DialogDescription>
+              This will delete the current roadmap and take you to create a new one with the same details pre-filled. You can tweak any inputs before generating. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setReviseConfirmOpen(false)} className="border-white/10">
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!roadmap || !roadmapData) return;
+                const reviseState = {
+                  replaceRoadmapId: roadmap.id,
+                  topic: roadmapData.topic,
+                  skill_level: roadmapData.skill_level,
+                  timeline_weeks: roadmapData.timeline_weeks,
+                  hours_per_day: roadmapData.hours_per_day,
+                  hard_deadline: roadmap.hard_deadline ?? false,
+                  deadline_date: roadmap.deadline_date ?? "",
+                };
+                await supabase.from("roadmaps").delete().eq("id", roadmap.id);
+                navigate("/new", { state: reviseState });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete & Revise
             </Button>
           </DialogFooter>
         </DialogContent>

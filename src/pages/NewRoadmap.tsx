@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
@@ -54,19 +54,30 @@ const LOADING_MESSAGES = [
 export default function NewRoadmap() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const [topic, setTopic] = useState("");
-  const [skillLevel, setSkillLevel] = useState("beginner");
+  const location = useLocation();
+  const reviseState = location.state as {
+    replaceRoadmapId?: string;
+    topic?: string;
+    skill_level?: string;
+    timeline_weeks?: number;
+    hours_per_day?: number;
+    hard_deadline?: boolean;
+    deadline_date?: string;
+  } | null;
+
+  const [topic, setTopic] = useState(reviseState?.topic ?? "");
+  const [skillLevel, setSkillLevel] = useState(reviseState?.skill_level ?? "beginner");
   const [timelineUnit, setTimelineUnit] = useState<"weeks" | "days">("weeks");
-  const [timelineValue, setTimelineValue] = useState(4);
-  const [hoursPerDay, setHoursPerDay] = useState(1);
-  const [hardDeadline, setHardDeadline] = useState(false);
-  const [deadlineDate, setDeadlineDate] = useState("");
+  const [timelineValue, setTimelineValue] = useState(reviseState?.timeline_weeks ?? 4);
+  const [hoursPerDay, setHoursPerDay] = useState(reviseState?.hours_per_day ?? 1);
+  const [hardDeadline, setHardDeadline] = useState(reviseState?.hard_deadline ?? false);
+  const [deadlineDate, setDeadlineDate] = useState(reviseState?.deadline_date ?? "");
   const [includeWeekends, setIncludeWeekends] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [activeCount, setActiveCount] = useState(0);
-  const [checkingActive, setCheckingActive] = useState(true);  
+  const [checkingActive, setCheckingActive] = useState(true);
 
   const checkActive = async () => {
     if (!user) return;
