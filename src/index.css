@@ -4,14 +4,14 @@
 
 @layer base {
   :root {
-    --background: 220 30% 95%;
-    --foreground: 220 45% 10%;
+    --background: 220 45% 7%;
+    --foreground: 210 40% 98%;
 
-    --card: 220 25% 92%;
-    --card-foreground: 220 45% 10%;
+    --card: 220 40% 10%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 220 25% 92%;
-    --popover-foreground: 220 45% 10%;
+    --popover: 220 40% 10%;
+    --popover-foreground: 210 40% 98%;
 
     --primary: 155 100% 50%;
     --primary-foreground: 220 45% 5%;
@@ -19,8 +19,8 @@
     --secondary: 275 100% 70%;
     --secondary-foreground: 220 45% 5%;
 
-    --muted: 220 20% 88%;
-    --muted-foreground: 220 15% 40%;
+    --muted: 220 30% 14%;
+    --muted-foreground: 215 25% 58%;
 
     --accent: 185 100% 55%;
     --accent-foreground: 220 45% 5%;
@@ -34,8 +34,8 @@
     --warning: 42 100% 58%;
     --warning-foreground: 220 45% 5%;
 
-    --border: 220 20% 85%;
-    --input: 220 20% 85%;
+    --border: 220 25% 15%;
+    --input: 220 25% 15%;
     --ring: 155 100% 50%;
 
     --radius: 0.75rem;
@@ -43,13 +43,13 @@
     --glass-bg: 220 30% 12%;
     --glass-border: 0 0% 100%;
 
-    --sidebar-background: 220 25% 92%;
-    --sidebar-foreground: 220 45% 10%;
+    --sidebar-background: 220 45% 5%;
+    --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 155 100% 50%;
-    --sidebar-primary-foreground: 220 45% 10%;
-    --sidebar-accent: 220 20% 88%;
-    --sidebar-accent-foreground: 220 45% 10%;
-    --sidebar-border: 220 20% 85%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 220 30% 14%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 220 25% 15%;
     --sidebar-ring: 155 100% 50%;
   }
 }
@@ -62,23 +62,23 @@
   body {
     @apply bg-background text-foreground font-body antialiased;
     font-size: 18px;
-    background: linear-gradient(135deg, hsl(220 30% 95%) 0%, hsl(225 25% 90%) 100%);
+    background: linear-gradient(135deg, hsl(220 45% 7%) 0%, hsl(220 40% 12%) 100%);
     min-height: 100vh;
   }
 }
 
 @layer utilities {
   .glass {
-    @apply bg-white/60 backdrop-blur-lg border border-white/40 rounded-2xl;
+    @apply bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl;
   }
 
   .glass-strong {
-    @apply bg-white/70 backdrop-blur-xl border border-white/50 rounded-2xl;
+    @apply bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl;
   }
 
   .glass-blue {
-    background: hsl(210 40% 96% / 0.75);
-    @apply backdrop-blur-xl border border-accent/20 rounded-2xl;
+    background: hsl(200 60% 18% / 0.55);
+    @apply backdrop-blur-xl border border-accent/15 rounded-2xl;
   }
 
   .gradient-text {
