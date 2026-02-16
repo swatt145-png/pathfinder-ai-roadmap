@@ -94,6 +94,7 @@ export default function NewRoadmap() {
   useEffect(() => { checkActive(); }, [user]);
 
   const timelineWeeks = timelineUnit === "weeks" ? timelineValue : Math.ceil(timelineValue / 7);
+  const timelineDays = timelineUnit === "days" ? timelineValue : timelineValue * 7;
 
   const applyQuickStart = (qs: typeof QUICK_STARTS[0]) => {
     setTopic(qs.topic);
@@ -110,11 +111,11 @@ export default function NewRoadmap() {
     if (hardDeadline && deadlineDate) {
       const selected = new Date(deadlineDate);
       const minDate = new Date();
-      minDate.setDate(minDate.getDate() + timelineWeeks * 7);
+      minDate.setDate(minDate.getDate() + timelineDays);
       minDate.setHours(0, 0, 0, 0);
       selected.setHours(0, 0, 0, 0);
       if (selected < minDate) {
-        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
+        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from now), or reduce your target timeline.`);
         return;
       }
     }
@@ -315,7 +316,7 @@ export default function NewRoadmap() {
 
               <div className="flex items-center justify-between glass-blue p-4">
                 <Label className="text-base">Is this a hard deadline?</Label>
-                <Switch checked={hardDeadline} onCheckedChange={setHardDeadline} />
+                <Switch checked={hardDeadline} onCheckedChange={(v) => { setHardDeadline(v); if (!v) setError(null); }} />
               </div>
 
               {hardDeadline && (
@@ -326,11 +327,11 @@ export default function NewRoadmap() {
                     onChange={(e) => {
                       const selected = new Date(e.target.value);
                       const minDate = new Date();
-                      minDate.setDate(minDate.getDate() + timelineWeeks * 7);
+                      minDate.setDate(minDate.getDate() + timelineDays);
                       minDate.setHours(0, 0, 0, 0);
                       selected.setHours(0, 0, 0, 0);
                       if (selected < minDate) {
-                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineWeeks} weeks from now), or reduce your target weeks.`);
+                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from now), or reduce your target timeline.`);
                         setDeadlineDate(e.target.value);
                       } else {
                         setError(null);
