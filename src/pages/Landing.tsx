@@ -38,31 +38,31 @@ export default function Landing() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
             {features.map((f) => (
-              <div key={f.text} className="flex items-center gap-3 glass px-4 py-3 text-left">
-                <f.icon className="w-5 h-5 text-primary shrink-0" />
-                <span className="text-sm text-foreground/90">{f.text}</span>
+              <div key={f.text} className="flex items-center gap-3 glass-blue px-5 py-4 text-left rounded-xl">
+                <f.icon className="w-6 h-6 text-primary shrink-0" />
+                <span className="text-base text-foreground/90">{f.text}</span>
               </div>
             ))}
           </div>
 
           <Button
             onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-            className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-105"
+            className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 hover:glow-primary"
           >
             Get Started
           </Button>
 
-          <div className="mt-5 flex items-center justify-center gap-4 text-sm text-muted-foreground">
+          <div className="mt-5 flex items-center justify-center gap-5 text-base">
             <button
               onClick={() => { setAuthTab("signin"); setAuthOpen(true); }}
-              className="text-primary hover:underline font-medium"
+              className="text-primary hover:underline font-semibold text-base"
             >
               Sign In
             </button>
             <span className="text-white/20">|</span>
             <button
               onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-              className="text-primary hover:underline font-medium"
+              className="text-primary hover:underline font-semibold text-base"
             >
               Sign Up
             </button>
@@ -71,7 +71,7 @@ export default function Landing() {
           <button
             onClick={handleGuestLogin}
             disabled={guestLoading}
-            className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+            className="mt-5 glass-blue px-8 py-3 rounded-xl text-base font-semibold text-foreground/80 hover:text-foreground transition-all hover:scale-105"
           >
             {guestLoading ? (
               <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Entering as guest…</span>
