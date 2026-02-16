@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import NeonDogAnimation from "@/components/NeonDogAnimation";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -188,19 +189,7 @@ export default function NewRoadmap() {
         <AppBar />
         <div className="flex min-h-screen items-center justify-center px-6 pt-14 overflow-hidden">
           <div className="text-center w-full max-w-md animate-fade-in">
-            {/* Learning animation - floating books/neurons */}
-            <div className="relative w-24 h-24 mx-auto mb-8">
-              <div className="absolute inset-0 rounded-full border-2 border-primary/30 animate-spin" style={{ animationDuration: '3s' }} />
-              <div className="absolute inset-2 rounded-full border-2 border-secondary/30 animate-spin" style={{ animationDuration: '2s', animationDirection: 'reverse' }} />
-              <div className="absolute inset-4 rounded-full border-2 border-accent/30 animate-spin" style={{ animationDuration: '4s' }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-4 h-4 rounded-full bg-primary animate-pulse shadow-[0_0_12px_hsl(var(--primary))]" />
-              </div>
-              {/* Orbiting dots */}
-              <div className="absolute w-2.5 h-2.5 rounded-full bg-secondary top-0 left-1/2 -translate-x-1/2 animate-pulse shadow-[0_0_8px_hsl(var(--secondary))]" style={{ animationDelay: '0.5s' }} />
-              <div className="absolute w-2.5 h-2.5 rounded-full bg-accent bottom-0 left-1/2 -translate-x-1/2 animate-pulse shadow-[0_0_8px_hsl(var(--accent))]" style={{ animationDelay: '1s' }} />
-              <div className="absolute w-2 h-2 rounded-full bg-primary right-0 top-1/2 -translate-y-1/2 animate-pulse shadow-[0_0_8px_hsl(var(--primary))]" style={{ animationDelay: '1.5s' }} />
-            </div>
+            <NeonDogAnimation />
             <p className="text-primary font-heading font-semibold text-lg mb-6 animate-breathe">
               {LOADING_MESSAGES[Math.min(loadingStep, LOADING_MESSAGES.length - 1)]}
             </p>
