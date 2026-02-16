@@ -1,32 +1,42 @@
 import { useState } from "react";
 import { AuthModal } from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
-import { Compass, BarChart3, Zap } from "lucide-react";
+import { Compass, BarChart3, Zap, Brain, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/logo.png";
 
 export default function Landing() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"signin" | "signup">("signup");
+  const [guestLoading, setGuestLoading] = useState(false);
+  const { signInAsGuest } = useAuth();
 
   const features = [
     { icon: Compass, text: "Personalized roadmaps for any tech skill" },
     { icon: BarChart3, text: "Adapts based on your actual progress" },
     { icon: Zap, text: "Real resources, real quizzes, real results" },
+    { icon: Brain, text: "AI-powered insights & smart recommendations" },
   ];
+
+  const handleGuestLogin = async () => {
+    setGuestLoading(true);
+    await signInAsGuest();
+    setGuestLoading(false);
+  };
 
   return (
     <>
       <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="text-center max-w-lg animate-fade-in">
-          <img src={logo} alt="PathFinder logo" className="h-24 w-24 mx-auto mb-4 object-contain rounded-full ring-2 ring-white/80" />
-          <h1 className="font-heading text-5xl md:text-6xl font-extrabold gradient-text mb-4">
+        <div className="text-center max-w-xl animate-fade-in">
+          <img src={logo} alt="PathFinder logo" className="h-32 w-32 mx-auto mb-5 object-contain rounded-full ring-2 ring-white/80" />
+          <h1 className="font-heading text-6xl md:text-7xl font-extrabold gradient-text mb-4">
             PathFinder
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-10 font-body">
             Your AI-powered learning companion that adapts to you
           </p>
 
-          <div className="space-y-4 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
             {features.map((f) => (
               <div key={f.text} className="flex items-center gap-3 glass px-4 py-3 text-left">
                 <f.icon className="w-5 h-5 text-primary shrink-0" />
@@ -42,15 +52,33 @@ export default function Landing() {
             Get Started
           </Button>
 
-          <p className="mt-4 text-sm text-muted-foreground">
-            Already have an account?{" "}
+          <div className="mt-5 flex items-center justify-center gap-4 text-sm text-muted-foreground">
             <button
               onClick={() => { setAuthTab("signin"); setAuthOpen(true); }}
               className="text-primary hover:underline font-medium"
             >
               Sign In
             </button>
-          </p>
+            <span className="text-white/20">|</span>
+            <button
+              onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
+              className="text-primary hover:underline font-medium"
+            >
+              Sign Up
+            </button>
+          </div>
+
+          <button
+            onClick={handleGuestLogin}
+            disabled={guestLoading}
+            className="mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+          >
+            {guestLoading ? (
+              <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Entering as guest…</span>
+            ) : (
+              "Continue as Guest"
+            )}
+          </button>
         </div>
       </div>
 
