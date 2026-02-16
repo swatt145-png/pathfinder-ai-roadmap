@@ -91,7 +91,7 @@ export default function Flashcards() {
     return (
       <>
         <AppBar />
-        <div className="min-h-screen pt-20 pb-10 px-4 max-w-3xl mx-auto animate-fade-in">
+        <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
           <div className="flex items-center gap-3 mb-6">
             <Button variant="ghost" size="sm" onClick={() => { setSelectedCard(null); setFlipped(false); }}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Back to deck
@@ -131,7 +131,7 @@ export default function Flashcards() {
     return (
       <>
         <AppBar />
-        <div className="min-h-screen pt-20 pb-10 px-4 max-w-5xl mx-auto animate-fade-in">
+        <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-6xl mx-auto animate-fade-in">
           <div className="flex items-center gap-3 mb-8">
             <Button variant="ghost" size="icon" onClick={() => setSelectedRoadmap(null)}>
               <ArrowLeft className="h-5 w-5" />
@@ -174,7 +174,7 @@ export default function Flashcards() {
   return (
     <>
       <AppBar />
-      <div className="min-h-screen pt-20 pb-10 px-4 max-w-4xl mx-auto animate-fade-in">
+      <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-6xl mx-auto animate-fade-in">
         <div className="flex items-center gap-3 mb-8">
           <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
             <ArrowLeft className="h-5 w-5" />
