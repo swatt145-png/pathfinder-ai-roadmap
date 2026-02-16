@@ -591,6 +591,26 @@ export default function Dashboard() {
               fetchData();
             }
           }}
+          onMarkNotComplete={async (moduleId) => {
+            if (!user || !roadmap) return;
+            const existing = progressMap[moduleId];
+            if (existing) {
+              await supabase.from("progress").update({
+                status: "not_started",
+                completed_at: null,
+                self_report: null,
+                quiz_score: null,
+                quiz_answers: null,
+              }).eq("id", existing.id);
+              // Decrement completed_modules count
+              const currentCompleted = roadmap.completed_modules ?? 0;
+              await supabase.from("roadmaps").update({
+                completed_modules: Math.max(0, currentCompleted - 1),
+              }).eq("id", roadmap.id);
+              setSelectedModule(null);
+              fetchData();
+            }
+          }}
           onUpdateResourcesAndNotes={async (moduleId, completedResources, notes) => {
             if (!user || !roadmap) return;
             const existing = progressMap[moduleId];
