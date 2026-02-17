@@ -425,11 +425,12 @@ function scoreResource(
   // Reddit community resource (include max 1 per roadmap, handled in selection)
   if (urlLower.includes("reddit.com")) score += 5;
 
-  // CRITERION 3: TIME FIT
+  // CRITERION 3: TIME FIT (reward proportional fit, no harsh penalty for long videos)
   const ratio = res.estimated_minutes / moduleMinutes;
   if (ratio >= 0.1 && ratio <= 0.5) score += 10;
-  else if (ratio > 0.5 && ratio <= 0.8) score += 5;
-  else if (ratio > 0.8) score -= 5;
+  else if (ratio > 0.5 && ratio <= 1.0) score += 5;
+  // Long videos that exceed module time get slight penalty but are NOT disqualified
+  else if (ratio > 1.0) score -= 2;
 
   return score;
 }
@@ -454,7 +455,9 @@ function selectResources(
 
   for (const { resource } of scored) {
     if (selected.length >= config.maxResourcesPerModule) break;
-    if (totalMinutes + resource.estimated_minutes > moduleMinutes * 1.15) continue;
+    // Allow first resource even if it exceeds module time (long but highly relevant)
+    // For subsequent resources, cap at module budget
+    if (selected.length > 0 && totalMinutes + resource.estimated_minutes > moduleMinutes * 1.15) continue;
 
     const typeGroup = resource.type === "documentation" || resource.type === "tutorial" ? "articles" : resource.type === "practice" ? "practice" : "videos";
     const targetForType = (config.targetMix as any)[typeGroup] || 2;
@@ -468,16 +471,10 @@ function selectResources(
     typeCounts[resource.type] = (typeCounts[resource.type] || 0) + 1;
   }
 
-  // Scale resource estimates to fill ~85% of module time if underfilled
-  if (selected.length > 0 && totalMinutes < moduleMinutes * 0.6) {
-    const scale = Math.min(moduleMinutes * 0.85 / totalMinutes, 3);
-    for (const res of selected) {
-      res.estimated_minutes = Math.round(res.estimated_minutes * scale);
-    }
-  }
-
-  // Fill to minimum if needed
-  if (selected.length < config.minResourcesPerModule) {
+  // Fill to minimum if needed (but allow 1 resource if it fills the time well)
+  const effectiveMin = (selected.length === 1 && totalMinutes >= moduleMinutes * 0.5)
+    ? 1 : config.minResourcesPerModule;
+  if (selected.length < effectiveMin) {
     for (const { resource } of scored) {
       if (selected.includes(resource)) continue;
       if (selected.length >= config.minResourcesPerModule) break;
@@ -496,7 +493,8 @@ async function fetchResourcesForModule(
   skillLevel: string,
   apiKey: string,
   moduleHours: number,
-  learningGoal: string
+  learningGoal: string,
+  totalAvailableHours?: number
 ): Promise<Resource[]> {
   const config = getGoalSearchConfig(learningGoal);
   const moduleMinutes = Math.floor(moduleHours * 60);
@@ -535,7 +533,9 @@ async function fetchResourcesForModule(
     const title = v.title || "Video Tutorial";
     if (isDisqualified(title, v.link)) continue;
     const mins = parseDurationToMinutes(v.duration);
-    if (mins > moduleMinutes * 0.8) continue;
+    // Only disqualify if video is longer than total available time
+    const totalAvailableMinutes = totalAvailableHours ? totalAvailableHours * 60 : moduleMinutes;
+    if (mins > totalAvailableMinutes) continue;
     candidates.push({
       title, url: v.link, type: "video",
       estimated_minutes: mins,
@@ -773,7 +773,7 @@ Return ONLY valid JSON with this exact structure:
     console.log(`Fetching resources for ${roadmap.modules?.length || 0} modules (goal: ${effectiveGoal}, level: ${skill_level})...`);
 
     const resourcePromises = (roadmap.modules || []).map((mod: any) =>
-      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day, effectiveGoal)
+      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day, effectiveGoal, totalHours)
     );
     const allResources = await Promise.all(resourcePromises);
 
