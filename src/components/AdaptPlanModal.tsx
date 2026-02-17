@@ -16,16 +16,12 @@ interface Props {
 
 export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGoal, onClose, onApply }: Props) {
   const completedCount = Object.values(progressMap).filter((p) => p.status === "completed").length;
-  const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
   const [newDays, setNewDays] = useState(roadmapData.timeline_weeks * 7);
-  const [newWeeks, setNewWeeks] = useState(roadmapData.timeline_weeks);
   const [newHours, setNewHours] = useState(roadmapData.hours_per_day);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AdaptResult | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const effectiveDays = timelineUnit === "days" ? newDays : newWeeks * 7;
 
   const handleRecalculate = async () => {
     setLoading(true);
@@ -35,7 +31,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
         body: {
           roadmap_data: roadmapData,
           all_progress: Object.values(progressMap),
-          new_timeline_days: effectiveDays,
+          new_timeline_days: newDays,
           new_hours_per_day: newHours,
           adjustment_type: "manual",
           learning_goal: learningGoal || "hands_on",
@@ -91,36 +87,14 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
         {!result ? (
           <div className="space-y-4">
             <div>
-              <Label className="text-sm text-muted-foreground mb-2 block">Timeline</Label>
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => setTimelineUnit("days")}
-                  className={`flex-1 py-1.5 text-xs font-heading font-bold rounded-lg transition-all ${timelineUnit === "days" ? "gradient-primary text-primary-foreground" : "glass text-muted-foreground hover:bg-white/5"}`}
-                >Days</button>
-                <button
-                  onClick={() => setTimelineUnit("weeks")}
-                  className={`flex-1 py-1.5 text-xs font-heading font-bold rounded-lg transition-all ${timelineUnit === "weeks" ? "gradient-primary text-primary-foreground" : "glass text-muted-foreground hover:bg-white/5"}`}
-                >Weeks</button>
-              </div>
-              {timelineUnit === "days" ? (
-                <>
               <Label className="text-sm text-muted-foreground mb-2 block">
-                    Days remaining: <span className="text-primary font-heading font-bold">{newDays}</span>
-                  </Label>
-                  <input type="range" min={0} max={90} value={newDays} onChange={(e) => setNewDays(Number(e.target.value))} className="w-full accent-primary" />
-                </>
-              ) : (
-                <>
-              <Label className="text-sm text-muted-foreground mb-2 block">
-                    Weeks remaining: <span className="text-primary font-heading font-bold">{newWeeks}</span>
-                  </Label>
-                  <input type="range" min={1} max={16} value={newWeeks} onChange={(e) => setNewWeeks(Number(e.target.value))} className="w-full accent-primary" />
-                </>
-              )}
+                How many days do you have remaining? <span className="text-primary font-heading font-bold">{newDays}</span>
+              </Label>
+              <input type="range" min={1} max={90} value={newDays} onChange={(e) => setNewDays(Number(e.target.value))} className="w-full accent-primary" />
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-2 block">
-                Hours/day: <span className="text-primary font-heading font-bold">{newHours}</span>
+                How many hours a day can you study? <span className="text-primary font-heading font-bold">{newHours}</span>
               </Label>
               <input type="range" min={0.5} max={8} step={0.5} value={newHours} onChange={(e) => setNewHours(Number(e.target.value))} className="w-full accent-primary" />
             </div>

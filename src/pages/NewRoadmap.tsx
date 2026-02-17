@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, BookOpen, Layers } from "lucide-react";
+import { Loader2, BookOpen, Layers, BookOpenCheck, Code2, Zap, GraduationCap } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
 const SKILLS = [
@@ -18,10 +18,10 @@ const SKILLS = [
 ];
 
 const LEARNING_GOALS = [
-  { value: "conceptual", label: "📚 Conceptual", desc: "Understand the theory, concepts, and mental models" },
-  { value: "hands_on", label: "💻 Hands-On", desc: "Build things, write code, solve problems" },
-  { value: "quick_overview", label: "⚡ Quick Overview", desc: "Fast high-level understanding for a demo or meeting" },
-  { value: "deep_mastery", label: "🎓 Deep Mastery", desc: "Comprehensive, in-depth expertise" },
+  { value: "conceptual", label: "Conceptual", icon: BookOpenCheck, desc: "Understand the theory, concepts, and mental models" },
+  { value: "hands_on", label: "Hands-On", icon: Code2, desc: "Build things, write code, solve problems" },
+  { value: "quick_overview", label: "Quick Overview", icon: Zap, desc: "Fast high-level understanding for a demo or meeting" },
+  { value: "deep_mastery", label: "Deep Mastery", icon: GraduationCap, desc: "Comprehensive, in-depth expertise" },
 ];
 
 const QUICK_STARTS = [
@@ -273,6 +273,7 @@ export default function NewRoadmap() {
                       onClick={() => setLearningGoal(g.value)}
                       className={`glass-blue p-3 text-center transition-all ${learningGoal === g.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-accent/10"}`}
                     >
+                      <g.icon className={`w-5 h-5 mx-auto mb-1 ${learningGoal === g.value ? "text-primary" : "text-muted-foreground"}`} />
                       <span className="block text-xs sm:text-sm font-heading font-semibold">{g.label}</span>
                       {learningGoal === g.value && (
                         <span className="block text-xs text-muted-foreground mt-1 animate-fade-in">{g.desc}</span>

@@ -92,6 +92,7 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
       </div>
 
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-8">
+        <div className="glass-blue p-5 space-y-8">
         <p className="text-base text-muted-foreground">{module.description}</p>
 
         {/* Learning Objectives */}
@@ -265,12 +266,14 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
 
             <Button
               onClick={handleComplete}
-              className="w-full h-12 gradient-primary text-primary-foreground font-heading font-bold glow-primary"
+              className="w-full h-12 gradient-primary text-primary-foreground font-heading font-bold hover:glow-primary transition-all"
             >
               Complete Module ✅
             </Button>
           </div>
         )}
+      </div>
+
       </div>
 
       {quizOpen && (

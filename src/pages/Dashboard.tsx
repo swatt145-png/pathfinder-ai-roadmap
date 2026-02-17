@@ -10,7 +10,7 @@ import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActio
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
+import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap } from "lucide-react";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
 interface CompletionActionState {
@@ -399,11 +399,22 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
-            {roadmap?.learning_goal && (
-              <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-accent/20 text-accent-foreground">
-                {roadmap.learning_goal === "conceptual" ? "📚 Conceptual" : roadmap.learning_goal === "hands_on" ? "💻 Hands-On" : roadmap.learning_goal === "quick_overview" ? "⚡ Quick Overview" : roadmap.learning_goal === "deep_mastery" ? "🎓 Deep Mastery" : roadmap.learning_goal}
-              </span>
-            )}
+            {roadmap?.learning_goal && (() => {
+              const goalMap: Record<string, { icon: React.ElementType; label: string }> = {
+                conceptual: { icon: BookOpenCheck, label: "Conceptual" },
+                hands_on: { icon: Code2, label: "Hands-On" },
+                quick_overview: { icon: Zap, label: "Quick Overview" },
+                deep_mastery: { icon: GraduationCap, label: "Deep Mastery" },
+              };
+              const g = goalMap[roadmap.learning_goal];
+              if (!g) return null;
+              const GoalIcon = g.icon;
+              return (
+                <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-accent/20 text-accent-foreground inline-flex items-center gap-1">
+                  <GoalIcon className="w-3.5 h-3.5" /> {g.label}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Progress bar */}
