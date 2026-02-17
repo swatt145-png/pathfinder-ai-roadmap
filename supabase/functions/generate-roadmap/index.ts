@@ -17,31 +17,121 @@ interface Resource {
   description: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Tiered Resource Prioritization ──────────────────────────────────────────
 
-// Well-known, trusted resource domains — used for scoring and type detection
-const TRUSTED_DOMAINS = [
-  "youtube.com", "youtu.be", "freecodecamp.org", "coursera.org", "udemy.com",
-  "khanacademy.org", "codecademy.com", "ocw.mit.edu", "edx.org",
-  "leetcode.com", "hackerrank.com", "sqlzoo.net", "w3schools.com",
-  "developer.mozilla.org", "realpython.com", "digitalocean.com",
-  "geeksforgeeks.org", "stackoverflow.com", "reddit.com",
-  "docs.python.org", "docs.oracle.com", "learn.microsoft.com",
-  "tutorialspoint.com",
+// TIER 1: Always prioritize regardless of learning goal
+const TIER1_DOMAINS = [
+  "freecodecamp.org", "cs50.harvard.edu", "ocw.mit.edu",
+  "khanacademy.org", "developer.mozilla.org",
 ];
 
-const TRUSTED_YOUTUBE_CHANNELS = [
+// Official documentation domains (always tier 1 for their technology)
+const OFFICIAL_DOC_PATTERNS = [
+  "python.org/doc", "docs.python.org", "react.dev", "vuejs.org",
+  "angular.io/docs", "docs.docker.com", "kubernetes.io/docs",
+  "go.dev/doc", "doc.rust-lang.org", "docs.oracle.com",
+  "learn.microsoft.com", "developer.apple.com",
+];
+
+// TIER 2: Prioritize based on learning goal
+
+interface GoalResources {
+  youtubeChannels: string[];
+  coursePlatforms: string[];
+  practicePlatforms: string[];
+  articleSites: string[];
+  siteFilters: string[]; // for Serper site: queries
+}
+
+const GOAL_RESOURCES: Record<string, GoalResources> = {
+  quick_overview: {
+    youtubeChannels: ["fireship", "networkchuck", "techworld with nana"],
+    coursePlatforms: ["codecademy.com"],
+    practicePlatforms: [],
+    articleSites: ["dev.to", "w3schools.com"],
+    siteFilters: [
+      "site:youtube.com fireship", "site:youtube.com networkchuck",
+      "site:youtube.com techworld with nana", "site:codecademy.com",
+      "site:dev.to", "site:w3schools.com", "site:freecodecamp.org",
+    ],
+  },
+  hands_on: {
+    youtubeChannels: [
+      "traversy media", "web dev simplified", "tech with tim",
+      "net ninja", "programming with mosh", "javascript mastery",
+    ],
+    coursePlatforms: ["udemy.com", "codecademy.com", "theodinproject.com"],
+    practicePlatforms: ["leetcode.com", "hackerrank.com", "exercism.org", "sqlzoo.net"],
+    articleSites: ["digitalocean.com", "realpython.com", "geeksforgeeks.org", "w3schools.com"],
+    siteFilters: [
+      "site:youtube.com traversy media", "site:youtube.com web dev simplified",
+      "site:youtube.com programming with mosh", "site:udemy.com",
+      "site:codecademy.com", "site:theodinproject.com",
+      "site:realpython.com", "site:digitalocean.com/community/tutorials",
+      "site:freecodecamp.org",
+    ],
+  },
+  conceptual: {
+    youtubeChannels: [
+      "3blue1brown", "cs dojo", "computerphile", "corey schafer",
+    ],
+    coursePlatforms: ["coursera.org", "edx.org", "khanacademy.org"],
+    practicePlatforms: [],
+    articleSites: ["geeksforgeeks.org", "realpython.com"],
+    siteFilters: [
+      "site:youtube.com 3blue1brown", "site:youtube.com cs dojo",
+      "site:youtube.com computerphile", "site:youtube.com corey schafer",
+      "site:coursera.org", "site:edx.org", "site:khanacademy.org",
+      "site:freecodecamp.org", "site:ocw.mit.edu",
+    ],
+  },
+  deep_mastery: {
+    youtubeChannels: [
+      "freecodecamp", "sentdex", "the coding train",
+    ],
+    coursePlatforms: ["coursera.org", "edx.org", "ocw.mit.edu"],
+    practicePlatforms: ["leetcode.com", "hackerrank.com", "exercism.org", "sqlzoo.net"],
+    articleSites: ["realpython.com", "digitalocean.com", "geeksforgeeks.org"],
+    siteFilters: [
+      "site:youtube.com freecodecamp", "site:youtube.com sentdex",
+      "site:coursera.org", "site:edx.org", "site:ocw.mit.edu",
+      "site:realpython.com", "site:digitalocean.com/community/tutorials",
+      "site:freecodecamp.org",
+    ],
+  },
+};
+
+// Anti-pattern domains to deprioritize or skip
+const DEPRIORITIZE_DOMAINS = [
+  "tutorialspoint.com", "javatpoint.com",
+];
+
+// All known good domains (for general trust check)
+const ALL_TRUSTED_DOMAINS = [
+  ...TIER1_DOMAINS, ...OFFICIAL_DOC_PATTERNS,
+  "youtube.com", "youtu.be", "coursera.org", "udemy.com", "edx.org",
+  "codecademy.com", "theodinproject.com",
+  "leetcode.com", "hackerrank.com", "sqlzoo.net", "exercism.org",
+  "w3schools.com", "realpython.com", "digitalocean.com",
+  "geeksforgeeks.org", "stackoverflow.com", "reddit.com",
+  "dev.to",
+];
+
+// All known YouTube channels (for general channel trust check)
+const ALL_YOUTUBE_CHANNELS = [
   "freecodecamp", "traversy media", "fireship", "networkchuck", "cs dojo",
   "corey schafer", "web dev simplified", "tech with tim", "techworld with nana",
   "3blue1brown", "sentdex", "programming with mosh", "the coding train",
-  "net ninja", "academind", "ben awad",
+  "net ninja", "javascript mastery", "computerphile", "cs50",
 ];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function detectResourceType(url: string): Resource["type"] {
   const lower = url.toLowerCase();
   const docDomains = ["docs.", "developer.", "devdocs.", "wiki.", "reference.", "documentation", "developer.mozilla.org", "learn.microsoft.com"];
   const practiceDomains = ["leetcode", "hackerrank", "codewars", "exercism", "codecademy.com/learn", "freecodecamp.org/learn", "sqlzoo"];
-  const tutorialDomains = ["freecodecamp", "w3schools", "tutorialspoint", "geeksforgeeks", "codecademy", "khanacademy", "realpython", "digitalocean.com/community"];
+  const tutorialDomains = ["freecodecamp", "w3schools", "geeksforgeeks", "codecademy", "khanacademy", "realpython", "digitalocean.com/community", "theodinproject"];
   if (practiceDomains.some(d => lower.includes(d))) return "practice";
   if (docDomains.some(d => lower.includes(d))) return "documentation";
   if (tutorialDomains.some(d => lower.includes(d))) return "tutorial";
@@ -60,10 +150,12 @@ function parseDurationToMinutes(duration?: string): number {
 }
 
 function isDisqualified(title: string, url: string): boolean {
-  const courseKeywords = /\b(full course|complete course|crash course.*\d+ hours|bootcamp|playlist|lessons? \d+-\d+|parts? \d+-\d+|\d+ lessons|\d{2,}\s*hours)\b/i;
   const spamSignals = /\b(top \d+ best|best \d+|you won't believe|clickbait)\b/i;
-  if (courseKeywords.test(title) || url.includes("playlist") || url.includes("/learn/")) return true;
   if (spamSignals.test(title)) return true;
+  // Deprioritized/anti-pattern domains
+  if (DEPRIORITIZE_DOMAINS.some(d => url.toLowerCase().includes(d))) return true;
+  // AI content farm signals
+  if (/\b(ai generated|content farm)\b/i.test(title)) return true;
   return false;
 }
 
@@ -91,7 +183,6 @@ async function searchSerper(query: string, apiKey: string, type: "search" | "vid
 
 interface GoalSearchConfig {
   queryModifiers: string[];
-  platformBoost: string[];       // domains to boost in ranking
   videoCount: number;
   webCount: number;
   targetMix: { videos: number; articles: number; practice: number };
@@ -104,7 +195,6 @@ function getGoalSearchConfig(goal: string): GoalSearchConfig {
     case "conceptual":
       return {
         queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"],
-        platformBoost: ["khanacademy.org", "ocw.mit.edu", "edx.org", "coursera.org", "youtube.com"],
         videoCount: 8, webCount: 6,
         targetMix: { videos: 2, articles: 2, practice: 0 },
         maxResourcesPerModule: 5, minResourcesPerModule: 3,
@@ -112,7 +202,6 @@ function getGoalSearchConfig(goal: string): GoalSearchConfig {
     case "hands_on":
       return {
         queryModifiers: ["tutorial", "build", "project", "practice", "exercise", "hands-on", "step by step", "code along"],
-        platformBoost: ["freecodecamp.org", "codecademy.com", "leetcode.com", "hackerrank.com", "youtube.com"],
         videoCount: 6, webCount: 8,
         targetMix: { videos: 1, articles: 1, practice: 1 },
         maxResourcesPerModule: 5, minResourcesPerModule: 3,
@@ -120,7 +209,6 @@ function getGoalSearchConfig(goal: string): GoalSearchConfig {
     case "quick_overview":
       return {
         queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "cheat sheet", "essentials"],
-        platformBoost: ["youtube.com", "dev.to", "medium.com", "freecodecamp.org"],
         videoCount: 6, webCount: 4,
         targetMix: { videos: 1, articles: 1, practice: 0 },
         maxResourcesPerModule: 3, minResourcesPerModule: 2,
@@ -128,7 +216,6 @@ function getGoalSearchConfig(goal: string): GoalSearchConfig {
     case "deep_mastery":
       return {
         queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "best practices", "full course", "masterclass"],
-        platformBoost: ["coursera.org", "udemy.com", "ocw.mit.edu", "realpython.com", "freecodecamp.org"],
         videoCount: 6, webCount: 8,
         targetMix: { videos: 2, articles: 1, practice: 1 },
         maxResourcesPerModule: 5, minResourcesPerModule: 3,
@@ -136,7 +223,6 @@ function getGoalSearchConfig(goal: string): GoalSearchConfig {
     default:
       return {
         queryModifiers: ["tutorial", "guide"],
-        platformBoost: [],
         videoCount: 6, webCount: 6,
         targetMix: { videos: 1, articles: 1, practice: 0 },
         maxResourcesPerModule: 5, minResourcesPerModule: 3,
@@ -164,40 +250,60 @@ function scoreResource(
   moduleMinutes: number
 ): number {
   let score = 0;
+  const urlLower = res.url.toLowerCase();
+  const titleLower = res.title.toLowerCase();
+  const goalRes = GOAL_RESOURCES[goal] || GOAL_RESOURCES["hands_on"];
 
   // CRITERION 1: RELEVANCE — title/description must relate to module
-  const titleLower = res.title.toLowerCase();
   const moduleLower = moduleTitle.toLowerCase();
   const moduleWords = moduleLower.split(/\s+/).filter(w => w.length > 3);
   const matchingWords = moduleWords.filter(w => titleLower.includes(w));
-  score += matchingWords.length * 15; // relevance boost
+  score += matchingWords.length * 15;
 
-  // Goal fit: video for conceptual, practice for hands_on, etc.
+  // Goal fit
   if (goal === "conceptual" && (res.type === "video" || res.type === "documentation")) score += 10;
   if (goal === "hands_on" && (res.type === "tutorial" || res.type === "practice")) score += 10;
   if (goal === "quick_overview" && res.estimated_minutes <= 20) score += 10;
   if (goal === "deep_mastery" && res.estimated_minutes >= 20) score += 10;
 
-  // Level fit: beginners prefer videos, advanced prefer docs
+  // Level fit
   if (level === "beginner" && res.type === "video") score += 5;
   if (level === "advanced" && (res.type === "documentation" || res.type === "article")) score += 5;
 
-  // CRITERION 2: QUALITY — trusted & well-known platforms get major boost
-  const urlLower = res.url.toLowerCase();
-  const titleLowerFull = res.title.toLowerCase();
-  const isTrustedDomain = TRUSTED_DOMAINS.some(d => urlLower.includes(d));
-  const isTrustedChannel = TRUSTED_YOUTUBE_CHANNELS.some(ch => titleLowerFull.includes(ch));
-  if (isTrustedDomain) score += 15;
-  if (isTrustedChannel) score += 20; // strong boost for known quality channels
-  if (config.platformBoost.some(p => urlLower.includes(p))) score += 5;
-  // Penalize unknown/low-quality domains
-  if (!isTrustedDomain && !isTrustedChannel) score -= 5;
+  // CRITERION 2: SOURCE TRUST (tiered)
+  // Tier 1: universal priority (+25)
+  const isTier1 = TIER1_DOMAINS.some(d => urlLower.includes(d));
+  const isOfficialDoc = OFFICIAL_DOC_PATTERNS.some(d => urlLower.includes(d));
+  if (isTier1) score += 25;
+  if (isOfficialDoc) score += 25;
 
-  // CRITERION 3: TIME FIT — prefer resources that fit well within module budget
+  // Tier 2: goal-specific priority (+20)
+  const isGoalChannel = goalRes.youtubeChannels.some(ch => titleLower.includes(ch));
+  const isGoalPlatform = goalRes.coursePlatforms.some(p => urlLower.includes(p));
+  const isGoalPractice = goalRes.practicePlatforms.some(p => urlLower.includes(p));
+  const isGoalArticle = goalRes.articleSites.some(s => urlLower.includes(s));
+  if (isGoalChannel) score += 20;
+  if (isGoalPlatform) score += 18;
+  if (isGoalPractice) score += 18;
+  if (isGoalArticle) score += 15;
+
+  // Known good but not goal-specific (+10)
+  const isAnyTrusted = ALL_TRUSTED_DOMAINS.some(d => urlLower.includes(d));
+  const isAnyKnownChannel = ALL_YOUTUBE_CHANNELS.some(ch => titleLower.includes(ch));
+  if (!isTier1 && !isOfficialDoc && !isGoalPlatform && !isGoalArticle && isAnyTrusted) score += 10;
+  if (!isGoalChannel && isAnyKnownChannel) score += 10;
+
+  // Unknown source penalty
+  if (!isAnyTrusted && !isAnyKnownChannel) score -= 8;
+
+  // Reddit community resource (include max 1 per roadmap, handled in selection)
+  if (urlLower.includes("reddit.com")) score += 5;
+
+  // CRITERION 3: TIME FIT
   const ratio = res.estimated_minutes / moduleMinutes;
-  if (ratio >= 0.1 && ratio <= 0.5) score += 10; // sweet spot
+  if (ratio >= 0.1 && ratio <= 0.5) score += 10;
   else if (ratio > 0.5 && ratio <= 0.8) score += 5;
-  else if (ratio > 0.8) score -= 5; // too long for a single resource in a module
+  else if (ratio > 0.8) score -= 5;
 
   return score;
 }
@@ -210,7 +316,6 @@ function selectResources(
   config: GoalSearchConfig,
   moduleMinutes: number
 ): Resource[] {
-  // Score all candidates
   const scored = candidates.map(r => ({
     resource: r,
     score: scoreResource(r, moduleTitle, goal, level, config, moduleMinutes),
@@ -225,20 +330,19 @@ function selectResources(
     if (selected.length >= config.maxResourcesPerModule) break;
     if (totalMinutes + resource.estimated_minutes > moduleMinutes * 1.15) continue;
 
-    // Enforce mix: don't over-index on one type
     const typeGroup = resource.type === "documentation" || resource.type === "tutorial" ? "articles" : resource.type === "practice" ? "practice" : "videos";
     const targetForType = (config.targetMix as any)[typeGroup] || 2;
     const currentOfType = typeGroup === "articles"
       ? (typeCounts["article"] + typeCounts["documentation"] + typeCounts["tutorial"])
       : typeGroup === "videos" ? typeCounts["video"] : typeCounts["practice"];
-    if (currentOfType >= targetForType + 1) continue; // allow 1 extra
+    if (currentOfType >= targetForType + 1) continue;
 
     selected.push(resource);
     totalMinutes += resource.estimated_minutes;
     typeCounts[resource.type] = (typeCounts[resource.type] || 0) + 1;
   }
 
-  // If we're underfilled, scale resource estimates to fill ~85% of module time
+  // Scale resource estimates to fill ~85% of module time if underfilled
   if (selected.length > 0 && totalMinutes < moduleMinutes * 0.6) {
     const scale = Math.min(moduleMinutes * 0.85 / totalMinutes, 3);
     for (const res of selected) {
@@ -246,7 +350,7 @@ function selectResources(
     }
   }
 
-  // If still below minimum, take top remaining candidates regardless of mix
+  // Fill to minimum if needed
   if (selected.length < config.minResourcesPerModule) {
     for (const { resource } of scored) {
       if (selected.includes(resource)) continue;
@@ -272,39 +376,48 @@ async function fetchResourcesForModule(
   const moduleMinutes = Math.floor(moduleHours * 60);
   const levelMod = getLevelSearchModifier(skillLevel);
   const goalMod = config.queryModifiers.slice(0, 3).join(" ");
+  const goalRes = GOAL_RESOURCES[learningGoal] || GOAL_RESOURCES["hands_on"];
 
-  // Site-scoped queries to prefer trusted platforms
-  const siteHints = "site:youtube.com OR site:freecodecamp.org OR site:geeksforgeeks.org OR site:realpython.com OR site:developer.mozilla.org OR site:w3schools.com OR site:digitalocean.com";
+  // Build goal-specific site-scoped query from tier 2 mappings
+  const siteFilter = goalRes.siteFilters.slice(0, 5).join(" OR ");
   const webQuery = `${moduleTitle} ${topic} ${levelMod} ${goalMod}`;
-  const webQueryTrusted = `${moduleTitle} ${topic} ${siteHints}`;
-  const videoQuery = `${moduleTitle} ${topic} ${goalMod} ${levelMod}`;
+  const webQueryTrusted = `${moduleTitle} ${topic} ${siteFilter}`;
 
-  // Run 3 parallel searches: general web, trusted-site web, and videos
-  const [webResults, trustedWebResults, videoResults] = await Promise.all([
+  // Build goal-specific YouTube query with preferred channels
+  const preferredChannels = goalRes.youtubeChannels.slice(0, 2).join(" OR ");
+  const videoQuery = `${moduleTitle} ${topic} ${goalMod} ${levelMod}`;
+  const videoQueryTargeted = preferredChannels
+    ? `${moduleTitle} ${topic} ${preferredChannels}`
+    : videoQuery;
+
+  // Run 4 parallel searches: general web, trusted-site web, general videos, targeted channel videos
+  const [webResults, trustedWebResults, videoResults, targetedVideoResults] = await Promise.all([
     searchSerper(webQuery, apiKey, "search", config.webCount),
     searchSerper(webQueryTrusted, apiKey, "search", 4),
     searchSerper(videoQuery, apiKey, "videos", config.videoCount),
+    searchSerper(videoQueryTargeted, apiKey, "videos", 4),
   ]);
 
   const candidates: Resource[] = [];
+  const seenUrls = new Set<string>();
 
-  for (const v of videoResults as SerperVideoResult[]) {
-    if (!v.link) continue;
+  // Process videos: targeted first (higher chance of preferred channels), then general
+  const allVideoResults = [...(targetedVideoResults as SerperVideoResult[]), ...(videoResults as SerperVideoResult[])];
+  for (const v of allVideoResults) {
+    if (!v.link || seenUrls.has(v.link)) continue;
+    seenUrls.add(v.link);
     const title = v.title || "Video Tutorial";
     if (isDisqualified(title, v.link)) continue;
     const mins = parseDurationToMinutes(v.duration);
-    if (mins > moduleMinutes * 0.8) continue; // single resource shouldn't dominate
+    if (mins > moduleMinutes * 0.8) continue;
     candidates.push({
-      title,
-      url: v.link,
-      type: "video",
+      title, url: v.link, type: "video",
       estimated_minutes: mins,
       description: `Video tutorial on ${moduleTitle}`,
     });
   }
 
-  // Combine general + trusted web results, deduplicating by URL
-  const seenUrls = new Set<string>();
+  // Process web results: trusted first, then general, deduplicated
   const allWebResults = [...(trustedWebResults as SerperWebResult[]), ...(webResults as SerperWebResult[])];
   for (const r of allWebResults) {
     if (!r.link || seenUrls.has(r.link)) continue;
@@ -313,8 +426,7 @@ async function fetchResourcesForModule(
     if (isDisqualified(title, r.link)) continue;
     const mins = estimateArticleMinutes(r.snippet || "");
     candidates.push({
-      title,
-      url: r.link,
+      title, url: r.link,
       type: detectResourceType(r.link),
       estimated_minutes: mins,
       description: r.snippet || `Resource for learning ${moduleTitle}`,
@@ -529,7 +641,7 @@ Return ONLY valid JSON with this exact structure:
 
     const roadmap = JSON.parse(content);
 
-    // Step 2: Fetch real resources via Serper (parallelized)
+    // Step 2: Fetch real resources via Serper (parallelized per module)
     console.log(`Fetching resources for ${roadmap.modules?.length || 0} modules (goal: ${effectiveGoal}, level: ${skill_level})...`);
 
     const resourcePromises = (roadmap.modules || []).map((mod: any) =>
