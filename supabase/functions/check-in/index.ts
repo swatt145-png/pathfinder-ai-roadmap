@@ -101,7 +101,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { roadmap_data, module_id, module_title, self_report, quiz_score, quiz_answers, all_progress } = await req.json();
+    const { roadmap_data, module_id, module_title, self_report, quiz_score, quiz_answers, all_progress, learning_goal } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -123,7 +123,20 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    const effectiveGoal = learning_goal || "hands_on";
+    const goalContext = effectiveGoal === "conceptual"
+      ? "The student's learning goal is CONCEPTUAL — they want theory, concepts, and mental models. If adapting, add more explanatory/lecture resources, not coding exercises."
+      : effectiveGoal === "hands_on"
+      ? "The student's learning goal is HANDS-ON — they want to build things and practice. If adapting, add more practice exercises and project-based resources, not lectures."
+      : effectiveGoal === "quick_overview"
+      ? "The student's learning goal is QUICK OVERVIEW — they want fast, high-level understanding. If adapting, use crash courses and summary content, keep it short."
+      : effectiveGoal === "deep_mastery"
+      ? "The student's learning goal is DEEP MASTERY — they want comprehensive, in-depth expertise. If adapting, add thorough review modules with advanced content."
+      : "";
+
     const systemPrompt = `You are Pathfinder's intelligent adaptation engine. A student is progressing through a learning roadmap and has just checked in on a module. Analyze their performance and determine if the remaining roadmap needs adjustment.
+
+${goalContext}
 
 ADAPTATION LOGIC:
 - If the module was HARD and quiz score < 60%: Insert a focused review module. Adjust timeline.
@@ -150,6 +163,7 @@ OTHER RULES:
 Self-report: ${self_report}
 Quiz score: ${quiz_score ?? "not taken"}
 ${quiz_answers ? `Wrong answers: ${JSON.stringify(quiz_answers)}` : ""}
+Learning Goal: ${effectiveGoal}
 
 Current roadmap: ${JSON.stringify(roadmap_data)}
 All progress: ${JSON.stringify(all_progress)}

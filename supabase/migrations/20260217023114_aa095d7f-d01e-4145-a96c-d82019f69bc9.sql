@@ -1,0 +1,1 @@
+ALTER TABLE public.roadmaps ADD COLUMN learning_goal text;

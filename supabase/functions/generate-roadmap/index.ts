@@ -28,7 +28,6 @@ function detectResourceType(url: string): "article" | "documentation" | "tutoria
 
 function parseDurationToMinutes(duration?: string): number {
   if (!duration) return 15;
-  // Formats like "12:34" or "1:02:30" or "12 minutes"
   const hmsMatch = duration.match(/(\d+):(\d+):(\d+)/);
   if (hmsMatch) return parseInt(hmsMatch[1]) * 60 + parseInt(hmsMatch[2]);
   const msMatch = duration.match(/(\d+):(\d+)/);
@@ -67,10 +66,19 @@ function isLikelyCourseOrPlaylist(title: string, url: string): boolean {
 }
 
 function estimateArticleMinutes(snippet: string): number {
-  // Estimate reading time: ~200 words/min, snippet hints at length
   const wordCount = snippet ? snippet.split(/\s+/).length : 0;
   if (wordCount > 80) return 15;
   return 10;
+}
+
+function getSearchSuffix(learningGoal: string): string {
+  switch (learningGoal) {
+    case "conceptual": return "explained how it works theory concepts lecture";
+    case "hands_on": return "tutorial build project hands-on practice exercise step by step";
+    case "quick_overview": return "crash course quick guide 10 minutes overview cheat sheet summary";
+    case "deep_mastery": return "complete guide advanced in depth best practices comprehensive";
+    default: return "tutorial";
+  }
 }
 
 async function fetchResourcesForModule(
@@ -78,12 +86,13 @@ async function fetchResourcesForModule(
   topic: string,
   skillLevel: string,
   apiKey: string,
-  moduleHours: number
+  moduleHours: number,
+  learningGoal: string
 ) {
   const maxMinutes = Math.floor(moduleHours * 60);
-  // Request fewer results to stay focused
-  const webQuery = `${moduleTitle} ${topic} ${skillLevel} tutorial`;
-  const videoQuery = `${moduleTitle} ${topic} tutorial ${skillLevel} short`;
+  const goalSuffix = getSearchSuffix(learningGoal);
+  const webQuery = `${moduleTitle} ${topic} ${skillLevel} ${goalSuffix}`;
+  const videoQuery = `${moduleTitle} ${topic} ${goalSuffix} ${skillLevel}`;
 
   const [webResults, videoResults] = await Promise.all([
     searchSerper(webQuery, apiKey, "search", 4),
@@ -96,9 +105,8 @@ async function fetchResourcesForModule(
     if (!v.link) continue;
     const mins = parseDurationToMinutes(v.duration);
     const title = v.title || "Video Tutorial";
-    // Skip full courses/playlists and very long videos
     if (isLikelyCourseOrPlaylist(title, v.link)) continue;
-    if (mins > maxMinutes * 0.8) continue; // single resource shouldn't exceed 80% of budget
+    if (mins > maxMinutes * 0.8) continue;
     candidates.push({
       title,
       url: v.link,
@@ -122,20 +130,17 @@ async function fetchResourcesForModule(
     });
   }
 
-  // Sort by duration ascending — prefer shorter, focused resources
   candidates.sort((a, b) => a.estimated_minutes - b.estimated_minutes);
 
-  // Greedily pick resources that fit within the time budget
   const selected: any[] = [];
   let totalMinutes = 0;
   for (const res of candidates) {
     if (totalMinutes + res.estimated_minutes > maxMinutes) continue;
     selected.push(res);
     totalMinutes += res.estimated_minutes;
-    if (selected.length >= 5) break; // max 5 resources per module
+    if (selected.length >= 5) break;
   }
 
-  // If nothing fit, take the single shortest candidate
   if (selected.length === 0 && candidates.length > 0) {
     const shortest = candidates[0];
     shortest.estimated_minutes = Math.min(shortest.estimated_minutes, maxMinutes);
@@ -145,11 +150,47 @@ async function fetchResourcesForModule(
   return selected;
 }
 
+function getLearningGoalInstructions(learningGoal: string): string {
+  switch (learningGoal) {
+    case "conceptual":
+      return `LEARNING GOAL: Conceptual
+- Focus on "why" and "how it works" rather than "how to do it"
+- Quiz style: Test understanding of concepts, definitions, tradeoffs, comparisons
+- Time allocation: More time on reading and watching, less on exercises
+- Module style: Theory-first, with diagrams and mental models
+- Aim for 5-8 modules with conceptual depth`;
+    case "hands_on":
+      return `LEARNING GOAL: Hands-On
+- Every module should have a "build something" or "try this" component
+- Quiz style: Code-oriented questions, "what would this code output", practical scenarios
+- Time allocation: 30% learning, 70% doing
+- Module style: Project-based, practical exercises
+- Aim for 5-8 modules with practical focus`;
+    case "quick_overview":
+      return `LEARNING GOAL: Quick Overview
+- Condensed content, hit the key points fast, skip deep dives
+- Quiz style: Quick recall, key terminology, "which tool is used for what"
+- Time allocation: Short focused bursts, no lengthy content
+- Module style: Summary-oriented, essentials only
+- IMPORTANT: Use only 3-5 modules (fewer than normal). Each module should be shorter. The entire roadmap should feel fast and punchy.`;
+    case "deep_mastery":
+      return `LEARNING GOAL: Deep Mastery
+- Deep dives with prerequisites clearly mapped, includes edge cases and best practices
+- Quiz style: Advanced questions testing nuance, tradeoffs, "when would you use X vs Y", design decisions
+- Time allocation: More modules, longer per module, includes review modules
+- Module style: Comprehensive with advanced topics
+- IMPORTANT: Use 7-10 modules with more depth per module.`;
+    default:
+      return "";
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { topic, skill_level, timeline_weeks, hours_per_day, hard_deadline, deadline_date, include_weekends } = await req.json();
+    const { topic, skill_level, learning_goal, timeline_weeks, hours_per_day, hard_deadline, deadline_date, include_weekends } = await req.json();
+    const effectiveGoal = learning_goal || "hands_on";
     const days_in_timeline = timeline_weeks * 7;
     const study_days = include_weekends === false ? Math.round(days_in_timeline * 5 / 7) : days_in_timeline;
     const total_hours = study_days * hours_per_day;
@@ -160,11 +201,12 @@ serve(async (req) => {
     const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY");
     if (!SERPER_API_KEY) throw new Error("SERPER_API_KEY not configured");
 
-    // Step 1: AI generates curriculum structure WITHOUT resource URLs
-    const systemPrompt = `You are Pathfinder, an expert learning curriculum designer for technical topics. You create personalized, structured, and realistic learning roadmaps. Given a topic, skill level, timeline, and available hours, design a comprehensive learning path.
+    const goalInstructions = getLearningGoalInstructions(effectiveGoal);
+
+    const systemPrompt = `You are Pathfinder, an expert learning curriculum designer for technical topics. You create personalized, structured, and realistic learning roadmaps. Given a topic, skill level, learning goal, timeline, and available hours, design a comprehensive learning path.
 
 RULES:
-- Break the topic into 5-8 sequential modules depending on complexity and timeline
+- Break the topic into sequential modules (number depends on learning goal — see below)
 - Each module must logically build on the previous one
 - Total estimated hours across all modules must not exceed the student's available hours (${total_hours} hours)
 - DO NOT include any resources or URLs - leave resources as empty arrays. Resources will be fetched separately.
@@ -172,6 +214,9 @@ RULES:
 - Each quiz question must have exactly 4 options with one correct answer and a clear explanation
 - Assign each module to specific days within the timeline
 - Be realistic about what can be learned in the given time
+- Generate a concise, clean "topic" field that summarizes the user's input as a proper title (capitalize first letter, remove filler words like "I want to learn", include skill context if relevant). Examples: "Docker Basics in 2 Days", "Machine Learning Models", "Python Libraries Intermediate"
+
+${goalInstructions}
 
 SKILL LEVEL GUIDE:
 - Beginner: Start from absolute fundamentals, assume no prior knowledge, favor video tutorials
@@ -180,6 +225,7 @@ SKILL LEVEL GUIDE:
 
     const userPrompt = `Create a learning roadmap for: "${topic}"
 Skill level: ${skill_level}
+Learning Goal: ${effectiveGoal}
 Timeline: ${timeline_weeks} weeks (${study_days} study days${include_weekends === false ? ", weekends excluded" : ", including weekends"})
 Hours per day: ${hours_per_day}
 Total available hours: ${total_hours}
@@ -187,7 +233,7 @@ ${hard_deadline && deadline_date ? `Hard deadline: ${deadline_date}` : ""}
 
 Return ONLY valid JSON with this exact structure:
 {
-  "topic": "${topic}",
+  "topic": "concise clean title summarizing the learning goal (e.g. 'Docker Basics in 2 Days', 'Machine Learning Models', 'Python Libraries Intermediate')",
   "skill_level": "${skill_level}",
   "timeline_weeks": ${timeline_weeks},
   "hours_per_day": ${hours_per_day},
@@ -248,10 +294,10 @@ Return ONLY valid JSON with this exact structure:
     const roadmap = JSON.parse(content);
 
     // Step 2: Fetch real resources via Serper API (parallelized across all modules)
-    console.log(`Fetching resources for ${roadmap.modules?.length || 0} modules via Serper...`);
+    console.log(`Fetching resources for ${roadmap.modules?.length || 0} modules via Serper (goal: ${effectiveGoal})...`);
 
     const resourcePromises = (roadmap.modules || []).map((mod: any) =>
-      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day)
+      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day, effectiveGoal)
     );
     const allResources = await Promise.all(resourcePromises);
 

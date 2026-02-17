@@ -9,11 +9,12 @@ interface Props {
   roadmapData: RoadmapData;
   progressMap: Record<string, ModuleProgress>;
   roadmapId: string;
+  learningGoal?: string;
   onClose: () => void;
   onApply: (updatedRoadmap: RoadmapData) => void;
 }
 
-export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, onApply }: Props) {
+export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGoal, onClose, onApply }: Props) {
   const completedCount = Object.values(progressMap).filter((p) => p.status === "completed").length;
   const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
   const [newDays, setNewDays] = useState(roadmapData.timeline_weeks * 7);
@@ -37,6 +38,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, onClose, o
           new_timeline_days: effectiveDays,
           new_hours_per_day: newHours,
           adjustment_type: "manual",
+          learning_goal: learningGoal || "hands_on",
         },
       });
       if (fnErr) throw new Error(fnErr.message);
