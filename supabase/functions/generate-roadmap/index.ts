@@ -95,8 +95,8 @@ async function fetchResourcesForModule(
   const videoQuery = `${moduleTitle} ${topic} ${goalSuffix} ${skillLevel}`;
 
   const [webResults, videoResults] = await Promise.all([
-    searchSerper(webQuery, apiKey, "search", 4),
-    searchSerper(videoQuery, apiKey, "videos", 4),
+    searchSerper(webQuery, apiKey, "search", 6),
+    searchSerper(videoQuery, apiKey, "videos", 6),
   ]);
 
   const candidates: any[] = [];
@@ -130,29 +130,42 @@ async function fetchResourcesForModule(
     });
   }
 
-  candidates.sort((a, b) => a.estimated_minutes - b.estimated_minutes);
+  candidates.sort((a, b) => b.estimated_minutes - a.estimated_minutes);
 
   const selected: any[] = [];
   let totalMinutes = 0;
+
+  // First pass: pick longer resources first to fill module time
   for (const res of candidates) {
-    if (totalMinutes + res.estimated_minutes > maxMinutes) continue;
+    if (selected.length >= 6) break;
+    if (totalMinutes + res.estimated_minutes > maxMinutes * 1.2) continue;
     selected.push(res);
     totalMinutes += res.estimated_minutes;
-    if (selected.length >= 5) break;
   }
 
-  // If total resource time is far less than the module time, scale up estimates to fill the time
-  if (selected.length > 0 && totalMinutes < maxMinutes * 0.5) {
-    const scale = Math.min(maxMinutes / totalMinutes, 3);
-    for (const res of selected) {
-      res.estimated_minutes = Math.round(res.estimated_minutes * scale);
+  // If we still have capacity, add shorter ones
+  if (totalMinutes < maxMinutes * 0.6) {
+    for (const res of candidates) {
+      if (selected.includes(res)) continue;
+      if (selected.length >= 8) break;
+      selected.push(res);
+      totalMinutes += res.estimated_minutes;
     }
   }
 
+  // Scale up resource estimates to reasonably fill the module time
+  if (selected.length > 0 && totalMinutes < maxMinutes * 0.7) {
+    const scale = Math.min(maxMinutes * 0.85 / totalMinutes, 4);
+    for (const res of selected) {
+      res.estimated_minutes = Math.round(res.estimated_minutes * scale);
+    }
+    totalMinutes = selected.reduce((s: number, r: any) => s + r.estimated_minutes, 0);
+  }
+
   if (selected.length === 0 && candidates.length > 0) {
-    const shortest = candidates[0];
-    shortest.estimated_minutes = Math.min(shortest.estimated_minutes, maxMinutes);
-    selected.push(shortest);
+    const best = candidates[0];
+    best.estimated_minutes = Math.min(best.estimated_minutes, maxMinutes);
+    selected.push(best);
   }
 
   return selected;
