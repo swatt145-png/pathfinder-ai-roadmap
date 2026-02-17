@@ -19,11 +19,29 @@ interface Resource {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Well-known, trusted resource domains — used for scoring and type detection
+const TRUSTED_DOMAINS = [
+  "youtube.com", "youtu.be", "freecodecamp.org", "coursera.org", "udemy.com",
+  "khanacademy.org", "codecademy.com", "ocw.mit.edu", "edx.org",
+  "leetcode.com", "hackerrank.com", "sqlzoo.net", "w3schools.com",
+  "developer.mozilla.org", "realpython.com", "digitalocean.com",
+  "geeksforgeeks.org", "stackoverflow.com", "reddit.com",
+  "docs.python.org", "docs.oracle.com", "learn.microsoft.com",
+  "tutorialspoint.com",
+];
+
+const TRUSTED_YOUTUBE_CHANNELS = [
+  "freecodecamp", "traversy media", "fireship", "networkchuck", "cs dojo",
+  "corey schafer", "web dev simplified", "tech with tim", "techworld with nana",
+  "3blue1brown", "sentdex", "programming with mosh", "the coding train",
+  "net ninja", "academind", "ben awad",
+];
+
 function detectResourceType(url: string): Resource["type"] {
   const lower = url.toLowerCase();
-  const docDomains = ["docs.", "developer.", "devdocs.", "wiki.", "reference.", "documentation"];
-  const practiceDomains = ["leetcode", "hackerrank", "codewars", "exercism", "codecademy.com/learn", "freecodecamp.org/learn"];
-  const tutorialDomains = ["freecodecamp", "w3schools", "tutorialspoint", "geeksforgeeks", "codecademy", "khanacademy", "realpython"];
+  const docDomains = ["docs.", "developer.", "devdocs.", "wiki.", "reference.", "documentation", "developer.mozilla.org", "learn.microsoft.com"];
+  const practiceDomains = ["leetcode", "hackerrank", "codewars", "exercism", "codecademy.com/learn", "freecodecamp.org/learn", "sqlzoo"];
+  const tutorialDomains = ["freecodecamp", "w3schools", "tutorialspoint", "geeksforgeeks", "codecademy", "khanacademy", "realpython", "digitalocean.com/community"];
   if (practiceDomains.some(d => lower.includes(d))) return "practice";
   if (docDomains.some(d => lower.includes(d))) return "documentation";
   if (tutorialDomains.some(d => lower.includes(d))) return "tutorial";
@@ -164,9 +182,16 @@ function scoreResource(
   if (level === "beginner" && res.type === "video") score += 5;
   if (level === "advanced" && (res.type === "documentation" || res.type === "article")) score += 5;
 
-  // CRITERION 2: QUALITY — platform boost
+  // CRITERION 2: QUALITY — trusted & well-known platforms get major boost
   const urlLower = res.url.toLowerCase();
-  if (config.platformBoost.some(p => urlLower.includes(p))) score += 8;
+  const titleLowerFull = res.title.toLowerCase();
+  const isTrustedDomain = TRUSTED_DOMAINS.some(d => urlLower.includes(d));
+  const isTrustedChannel = TRUSTED_YOUTUBE_CHANNELS.some(ch => titleLowerFull.includes(ch));
+  if (isTrustedDomain) score += 15;
+  if (isTrustedChannel) score += 20; // strong boost for known quality channels
+  if (config.platformBoost.some(p => urlLower.includes(p))) score += 5;
+  // Penalize unknown/low-quality domains
+  if (!isTrustedDomain && !isTrustedChannel) score -= 5;
 
   // CRITERION 3: TIME FIT — prefer resources that fit well within module budget
   const ratio = res.estimated_minutes / moduleMinutes;
@@ -248,11 +273,16 @@ async function fetchResourcesForModule(
   const levelMod = getLevelSearchModifier(skillLevel);
   const goalMod = config.queryModifiers.slice(0, 3).join(" ");
 
+  // Site-scoped queries to prefer trusted platforms
+  const siteHints = "site:youtube.com OR site:freecodecamp.org OR site:geeksforgeeks.org OR site:realpython.com OR site:developer.mozilla.org OR site:w3schools.com OR site:digitalocean.com";
   const webQuery = `${moduleTitle} ${topic} ${levelMod} ${goalMod}`;
+  const webQueryTrusted = `${moduleTitle} ${topic} ${siteHints}`;
   const videoQuery = `${moduleTitle} ${topic} ${goalMod} ${levelMod}`;
 
-  const [webResults, videoResults] = await Promise.all([
+  // Run 3 parallel searches: general web, trusted-site web, and videos
+  const [webResults, trustedWebResults, videoResults] = await Promise.all([
     searchSerper(webQuery, apiKey, "search", config.webCount),
+    searchSerper(webQueryTrusted, apiKey, "search", 4),
     searchSerper(videoQuery, apiKey, "videos", config.videoCount),
   ]);
 
@@ -273,8 +303,12 @@ async function fetchResourcesForModule(
     });
   }
 
-  for (const r of webResults as SerperWebResult[]) {
-    if (!r.link) continue;
+  // Combine general + trusted web results, deduplicating by URL
+  const seenUrls = new Set<string>();
+  const allWebResults = [...(trustedWebResults as SerperWebResult[]), ...(webResults as SerperWebResult[])];
+  for (const r of allWebResults) {
+    if (!r.link || seenUrls.has(r.link)) continue;
+    seenUrls.add(r.link);
     const title = r.title || "Learning Resource";
     if (isDisqualified(title, r.link)) continue;
     const mins = estimateArticleMinutes(r.snippet || "");
