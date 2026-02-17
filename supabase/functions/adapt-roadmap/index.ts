@@ -63,17 +63,18 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day } = await req.json();
+    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day, learning_goal } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    const effectiveGoal = learning_goal || "hands_on";
+
     // Support both days and weeks input; prefer days
-    // 0 days means "finish today" — user still has hours available today
     const rawDays = new_timeline_days != null ? Number(new_timeline_days) : (Number(new_timeline_weeks) * 7);
     const hrsPerDay = Number(new_hours_per_day);
     const totalAvailableHours = rawDays === 0 ? hrsPerDay : rawDays * hrsPerDay;
-    const displayDays = rawDays === 0 ? 1 : rawDays; // "today" counts as 1 day of work
+    const displayDays = rawDays === 0 ? 1 : rawDays;
 
     const completedModules = all_progress?.filter((p: any) => p.status === "completed") || [];
     const remainingModules = roadmap_data.modules.filter((m: any) =>
@@ -81,18 +82,13 @@ serve(async (req) => {
     );
     const remainingHours = remainingModules.reduce((sum: number, m: any) => sum + (m.estimated_hours || 0), 0);
 
-    // Build the list of completed module IDs for the prompt
     const completedModuleIds = completedModules.map((p: any) => p.module_id);
     const completedModulesData = roadmap_data.modules.filter((m: any) => completedModuleIds.includes(m.id));
     const totalCompletedHours = completedModulesData.reduce((sum: number, m: any) => sum + (m.estimated_hours || 0), 0);
-    const totalDaysCompleted = completedModulesData.length; // 1 module ≈ 1 day
+    const totalDaysCompleted = completedModulesData.length;
 
-    // Determine the adaptation strategy deterministically in code
     const isCrashCourse = totalAvailableHours < remainingHours;
     const isSplit = !isCrashCourse && hrsPerDay < remainingHours && displayDays > 1;
-    // isCrashCourse: user has LESS total time → condense resources
-    // isSplit: user has enough total time but fewer hrs/day → split modules into daily chunks
-    // else: just redistribute
 
     let strategyInstruction: string;
     if (isCrashCourse) {
@@ -117,7 +113,19 @@ You MUST condense all remaining modules to fit within exactly ${totalAvailableHo
 - timeline_days in the response = ${totalDaysCompleted + displayDays}.`;
     }
 
+    const goalContext = effectiveGoal === "conceptual"
+      ? "The student's learning goal is CONCEPTUAL. When replacing or adding resources, prefer lectures, explainer videos, and theory articles."
+      : effectiveGoal === "hands_on"
+      ? "The student's learning goal is HANDS-ON. When replacing or adding resources, prefer coding tutorials, exercises, and project-based content."
+      : effectiveGoal === "quick_overview"
+      ? "The student's learning goal is QUICK OVERVIEW. When replacing or adding resources, prefer crash courses, cheat sheets, and summary content."
+      : effectiveGoal === "deep_mastery"
+      ? "The student's learning goal is DEEP MASTERY. When replacing or adding resources, prefer comprehensive courses, official docs, and advanced tutorials."
+      : "";
+
     const systemPrompt = `You are a concise learning-plan optimizer. Address the user directly ("you/your"). Keep all text crisp — no filler.
+
+${goalContext}
 
 RULES:
 - The updated_roadmap MUST include ALL modules: both completed and adapted. Do NOT omit completed modules.
@@ -131,6 +139,7 @@ ${strategyInstruction}
 
     const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules (${remainingModules.length} remaining, ~${remainingHours}h of content).
 Available: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours}h total).
+Learning Goal: ${effectiveGoal}
 
 Current roadmap: ${JSON.stringify(roadmap_data)}
 Progress: ${JSON.stringify(all_progress)}

@@ -197,6 +197,7 @@ export default function Dashboard() {
           quiz_score: quizScore,
           quiz_answers: quizAnswers,
           all_progress: allProg,
+          learning_goal: roadmap?.learning_goal || "hands_on",
         },
       });
 
@@ -398,6 +399,11 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
+            {roadmap?.learning_goal && (
+              <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-accent/20 text-accent-foreground">
+                {roadmap.learning_goal === "conceptual" ? "📚 Conceptual" : roadmap.learning_goal === "hands_on" ? "💻 Hands-On" : roadmap.learning_goal === "quick_overview" ? "⚡ Quick Overview" : roadmap.learning_goal === "deep_mastery" ? "🎓 Deep Mastery" : roadmap.learning_goal}
+              </span>
+            )}
           </div>
 
           {/* Progress bar */}
@@ -641,6 +647,7 @@ export default function Dashboard() {
           roadmapData={roadmapData}
           progressMap={progressMap}
           roadmapId={roadmap.id}
+          learningGoal={roadmap?.learning_goal}
           onClose={() => setAdaptOpen(false)}
           onApply={handleAdaptApply}
         />
@@ -735,6 +742,7 @@ export default function Dashboard() {
                   replaceRoadmapId: roadmap.id,
                   topic: roadmapData.topic,
                   skill_level: roadmapData.skill_level,
+                  learning_goal: roadmap.learning_goal ?? "hands_on",
                   timeline_weeks: roadmapData.timeline_weeks,
                   hours_per_day: roadmapData.hours_per_day,
                   hard_deadline: roadmap.hard_deadline ?? false,

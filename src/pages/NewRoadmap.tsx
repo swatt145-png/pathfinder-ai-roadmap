@@ -17,12 +17,19 @@ const SKILLS = [
   { value: "advanced", label: "Advanced", desc: "I want to go deeper" },
 ];
 
+const LEARNING_GOALS = [
+  { value: "conceptual", label: "📚 Conceptual", desc: "Understand the theory, concepts, and mental models" },
+  { value: "hands_on", label: "💻 Hands-On", desc: "Build things, write code, solve problems" },
+  { value: "quick_overview", label: "⚡ Quick Overview", desc: "Fast high-level understanding for a demo or meeting" },
+  { value: "deep_mastery", label: "🎓 Deep Mastery", desc: "Comprehensive, in-depth expertise" },
+];
+
 const QUICK_STARTS = [
-  { label: "SQL in 2 weeks", topic: "SQL", weeks: 2, hours: 1.5, skill: "beginner" },
-  { label: "Python in 1 month", topic: "Python", weeks: 4, hours: 1, skill: "beginner" },
-  { label: "Cybersecurity in 3 weeks", topic: "Cybersecurity", weeks: 3, hours: 2, skill: "intermediate" },
-  { label: "React in 10 days", topic: "React", weeks: 2, hours: 2, skill: "intermediate" },
-  { label: "Docker in 1 week", topic: "Docker", weeks: 1, hours: 2, skill: "beginner" },
+  { label: "SQL in 2 weeks", topic: "SQL", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "Python in 1 month", topic: "Python", weeks: 4, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "Cybersecurity in 3 weeks", topic: "Cybersecurity", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
+  { label: "React in 10 days", topic: "React", weeks: 1.5, hours: 1.5, skill: "intermediate", goal: "hands_on" },
+  { label: "Docker in 1 week", topic: "Docker", weeks: 1, hours: 1, skill: "beginner", goal: "quick_overview" },
 ];
 
 const LOADING_STEPS = [
@@ -34,7 +41,6 @@ const LOADING_STEPS = [
 ];
 
 const extractTopicKeywords = (input: string): string => {
-  // Strip common filler phrases to get just the core topic
   const cleaned = input
     .replace(/^(i\s+(want|need|would like)\s+to\s+(learn|study|understand|master|know)\s+(about|more about|how to)?)\s*/i, "")
     .replace(/^(teach me|help me learn|show me)\s+(about\s+)?\s*/i, "")
@@ -60,6 +66,7 @@ export default function NewRoadmap() {
     replaceRoadmapId?: string;
     topic?: string;
     skill_level?: string;
+    learning_goal?: string;
     timeline_weeks?: number;
     hours_per_day?: number;
     hard_deadline?: boolean;
@@ -68,6 +75,7 @@ export default function NewRoadmap() {
 
   const [topic, setTopic] = useState(reviseState?.topic ?? "");
   const [skillLevel, setSkillLevel] = useState(reviseState?.skill_level ?? "beginner");
+  const [learningGoal, setLearningGoal] = useState(reviseState?.learning_goal ?? "hands_on");
   const [timelineUnit, setTimelineUnit] = useState<"weeks" | "days">("weeks");
   const [timelineValue, setTimelineValue] = useState(reviseState?.timeline_weeks ?? 4);
   const [hoursPerDay, setHoursPerDay] = useState(reviseState?.hours_per_day ?? 1);
@@ -102,9 +110,8 @@ export default function NewRoadmap() {
     setTimelineValue(qs.weeks);
     setHoursPerDay(qs.hours);
     setSkillLevel(qs.skill);
+    setLearningGoal(qs.goal);
   };
-
-
 
   const handleGenerate = async () => {
     if (!topic.trim() || !user || activeCount >= 10) return;
@@ -129,7 +136,7 @@ export default function NewRoadmap() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
-        body: { topic, skill_level: skillLevel, timeline_weeks: timelineWeeks, hours_per_day: hoursPerDay, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends },
+        body: { topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: timelineWeeks, hours_per_day: hoursPerDay, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends },
       });
 
       clearInterval(stepInterval);
@@ -143,6 +150,7 @@ export default function NewRoadmap() {
         user_id: user.id,
         topic: roadmapData.topic,
         skill_level: roadmapData.skill_level,
+        learning_goal: learningGoal,
         timeline_weeks: roadmapData.timeline_weeks,
         hours_per_day: roadmapData.hours_per_day,
         hard_deadline: hardDeadline,
@@ -170,8 +178,6 @@ export default function NewRoadmap() {
       setLoading(false);
     }
   };
-
-  // (removed - no longer needed)
 
   if (checkingActive) {
     return (
@@ -255,6 +261,25 @@ export default function NewRoadmap() {
                   placeholder="e.g., SQL, Python, Cybersecurity, Docker, React..."
                   className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
+              </div>
+
+              {/* Learning Goal */}
+              <div>
+                <Label className="text-muted-foreground text-base mb-3 block">Learning Goal</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {LEARNING_GOALS.map((g) => (
+                    <button
+                      key={g.value}
+                      onClick={() => setLearningGoal(g.value)}
+                      className={`glass-blue p-3 text-center transition-all ${learningGoal === g.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-accent/10"}`}
+                    >
+                      <span className="block text-xs sm:text-sm font-heading font-semibold">{g.label}</span>
+                      {learningGoal === g.value && (
+                        <span className="block text-xs text-muted-foreground mt-1 animate-fade-in">{g.desc}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>

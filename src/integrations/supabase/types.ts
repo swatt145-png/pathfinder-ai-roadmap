@@ -142,6 +142,7 @@ export type Database = {
           hours_per_day: number
           id: string
           last_activity_date: string | null
+          learning_goal: string | null
           original_roadmap_data: Json | null
           roadmap_data: Json
           skill_level: string
@@ -161,6 +162,7 @@ export type Database = {
           hours_per_day: number
           id?: string
           last_activity_date?: string | null
+          learning_goal?: string | null
           original_roadmap_data?: Json | null
           roadmap_data: Json
           skill_level: string
@@ -180,6 +182,7 @@ export type Database = {
           hours_per_day?: number
           id?: string
           last_activity_date?: string | null
+          learning_goal?: string | null
           original_roadmap_data?: Json | null
           roadmap_data?: Json
           skill_level?: string
