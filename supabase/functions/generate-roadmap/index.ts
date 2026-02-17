@@ -15,6 +15,19 @@ interface Resource {
   type: "video" | "article" | "documentation" | "tutorial" | "practice";
   estimated_minutes: number;
   description: string;
+  source?: string;
+  channel?: string;
+  view_count?: number;
+  like_count?: number;
+  quality_signal?: string;
+}
+
+interface YouTubeMetadata {
+  title: string;
+  channel: string;
+  durationMinutes: number;
+  viewCount: number;
+  likeCount: number;
 }
 
 // ─── Tiered Resource Prioritization ──────────────────────────────────────────
@@ -147,6 +160,81 @@ function parseDurationToMinutes(duration?: string): number {
   const min = duration.match(/(\d+)\s*min/i);
   if (min) return parseInt(min[1]);
   return 15;
+}
+
+function parseISO8601Duration(iso8601: string): number {
+  const match = iso8601.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  const hours = parseInt(match?.[1] || '0');
+  const minutes = parseInt(match?.[2] || '0');
+  const seconds = parseInt(match?.[3] || '0');
+  return hours * 60 + minutes + (seconds > 0 ? 1 : 0);
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+  return match ? match[1] : null;
+}
+
+function formatViewCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return String(count);
+}
+
+async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise<Map<string, YouTubeMetadata>> {
+  const metadataMap = new Map<string, YouTubeMetadata>();
+  if (videoIds.length === 0) return metadataMap;
+
+  // Batch in groups of 50
+  for (let i = 0; i < videoIds.length; i += 50) {
+    const batch = videoIds.slice(i, i + 50);
+    const idsParam = batch.join(",");
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${idsParam}&key=${apiKey}`
+      );
+      if (!res.ok) {
+        if (res.status === 403) {
+          console.warn("YouTube API quota exceeded, skipping enrichment");
+          return metadataMap;
+        }
+        console.error(`YouTube API error: ${res.status}`);
+        return metadataMap;
+      }
+      const data = await res.json();
+      for (const item of (data.items || [])) {
+        metadataMap.set(item.id, {
+          title: item.snippet?.title || "",
+          channel: item.snippet?.channelTitle || "",
+          durationMinutes: parseISO8601Duration(item.contentDetails?.duration || "PT0S"),
+          viewCount: parseInt(item.statistics?.viewCount || "0"),
+          likeCount: parseInt(item.statistics?.likeCount || "0"),
+        });
+      }
+    } catch (e) {
+      console.error("YouTube API fetch failed:", e);
+      return metadataMap;
+    }
+  }
+  return metadataMap;
+}
+
+function enrichResourcesWithYouTube(resources: Resource[], ytMap: Map<string, YouTubeMetadata>): Resource[] {
+  return resources.filter(r => {
+    if (r.type !== "video") return true;
+    const videoId = extractYouTubeVideoId(r.url);
+    if (!videoId) return true; // non-YouTube video, keep
+    const meta = ytMap.get(videoId);
+    if (!meta) return false; // video not found (deleted/private), exclude
+    r.title = meta.title || r.title;
+    r.estimated_minutes = meta.durationMinutes || r.estimated_minutes;
+    r.channel = meta.channel;
+    r.view_count = meta.viewCount;
+    r.like_count = meta.likeCount;
+    r.source = "YouTube";
+    r.quality_signal = `${formatViewCount(meta.viewCount)} views · ${meta.channel} · ${meta.durationMinutes} min`;
+    return true;
+  });
 }
 
 function isDisqualified(title: string, url: string): boolean {
@@ -565,6 +653,8 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
     const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY");
     if (!SERPER_API_KEY) throw new Error("SERPER_API_KEY not configured");
+    const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY");
+    if (!YOUTUBE_API_KEY) throw new Error("YOUTUBE_API_KEY not found. Add it in Lovable environment settings.");
 
     // Step 1: Generate roadmap structure via AI
     const systemPrompt = buildSystemPrompt(totalHours, effectiveGoal, skill_level);
@@ -649,9 +739,27 @@ Return ONLY valid JSON with this exact structure:
     );
     const allResources = await Promise.all(resourcePromises);
 
-    // Step 3: Inject resources
+    // Step 3: YouTube API enrichment
+    const allVideoIds = new Set<string>();
+    for (const resources of allResources) {
+      for (const r of resources) {
+        if (r.type === "video") {
+          const id = extractYouTubeVideoId(r.url);
+          if (id) allVideoIds.add(id);
+        }
+      }
+    }
+
+    let ytMap = new Map<string, YouTubeMetadata>();
+    if (allVideoIds.size > 0 && YOUTUBE_API_KEY) {
+      console.log(`Enriching ${allVideoIds.size} YouTube videos with metadata...`);
+      ytMap = await fetchYouTubeMetadata([...allVideoIds], YOUTUBE_API_KEY);
+      console.log(`Got metadata for ${ytMap.size} videos.`);
+    }
+
+    // Step 4: Inject enriched resources
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
-      roadmap.modules[i].resources = allResources[i] || [];
+      roadmap.modules[i].resources = enrichResourcesWithYouTube(allResources[i] || [], ytMap);
     }
 
     console.log("Roadmap generation complete.");
