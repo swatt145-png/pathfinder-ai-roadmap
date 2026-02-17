@@ -32,6 +32,11 @@ const RESOURCE_COLORS: Record<string, string> = {
   practice: "text-success",
 };
 
+function formatViewCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return String(count);
+}
 export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateResourcesAndNotes, onUpdateCompletedModule, onMarkNotComplete }: ModuleDetailProps) {
   const [selfReport, setSelfReport] = useState<string | null>(progress?.self_report ?? null);
   const [quizOpen, setQuizOpen] = useState(false);
@@ -153,7 +158,14 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                     <p className={`text-base font-heading font-semibold flex items-center gap-2 ${isChecked ? "line-through" : ""}`}>
                       {r.title} <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     </p>
-                    <p className="text-base text-muted-foreground mt-1">~{r.estimated_minutes} min · {r.description}</p>
+                    {(r as any).channel && (r as any).view_count ? (
+                      <p className="text-sm text-accent mt-1 flex items-center gap-1">
+                        🎬 {(r as any).channel} · {r.estimated_minutes} min · {formatViewCount((r as any).view_count)} views
+                      </p>
+                    ) : null}
+                    <p className="text-base text-muted-foreground mt-1">
+                      {(r as any).channel ? `${r.estimated_minutes} min · ` : `~${r.estimated_minutes} min · `}{r.description}
+                    </p>
                   </a>
                 </div>
               );

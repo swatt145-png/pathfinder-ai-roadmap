@@ -97,6 +97,74 @@ function parseAiJson(content: unknown): any {
   throw new Error(`Unable to parse AI JSON response: ${lastErr instanceof Error ? lastErr.message : "Unknown parse error"}`);
 }
 
+// ─── YouTube API Enrichment ──────────────────────────────────────────────────
+
+function parseISO8601Duration(iso8601: string): number {
+  const match = iso8601.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  return parseInt(match?.[1] || '0') * 60 + parseInt(match?.[2] || '0') + (parseInt(match?.[3] || '0') > 0 ? 1 : 0);
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+  return match ? match[1] : null;
+}
+
+function formatViewCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return String(count);
+}
+
+async function enrichRoadmapYouTube(roadmap: any, apiKey: string): Promise<void> {
+  if (!roadmap?.modules || !apiKey) return;
+  const videoIds = new Set<string>();
+  for (const mod of roadmap.modules) {
+    for (const r of (mod.resources || [])) {
+      if (r.type === "video" || (r.url && r.url.includes("youtube"))) {
+        const id = extractYouTubeVideoId(r.url);
+        if (id) videoIds.add(id);
+      }
+    }
+  }
+  if (videoIds.size === 0) return;
+
+  const ids = [...videoIds];
+  const metaMap = new Map<string, any>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50).join(",");
+    try {
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${batch}&key=${apiKey}`);
+      if (!res.ok) { console.warn(`YouTube API error: ${res.status}`); return; }
+      const data = await res.json();
+      for (const item of (data.items || [])) {
+        metaMap.set(item.id, {
+          title: item.snippet?.title, channel: item.snippet?.channelTitle,
+          durationMinutes: parseISO8601Duration(item.contentDetails?.duration || "PT0S"),
+          viewCount: parseInt(item.statistics?.viewCount || "0"),
+          likeCount: parseInt(item.statistics?.likeCount || "0"),
+        });
+      }
+    } catch (e) { console.error("YouTube API error in check-in:", e); return; }
+  }
+
+  for (const mod of roadmap.modules) {
+    mod.resources = (mod.resources || []).filter((r: any) => {
+      const id = extractYouTubeVideoId(r.url);
+      if (!id) return true;
+      const meta = metaMap.get(id);
+      if (!meta) return false; // deleted/private
+      r.title = meta.title || r.title;
+      r.estimated_minutes = meta.durationMinutes || r.estimated_minutes;
+      r.channel = meta.channel;
+      r.view_count = meta.viewCount;
+      r.like_count = meta.likeCount;
+      r.source = "YouTube";
+      r.quality_signal = `${formatViewCount(meta.viewCount)} views · ${meta.channel} · ${meta.durationMinutes} min`;
+      return true;
+    });
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -105,6 +173,7 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY") || "";
 
     // Determine if adaptation needed
     let needsCheck = false;
@@ -197,6 +266,11 @@ Return ONLY valid JSON:
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
     const result = parseAiJson(content);
+
+    // Enrich any YouTube URLs in adapted roadmap
+    if (result.updated_roadmap && YOUTUBE_API_KEY) {
+      await enrichRoadmapYouTube(result.updated_roadmap, YOUTUBE_API_KEY);
+    }
 
     return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
