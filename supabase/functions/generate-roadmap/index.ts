@@ -219,6 +219,8 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
   return metadataMap;
 }
 
+const MIN_YOUTUBE_VIEWS = 1000; // Filter out low-quality/irrelevant channels
+
 function enrichResourcesWithYouTube(resources: Resource[], ytMap: Map<string, YouTubeMetadata>): Resource[] {
   return resources.filter(r => {
     if (r.type !== "video") return true;
@@ -226,6 +228,11 @@ function enrichResourcesWithYouTube(resources: Resource[], ytMap: Map<string, Yo
     if (!videoId) return true; // non-YouTube video, keep
     const meta = ytMap.get(videoId);
     if (!meta) return false; // video not found (deleted/private), exclude
+    // Filter out low-quality videos with very few views
+    if (meta.viewCount < MIN_YOUTUBE_VIEWS) {
+      console.warn(`Excluding low-view video: "${meta.title}" by ${meta.channel} (${meta.viewCount} views)`);
+      return false;
+    }
     r.title = meta.title || r.title;
     r.estimated_minutes = meta.durationMinutes || r.estimated_minutes;
     r.channel = meta.channel;
@@ -757,9 +764,31 @@ Return ONLY valid JSON with this exact structure:
       console.log(`Got metadata for ${ytMap.size} videos.`);
     }
 
-    // Step 4: Inject enriched resources
+    // Step 4: Inject enriched resources + ensure no module has 0 resources
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
-      roadmap.modules[i].resources = enrichResourcesWithYouTube(allResources[i] || [], ytMap);
+      const mod = roadmap.modules[i];
+      const enriched = enrichResourcesWithYouTube(allResources[i] || [], ytMap);
+      if (enriched.length === 0) {
+        console.warn(`Module "${mod.title}" has 0 resources after enrichment, running fallback search...`);
+        // Fallback: do a simple broad search for this module
+        const fallbackResults = await fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day, effectiveGoal);
+        // For fallback, skip YouTube enrichment to avoid filtering them all out again
+        const nonVideoFallback = fallbackResults.filter(r => r.type !== "video");
+        if (nonVideoFallback.length > 0) {
+          mod.resources = nonVideoFallback;
+        } else {
+          // Last resort: keep whatever we got from fallback even if videos
+          mod.resources = fallbackResults.length > 0 ? fallbackResults : [{
+            title: `${mod.title} - Official Documentation`,
+            url: `https://www.google.com/search?q=${encodeURIComponent(mod.title + " " + topic + " documentation")}`,
+            type: "article" as const,
+            estimated_minutes: Math.round((mod.estimated_hours || 1) * 30),
+            description: `Search for official documentation on ${mod.title}`,
+          }];
+        }
+      } else {
+        mod.resources = enriched;
+      }
     }
 
     console.log("Roadmap generation complete.");
