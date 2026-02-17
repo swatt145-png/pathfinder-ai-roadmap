@@ -51,6 +51,8 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
   const learningObjectives = module.learning_objectives ?? [];
   const quiz = module.quiz ?? [];
 
+  const totalResourceMinutes = resources.reduce((sum, r) => sum + (r.estimated_minutes || 0), 0);
+
   const resourceProgress = resources.length > 0
     ? Math.round((completedResources.length / resources.length) * 100)
     : 0;
@@ -92,13 +94,22 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
         </button>
         <div className="flex-1 min-w-0">
           <h3 className="font-heading font-bold text-lg truncate">{module.title}</h3>
-          <p className="text-base text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h</p>
+          <p className="text-base text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h study time</p>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-8">
         <div className="glass-blue p-5 space-y-8">
         <p className="text-base text-muted-foreground">{module.description}</p>
+
+        <div className="flex flex-wrap gap-3">
+          <span className="text-sm font-heading px-3 py-1.5 rounded-lg bg-accent/10 text-accent border border-accent/20">
+            Resource time: ~{totalResourceMinutes} min
+          </span>
+          <span className="text-sm font-heading px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
+            Recommended study: {module.estimated_hours}h
+          </span>
+        </div>
 
         {/* Learning Objectives */}
         <div>
