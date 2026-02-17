@@ -681,11 +681,14 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { topic, skill_level, learning_goal, timeline_weeks, hours_per_day, hard_deadline, deadline_date, include_weekends } = await req.json();
+    const { topic, skill_level, learning_goal, timeline_weeks, timeline_days, hours_per_day, hard_deadline, deadline_date, include_weekends } = await req.json();
     const effectiveGoal = learning_goal || "hands_on";
-    const daysInTimeline = timeline_weeks * 7;
+    // Use timeline_days if provided (exact user input), otherwise fall back to weeks * 7
+    const daysInTimeline = timeline_days || (timeline_weeks * 7);
     const studyDays = include_weekends === false ? Math.round(daysInTimeline * 5 / 7) : daysInTimeline;
     const totalHours = studyDays * hours_per_day;
+    // Derive accurate timeline_weeks for the AI prompt (keep fractional for short timelines)
+    const effectiveTimelineWeeks = timeline_days ? Math.round((timeline_days / 7) * 10) / 10 : timeline_weeks;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -700,16 +703,17 @@ serve(async (req) => {
     const userPrompt = `Create a learning roadmap for: "${topic}"
 Skill level: ${skill_level}
 Learning Goal: ${effectiveGoal}
-Timeline: ${timeline_weeks} weeks (${studyDays} study days${include_weekends === false ? ", weekends excluded" : ", including weekends"})
+Timeline: ${daysInTimeline} day${daysInTimeline === 1 ? '' : 's'} (${studyDays} study day${studyDays === 1 ? '' : 's'}${include_weekends === false ? ", weekends excluded" : ""})
 Hours per day: ${hours_per_day}
 Total available hours: ${totalHours}
 ${hard_deadline && deadline_date ? `Hard deadline: ${deadline_date} — be extra conservative, plan for ${Math.round(totalHours * 0.8)} hours of content.` : ""}
+${daysInTimeline <= 3 ? `IMPORTANT: This is a very short timeline (${daysInTimeline} day${daysInTimeline === 1 ? '' : 's'}). All modules must fit within ${daysInTimeline} day${daysInTimeline === 1 ? '' : 's'}. day_start and day_end must be between 1 and ${daysInTimeline}. Keep module count low (2-4 max).` : ""}
 
 Return ONLY valid JSON with this exact structure:
 {
   "topic": "concise clean title (e.g. 'Docker Basics in 2 Days', 'Machine Learning Models', 'Python Libraries Intermediate')",
   "skill_level": "${skill_level}",
-  "timeline_weeks": ${timeline_weeks},
+  "timeline_weeks": ${effectiveTimelineWeeks},
   "hours_per_day": ${hours_per_day},
   "total_hours": ${totalHours},
   "summary": "2-3 sentence overview. If the topic can't be fully covered in the available time, mention what's covered and what would need more time.",
