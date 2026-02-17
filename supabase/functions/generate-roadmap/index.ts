@@ -219,20 +219,51 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
   return metadataMap;
 }
 
-const MIN_YOUTUBE_VIEWS = 1000; // Filter out low-quality/irrelevant channels
+// Topic-relevance keywords for common tech/learning domains
+const TECH_RELEVANCE_KEYWORDS = [
+  "programming", "coding", "software", "developer", "engineer", "tutorial",
+  "course", "learn", "code", "tech", "computer", "science", "data",
+  "web", "app", "design", "system", "algorithm", "database", "server",
+  "cloud", "devops", "api", "framework", "library", "python", "javascript",
+  "java", "react", "node", "sql", "html", "css", "machine learning",
+  "ai", "artificial intelligence", "deep learning", "network", "security",
+  "linux", "docker", "kubernetes", "git", "frontend", "backend", "fullstack",
+  "interview", "dsa", "structure", "architecture", "scalab", "distribut",
+  "microservice", "load balanc", "cache", "proxy", "dns", "http",
+  "freecodecamp", "traversy", "fireship", "mosh", "academind", "sentdex",
+  "corey schafer", "tech with tim", "net ninja", "cs50", "mit", "khan academy",
+];
 
-function enrichResourcesWithYouTube(resources: Resource[], ytMap: Map<string, YouTubeMetadata>): Resource[] {
+function isVideoRelevantToTopic(meta: YouTubeMetadata, moduleTitle: string, topic: string): boolean {
+  const combined = `${meta.title} ${meta.channel}`.toLowerCase();
+  const searchContext = `${moduleTitle} ${topic}`.toLowerCase();
+
+  // Check if video title has ANY overlap with the module topic keywords
+  const topicWords = searchContext.split(/\s+/).filter(w => w.length > 3);
+  const titleMatchCount = topicWords.filter(w => combined.includes(w)).length;
+  if (titleMatchCount >= 2) return true;
+
+  // Check if the channel or title contains known tech/education keywords
+  const hasTechSignal = TECH_RELEVANCE_KEYWORDS.some(kw => combined.includes(kw));
+  if (hasTechSignal && titleMatchCount >= 1) return true;
+
+  // If zero topic words match AND no tech signal — irrelevant
+  if (titleMatchCount === 0 && !hasTechSignal) {
+    console.warn(`Excluding off-topic video: "${meta.title}" by ${meta.channel} — no relevance to "${moduleTitle}"`);
+    return false;
+  }
+
+  return true;
+}
+
+function enrichResourcesWithYouTube(resources: Resource[], ytMap: Map<string, YouTubeMetadata>, moduleTitle: string, topic: string): Resource[] {
   return resources.filter(r => {
     if (r.type !== "video") return true;
     const videoId = extractYouTubeVideoId(r.url);
-    if (!videoId) return true; // non-YouTube video, keep
+    if (!videoId) return true;
     const meta = ytMap.get(videoId);
-    if (!meta) return false; // video not found (deleted/private), exclude
-    // Filter out low-quality videos with very few views
-    if (meta.viewCount < MIN_YOUTUBE_VIEWS) {
-      console.warn(`Excluding low-view video: "${meta.title}" by ${meta.channel} (${meta.viewCount} views)`);
-      return false;
-    }
+    if (!meta) return false;
+    if (!isVideoRelevantToTopic(meta, moduleTitle, topic)) return false;
     r.title = meta.title || r.title;
     r.estimated_minutes = meta.durationMinutes || r.estimated_minutes;
     r.channel = meta.channel;
@@ -767,7 +798,7 @@ Return ONLY valid JSON with this exact structure:
     // Step 4: Inject enriched resources + ensure no module has 0 resources
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
       const mod = roadmap.modules[i];
-      const enriched = enrichResourcesWithYouTube(allResources[i] || [], ytMap);
+      const enriched = enrichResourcesWithYouTube(allResources[i] || [], ytMap, mod.title, topic);
       if (enriched.length === 0) {
         console.warn(`Module "${mod.title}" has 0 resources after enrichment, running fallback search...`);
         // Fallback: do a simple broad search for this module

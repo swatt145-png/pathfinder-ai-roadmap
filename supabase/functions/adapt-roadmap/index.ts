@@ -77,8 +77,33 @@ function formatViewCount(count: number): string {
   return String(count);
 }
 
+const TECH_RELEVANCE_KEYWORDS = [
+  "programming", "coding", "software", "developer", "engineer", "tutorial",
+  "course", "learn", "code", "tech", "computer", "science", "data",
+  "web", "app", "design", "system", "algorithm", "database", "server",
+  "cloud", "devops", "api", "framework", "python", "javascript", "java",
+  "react", "node", "sql", "html", "css", "machine learning", "ai",
+  "network", "security", "linux", "docker", "kubernetes", "git",
+  "interview", "architecture", "scalab", "distribut", "microservice",
+  "load balanc", "cache", "proxy", "freecodecamp", "traversy", "fireship",
+  "mosh", "sentdex", "corey schafer", "tech with tim", "net ninja", "cs50",
+];
+
+function isVideoRelevant(title: string, channel: string, moduleTitle: string, topic: string): boolean {
+  const combined = `${title} ${channel}`.toLowerCase();
+  const searchContext = `${moduleTitle} ${topic}`.toLowerCase();
+  const topicWords = searchContext.split(/\s+/).filter(w => w.length > 3);
+  const matchCount = topicWords.filter(w => combined.includes(w)).length;
+  if (matchCount >= 2) return true;
+  const hasTechSignal = TECH_RELEVANCE_KEYWORDS.some(kw => combined.includes(kw));
+  if (hasTechSignal && matchCount >= 1) return true;
+  if (matchCount === 0 && !hasTechSignal) return false;
+  return true;
+}
+
 async function enrichRoadmapYouTube(roadmap: any, apiKey: string): Promise<void> {
   if (!roadmap?.modules || !apiKey) return;
+  const topic = roadmap.topic || "";
   const videoIds = new Set<string>();
   for (const mod of roadmap.modules) {
     for (const r of (mod.resources || [])) {
@@ -115,6 +140,10 @@ async function enrichRoadmapYouTube(roadmap: any, apiKey: string): Promise<void>
       if (!id) return true;
       const meta = metaMap.get(id);
       if (!meta) return false;
+      if (!isVideoRelevant(meta.title, meta.channel, mod.title, topic)) {
+        console.warn(`Excluding off-topic video: "${meta.title}" by ${meta.channel}`);
+        return false;
+      }
       r.title = meta.title || r.title;
       r.estimated_minutes = meta.durationMinutes || r.estimated_minutes;
       r.channel = meta.channel;
