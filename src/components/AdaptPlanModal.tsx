@@ -16,12 +16,15 @@ interface Props {
 
 export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGoal, onClose, onApply }: Props) {
   const completedCount = Object.values(progressMap).filter((p) => p.status === "completed").length;
-  const [newDays, setNewDays] = useState(roadmapData.timeline_weeks * 7);
+  const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
+  const [newValue, setNewValue] = useState(roadmapData.timeline_weeks * 7);
   const [newHours, setNewHours] = useState(roadmapData.hours_per_day);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AdaptResult | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const totalDays = timelineUnit === "weeks" ? newValue * 7 : newValue;
 
   const handleRecalculate = async () => {
     setLoading(true);
@@ -31,7 +34,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
         body: {
           roadmap_data: roadmapData,
           all_progress: Object.values(progressMap),
-          new_timeline_days: newDays,
+          new_timeline_days: totalDays,
           new_hours_per_day: newHours,
           adjustment_type: "manual",
           learning_goal: learningGoal || "hands_on",
@@ -52,7 +55,6 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
     const opt = result.options.find((o) => o.id === selectedOption);
     if (!opt) return;
 
-    // Safety net: ensure completed modules are always preserved in the final roadmap
     const completedModuleIds = new Set(
       Object.values(progressMap)
         .filter((p) => p.status === "completed")
@@ -86,11 +88,35 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
 
         {!result ? (
           <div className="space-y-4">
+            {/* Timeline unit toggle */}
             <div>
+              <Label className="text-sm text-muted-foreground mb-2 block">Timeline</Label>
+              <div className="grid grid-cols-2 gap-1 p-1 glass rounded-xl mb-3">
+                <button
+                  onClick={() => { setTimelineUnit("days"); setNewValue(totalDays); }}
+                  className={`py-2 px-3 rounded-lg text-sm font-heading font-bold transition-all ${timelineUnit === "days" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Days
+                </button>
+                <button
+                  onClick={() => { setTimelineUnit("weeks"); setNewValue(Math.max(1, Math.round(totalDays / 7))); }}
+                  className={`py-2 px-3 rounded-lg text-sm font-heading font-bold transition-all ${timelineUnit === "weeks" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Weeks
+                </button>
+              </div>
+
               <Label className="text-sm text-muted-foreground mb-2 block">
-                How many days do you have remaining? <span className="text-primary font-heading font-bold">{newDays}</span>
+                {timelineUnit === "days" ? "Days" : "Weeks"} remaining: <span className="text-primary font-heading font-bold">{newValue}</span>
               </Label>
-              <input type="range" min={1} max={90} value={newDays} onChange={(e) => setNewDays(Number(e.target.value))} className="w-full accent-primary" />
+              <input
+                type="range"
+                min={1}
+                max={timelineUnit === "days" ? 90 : 12}
+                value={newValue}
+                onChange={(e) => setNewValue(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-2 block">
@@ -111,7 +137,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
               >
                 Skip for now
               </Button>
-              <Button onClick={handleRecalculate} disabled={loading} className="flex-1 gradient-primary text-primary-foreground font-heading font-bold h-12">
+              <Button onClick={handleRecalculate} disabled={loading} className="flex-1 gradient-primary text-primary-foreground font-heading font-bold h-12 hover:glow-primary transition-all">
                 {loading ? <><Loader2 className="animate-spin mr-2" /> Recalculating...</> : "Recalculate"}
               </Button>
             </div>
@@ -140,7 +166,6 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
               </button>
             ))}
 
-            {/* Keep Current Plan option */}
             <button
               onClick={() => setSelectedOption("keep_current")}
               className={`w-full text-left p-4 transition-all rounded-xl border-2 ${selectedOption === "keep_current" ? "border-primary bg-primary/20 shadow-lg shadow-primary/30 ring-2 ring-primary/40" : "glass border-transparent hover:bg-white/5"}`}
@@ -152,11 +177,11 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
             <p className="text-xs text-muted-foreground">💡 {result.recommendation_reason}</p>
 
             {selectedOption === "keep_current" ? (
-              <Button onClick={onClose} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12">
+              <Button onClick={onClose} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 hover:glow-primary transition-all">
                 Keep My Plan
               </Button>
             ) : (
-              <Button onClick={handleApply} disabled={!selectedOption} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 disabled:opacity-50">
+              <Button onClick={handleApply} disabled={!selectedOption} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 disabled:opacity-50 hover:glow-primary transition-all">
                 Apply Adapted Plan
               </Button>
             )}

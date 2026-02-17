@@ -391,7 +391,7 @@ export default function NewRoadmap() {
                 <Button
                   onClick={handleGenerate}
                   disabled={!topic.trim()}
-                  className="w-full h-16 text-xl font-heading font-bold gradient-primary text-primary-foreground glow-primary transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                  className="w-full h-16 text-xl font-heading font-bold gradient-primary text-primary-foreground hover:glow-primary transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
                 >
                   Generate My Roadmap ✨
                 </Button>
