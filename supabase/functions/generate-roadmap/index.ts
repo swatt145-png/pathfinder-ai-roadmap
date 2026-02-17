@@ -141,6 +141,14 @@ async function fetchResourcesForModule(
     if (selected.length >= 5) break;
   }
 
+  // If total resource time is far less than the module time, scale up estimates to fill the time
+  if (selected.length > 0 && totalMinutes < maxMinutes * 0.5) {
+    const scale = Math.min(maxMinutes / totalMinutes, 3);
+    for (const res of selected) {
+      res.estimated_minutes = Math.round(res.estimated_minutes * scale);
+    }
+  }
+
   if (selected.length === 0 && candidates.length > 0) {
     const shortest = candidates[0];
     shortest.estimated_minutes = Math.min(shortest.estimated_minutes, maxMinutes);
