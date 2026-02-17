@@ -136,7 +136,7 @@ export default function NewRoadmap() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
-        body: { topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: timelineWeeks, hours_per_day: hoursPerDay, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends },
+        body: { topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: timelineWeeks, timeline_days: timelineDays, hours_per_day: hoursPerDay, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends },
       });
 
       clearInterval(stepInterval);
