@@ -978,11 +978,27 @@ Return ONLY valid JSON with this exact structure:
       throw new Error("AI generation failed");
     }
 
-    const data = await response.json();
+    const responseText = await response.text();
+    if (!responseText || responseText.trim().length === 0) {
+      throw new Error("AI returned an empty response. Please try again.");
+    }
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error("Failed to parse AI response:", responseText.substring(0, 500));
+      throw new Error("AI returned an invalid response. Please try again.");
+    }
     const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("No response from AI");
+    if (!content) throw new Error("No response from AI. Please try again.");
 
-    const roadmap = JSON.parse(content);
+    let roadmap;
+    try {
+      roadmap = JSON.parse(content);
+    } catch (parseErr) {
+      console.error("Failed to parse roadmap JSON:", content.substring(0, 500));
+      throw new Error("AI returned malformed roadmap data. Please try again.");
+    }
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 2: STAGE 2A — Topic-Wide Anchor Retrieval
