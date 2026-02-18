@@ -175,6 +175,37 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const TIMEOUTS_MS = {
+  serper: 9000,
+  youtube: 12000,
+  agent1: 35000,
+  agent2: 22000,
+  reranker: 18000,
+};
+
+const RETRIEVAL_THRESHOLDS = {
+  topicMinUnique: 24,
+  moduleMinUnique: 16,
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError";
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function detectResourceType(url: string): CandidateResource["type"] {
   const lower = url.toLowerCase();
   const docDomains = ["docs.", "developer.", "devdocs.", "wiki.", "reference.", "documentation", "developer.mozilla.org", "learn.microsoft.com"];
@@ -238,8 +269,10 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
     const batch = videoIds.slice(i, i + 50);
     const idsParam = batch.join(",");
     try {
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${idsParam}&key=${apiKey}`
+      const res = await fetchWithTimeout(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${idsParam}&key=${apiKey}`,
+        { method: "GET" },
+        TIMEOUTS_MS.youtube
       );
       if (!res.ok) {
         if (res.status === 403) {
@@ -247,7 +280,7 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
           return metadataMap;
         }
         console.error(`YouTube API error: ${res.status}`);
-        return metadataMap;
+        continue;
       }
       const data = await res.json();
       for (const item of (data.items || [])) {
@@ -261,7 +294,7 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
       }
     } catch (e) {
       console.error("YouTube API fetch failed:", e);
-      return metadataMap;
+      continue;
     }
   }
   return metadataMap;
@@ -269,16 +302,31 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
 
 async function searchSerper(query: string, apiKey: string, type: "search" | "videos", num: number) {
   const url = type === "videos" ? "https://google.serper.dev/videos" : "https://google.serper.dev/search";
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ q: query, num }),
-    });
-    if (!res.ok) { console.error(`Serper ${type} error: ${res.status}`); return []; }
-    const data = await res.json();
-    return type === "videos" ? (data.videos || []) : (data.organic || []);
-  } catch (e) { console.error(`Serper ${type} fetch failed:`, e); return []; }
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ q: query, num }),
+      }, TIMEOUTS_MS.serper);
+      if (!res.ok) {
+        console.error(`Serper ${type} error: ${res.status}`);
+        return [];
+      }
+      const data = await res.json();
+      return type === "videos" ? (data.videos || []) : (data.organic || []);
+    } catch (e) {
+      const timeoutMsg = isAbortError(e) ? "timeout" : "fetch failed";
+      if (attempt < 2) {
+        console.warn(`Serper ${type} ${timeoutMsg}; retrying once for query: ${query.substring(0, 80)}`);
+        await sleep(200);
+        continue;
+      }
+      console.error(`Serper ${type} ${timeoutMsg}:`, e);
+      return [];
+    }
+  }
+  return [];
 }
 
 function estimateArticleMinutes(snippet: string): number {
@@ -297,6 +345,105 @@ function computeSemanticSimilarity(text1: string, text2: string): number {
     if (words2.has(w)) overlap++;
   }
   return overlap / Math.min(words1.size, words2.size);
+}
+
+function normalizeToken(token: string): string {
+  return token
+    .toLowerCase()
+    .replace(/[^a-z0-9+#./-]/g, "")
+    .trim();
+}
+
+function stemToken(token: string): string {
+  let t = normalizeToken(token);
+  if (t.length <= 4) return t;
+  if (t.endsWith("ing") && t.length > 6) t = t.slice(0, -3);
+  else if (t.endsWith("ed") && t.length > 5) t = t.slice(0, -2);
+  else if (t.endsWith("es") && t.length > 5) t = t.slice(0, -2);
+  else if (t.endsWith("s") && t.length > 4) t = t.slice(0, -1);
+  return t;
+}
+
+function tokenizeSemantic(text: string): string[] {
+  const raw = text
+    .toLowerCase()
+    .replace(/[^a-z0-9+#./\-\s]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 2);
+  return raw.map(stemToken).filter(Boolean);
+}
+
+function buildHashedEmbedding(text: string, dim = 256): number[] {
+  const tokens = tokenizeSemantic(text);
+  const vec = new Array<number>(dim).fill(0);
+  const weights = new Map<string, number>();
+
+  for (let i = 0; i < tokens.length; i++) {
+    const unigram = tokens[i];
+    weights.set(unigram, (weights.get(unigram) || 0) + 1);
+    if (i < tokens.length - 1) {
+      const bigram = `${tokens[i]}_${tokens[i + 1]}`;
+      weights.set(bigram, (weights.get(bigram) || 0) + 1.35);
+    }
+  }
+
+  for (const [token, tf] of weights.entries()) {
+    let hash = 0;
+    for (let i = 0; i < token.length; i++) {
+      hash = (hash * 31 + token.charCodeAt(i)) >>> 0;
+    }
+    const idx = hash % dim;
+    const idfLike = Math.min(2.5, 1 + token.length / 8);
+    vec[idx] += tf * idfLike;
+  }
+
+  let norm = 0;
+  for (const n of vec) norm += n * n;
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < vec.length; i++) vec[i] /= norm;
+  }
+  return vec;
+}
+
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (vecA.length !== vecB.length || vecA.length === 0) return 0;
+  let dot = 0;
+  for (let i = 0; i < vecA.length; i++) dot += vecA[i] * vecB[i];
+  return Math.max(0, Math.min(1, dot));
+}
+
+function computeEmbeddingSimilarity(text1: string, text2: string): number {
+  const vecA = buildHashedEmbedding(text1);
+  const vecB = buildHashedEmbedding(text2);
+  return cosineSimilarity(vecA, vecB);
+}
+
+function computeHybridSimilarity(text1: string, text2: string): number {
+  const lexical = computeSemanticSimilarity(text1, text2);
+  const embedding = computeEmbeddingSimilarity(text1, text2);
+  return Math.max(0, Math.min(1, lexical * 0.35 + embedding * 0.65));
+}
+
+function countUniqueSerperResults(results: { videos: SerperVideoResult[]; web: SerperWebResult[] }): number {
+  const unique = new Set<string>();
+  for (const v of results.videos || []) {
+    if (v.link) unique.add(v.link.split("&")[0]);
+  }
+  for (const w of results.web || []) {
+    if (w.link) unique.add(w.link);
+  }
+  return unique.size;
+}
+
+function mergeSerperResults(
+  base: { videos: SerperVideoResult[]; web: SerperWebResult[] },
+  incoming: { videos: SerperVideoResult[]; web: SerperWebResult[] },
+): { videos: SerperVideoResult[]; web: SerperWebResult[] } {
+  return {
+    videos: [...base.videos, ...incoming.videos],
+    web: [...base.web, ...incoming.web],
+  };
 }
 
 function detectCertificationIntent(text: string): boolean {
@@ -383,6 +530,7 @@ function getModuleBoundsFromTotalHours(totalHours: number): { min: number; max: 
   if (totalHours <= 3) return { min: 1, max: 2 };
   if (totalHours <= 8) return { min: 3, max: 4 };
   if (totalHours <= 14) return { min: 4, max: 6 };
+  if (totalHours <= 24) return { min: 4, max: 5 };
   return { min: 5, max: 8 };
 }
 
@@ -564,8 +712,8 @@ function applyStage4Filter(
 
     // 4.1: Embedding similarity threshold
     const resourceText = `${c.title} ${c.description} ${c.channel || ""}`;
-    const similarity = computeSemanticSimilarity(moduleText, resourceText);
-    if (similarity < 0.03) continue;
+    const similarity = computeHybridSimilarity(moduleText, resourceText);
+    if (similarity < 0.12) continue;
 
     // Keep a relaxed pool to prevent starvation when anchors are too narrow/noisy.
     const penalty = computeScopePenalty(c, ctx);
@@ -724,7 +872,7 @@ function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: numbe
 function computeContextFitScoreFallback(candidate: CandidateResource, ctx: ModuleContext, ytMeta?: YouTubeMetadata): number {
   const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")} ${ctx.goal} ${ctx.level}`;
   const resourceText = `${candidate.title} ${candidate.description} ${candidate.channel || ""}`;
-  const topicFit = Math.round(computeSemanticSimilarity(moduleText, resourceText) * 35);
+  const topicFit = Math.round(computeHybridSimilarity(moduleText, resourceText) * 35);
   let goalFit = 0;
   if (ctx.goal === "conceptual" && (candidate.type === "video" || candidate.type === "documentation" || candidate.type === "article")) goalFit = 20;
   else if (ctx.goal === "hands_on" && (candidate.type === "tutorial" || candidate.type === "practice" || candidate.type === "video")) goalFit = 20;
@@ -864,7 +1012,7 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -875,7 +1023,7 @@ Return ONLY valid JSON:
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       }),
-    });
+    }, TIMEOUTS_MS.agent2);
 
     if (!response.ok) {
       console.error(`AI Context Fit Scorer error: ${response.status}`);
@@ -910,6 +1058,10 @@ Return ONLY valid JSON:
     console.log(`AI Context Fit Scorer: Scored candidates for ${parsed.scores?.length || 0} modules`);
     return true;
   } catch (e) {
+    if (isAbortError(e)) {
+      console.warn("AI Context Fit Scorer timed out; using heuristic fallback.");
+      return false;
+    }
     console.error("AI Context Fit Scorer failed:", e);
     return false;
   }
@@ -925,9 +1077,9 @@ function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext
 
   const deduplicated: CandidateResource[] = [];
   for (const c of sorted) {
-    const isDuplicate = deduplicated.some(existing => {
-      const sim = computeSemanticSimilarity(existing.title, c.title);
-      return sim > 0.7;
+      const isDuplicate = deduplicated.some(existing => {
+      const sim = computeHybridSimilarity(existing.title, c.title);
+      return sim > 0.76;
     });
     if (!isDuplicate) deduplicated.push(c);
   }
@@ -1084,20 +1236,57 @@ interface GoalSearchConfig {
   videoCount: number;
   webCount: number;
   semanticHint: string;
+  intentTokens: string[];
+  outcomeTokens: string[];
 }
 
 function getGoalSearchConfig(goal: string): GoalSearchConfig {
   switch (goal) {
     case "conceptual":
-      return { queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"], videoCount: 8, webCount: 6, semanticHint: "mental model explained with examples" };
+      return {
+        queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"],
+        videoCount: 8,
+        webCount: 6,
+        semanticHint: "mental model explained with examples",
+        intentTokens: ["mental model", "tradeoffs", "architecture reasoning"],
+        outcomeTokens: ["deep explanation", "why this works", "design intuition"],
+      };
     case "hands_on":
-      return { queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"], videoCount: 6, webCount: 8, semanticHint: "project based practical walkthrough" };
+      return {
+        queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"],
+        videoCount: 6,
+        webCount: 8,
+        semanticHint: "project based practical walkthrough",
+        intentTokens: ["implementation", "code walkthrough", "real project"],
+        outcomeTokens: ["build from scratch", "hands-on lab", "practical exercise"],
+      };
     case "quick_overview":
-      return { queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "essentials"], videoCount: 6, webCount: 4, semanticHint: "high level summary key concepts" };
+      return {
+        queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "essentials"],
+        videoCount: 6,
+        webCount: 4,
+        semanticHint: "high level summary key concepts",
+        intentTokens: ["key ideas", "summary", "what matters most"],
+        outcomeTokens: ["fast understanding", "cheat sheet", "essentials only"],
+      };
     case "deep_mastery":
-      return { queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "full course", "masterclass"], videoCount: 6, webCount: 8, semanticHint: "deep dive architecture and tradeoffs" };
+      return {
+        queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "full course", "masterclass"],
+        videoCount: 6,
+        webCount: 8,
+        semanticHint: "deep dive architecture and tradeoffs",
+        intentTokens: ["advanced patterns", "production scale", "optimization"],
+        outcomeTokens: ["expert level", "edge cases", "system tradeoffs"],
+      };
     default:
-      return { queryModifiers: ["tutorial", "guide"], videoCount: 6, webCount: 6, semanticHint: "clear explanation practical relevance" };
+      return {
+        queryModifiers: ["tutorial", "guide"],
+        videoCount: 6,
+        webCount: 6,
+        semanticHint: "clear explanation practical relevance",
+        intentTokens: ["practical", "conceptual clarity"],
+        outcomeTokens: ["learn effectively", "apply confidently"],
+      };
   }
 }
 
@@ -1110,6 +1299,93 @@ function getLevelSearchModifier(level: string): string {
   }
 }
 
+const GENERIC_QUERY_WORDS = new Set([
+  "learn",
+  "learning",
+  "guide",
+  "overview",
+  "basics",
+  "introduction",
+  "tutorial",
+  "complete",
+  "course",
+  "roadmap",
+  "resources",
+  "best",
+]);
+
+function scoreAnchorTerm(term: string): number {
+  const normalized = normalizeToken(term);
+  if (!normalized || normalized.length < 3) return 0;
+  const parts = normalized.split(/[\s/_-]+/).filter(Boolean);
+  if (parts.length === 0) return 0;
+  const genericPenalty = parts.some((p) => GENERIC_QUERY_WORDS.has(p)) ? 0.55 : 1;
+  const specificity = Math.min(1.5, 0.7 + normalized.length / 24);
+  const technicalBoost = /[0-9+#./_-]/.test(normalized) ? 1.25 : 1;
+  return specificity * technicalBoost * genericPenalty;
+}
+
+function selectTopAnchors(terms: string[], maxCount = 3): string[] {
+  return [...terms]
+    .map((term) => term.trim())
+    .filter((term) => term.length > 1)
+    .sort((a, b) => scoreAnchorTerm(b) - scoreAnchorTerm(a))
+    .slice(0, maxCount);
+}
+
+function buildQuery(parts: Array<string | undefined | null>): string {
+  const raw = parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  return raw.slice(0, 180);
+}
+
+function buildTopicQueryPlan(topic: string, level: string, goal: string, certificationIntent: boolean): { precision: string[]; expansion: string[] } {
+  const levelMod = getLevelSearchModifier(level);
+  const cfg = getGoalSearchConfig(goal);
+  const certMod = certificationIntent ? "certification objective interview prep" : "";
+  const precision = [
+    buildQuery([topic, cfg.intentTokens[0], cfg.queryModifiers[0], levelMod, cfg.semanticHint]),
+    buildQuery([topic, cfg.intentTokens[1], cfg.queryModifiers[1], cfg.outcomeTokens[0], certMod]),
+  ].filter(Boolean);
+  const expansion = [
+    buildQuery([topic, cfg.intentTokens[2], cfg.queryModifiers[2], levelMod]),
+    buildQuery([topic, cfg.queryModifiers[3] || "guide", "direct tutorial article"]),
+  ].filter(Boolean);
+  return { precision: [...new Set(precision)], expansion: [...new Set(expansion)] };
+}
+
+function buildModuleQueryPlan(
+  module: any,
+  topic: string,
+  level: string,
+  goal: string,
+  certificationIntent: boolean,
+): { precision: string[]; expansion: string[] } {
+  const cfg = getGoalSearchConfig(goal);
+  const levelMod = getLevelSearchModifier(level);
+  const moduleTitle = module?.title || "";
+  const objective = (module?.learning_objectives || [])
+    .filter((o: string) => typeof o === "string" && o.trim().length > 0)
+    .slice(0, 1)
+    .join(" ");
+  const seedAnchors = selectTopAnchors((module?.anchor_terms || []) as string[], 3);
+  const anchors = seedAnchors.length > 0
+    ? seedAnchors.join(" ")
+    : selectTopAnchors(`${moduleTitle} ${objective}`.split(/\s+/), 3).join(" ");
+  const certMod = certificationIntent ? "interview question certification objective" : "interview question";
+
+  const precision = [
+    buildQuery([moduleTitle, topic, anchors, cfg.intentTokens[0], cfg.queryModifiers[0], levelMod]),
+    buildQuery([moduleTitle, topic, anchors, objective, cfg.outcomeTokens[0], cfg.queryModifiers[1], certMod]),
+  ].filter(Boolean);
+
+  const expansion = [
+    buildQuery([moduleTitle, topic, cfg.intentTokens[1], cfg.queryModifiers[2], levelMod]),
+    buildQuery([moduleTitle, topic, cfg.intentTokens[2], cfg.queryModifiers[3] || "guide", "direct learning resource"]),
+  ].filter(Boolean);
+
+  return { precision: [...new Set(precision)], expansion: [...new Set(expansion)] };
+}
+
 async function fetchTopicAnchors(
   topic: string,
   level: string,
@@ -1117,37 +1393,35 @@ async function fetchTopicAnchors(
   certificationIntent: boolean,
   serperKey: string
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
-  const normalizeQuery = (q: string) => q.replace(/\s+/g, " ").trim();
-  const dedupeQueries = (queries: string[]) => [...new Set(queries.map(normalizeQuery).filter(Boolean))];
-  const levelMod = getLevelSearchModifier(level);
   const goalConfig = getGoalSearchConfig(goal);
-  const goalMod = goalConfig.queryModifiers[0] || "";
-  const certMod = certificationIntent ? "certification exam guide" : "";
+  const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
+  const runQueryBatch = async (queries: string[]) => {
+    const promises: Promise<any>[] = [];
+    for (const q of queries) {
+      promises.push(searchSerper(q, serperKey, "videos", Math.max(goalConfig.videoCount, 8)));
+      promises.push(searchSerper(q, serperKey, "search", Math.max(goalConfig.webCount, 8)));
+    }
+    const results = await Promise.all(promises);
+    const batch: { videos: SerperVideoResult[]; web: SerperWebResult[] } = { videos: [], web: [] };
+    for (let i = 0; i < results.length; i++) {
+      if (i % 2 === 0) batch.videos.push(...(results[i] as SerperVideoResult[]));
+      else batch.web.push(...(results[i] as SerperWebResult[]));
+    }
+    return batch;
+  };
 
-  const queries = dedupeQueries([
-    `${topic} ${goalMod} ${levelMod} ${goalConfig.semanticHint}`,
-    `${topic} ${goalConfig.queryModifiers[1] || "guide"} practical examples ${levelMod}`,
-    `${topic} ${goalConfig.queryModifiers[2] || "overview"} ${certMod}`,
-    `${topic} direct tutorial lecture article`,
-  ]);
-
-  const promises: Promise<any>[] = [];
-  for (const q of queries) {
-    promises.push(searchSerper(q, serperKey, "videos", Math.max(goalConfig.videoCount, 8)));
-    promises.push(searchSerper(q, serperKey, "search", Math.max(goalConfig.webCount, 8)));
+  let combined = await runQueryBatch(plan.precision);
+  const precisionUnique = countUniqueSerperResults(combined);
+  if (precisionUnique < RETRIEVAL_THRESHOLDS.topicMinUnique) {
+    const expanded = await runQueryBatch(plan.expansion);
+    combined = mergeSerperResults(combined, expanded);
+    console.log(
+      `Topic anchors expanded: precision pool ${precisionUnique} < ${RETRIEVAL_THRESHOLDS.topicMinUnique}, ran fallback queries.`,
+    );
   }
 
-  const results = await Promise.all(promises);
-  const videos: SerperVideoResult[] = [];
-  const web: SerperWebResult[] = [];
-
-  for (let i = 0; i < results.length; i++) {
-    if (i % 2 === 0) videos.push(...(results[i] as SerperVideoResult[]));
-    else web.push(...(results[i] as SerperWebResult[]));
-  }
-
-  console.log(`Topic anchors: ${videos.length} videos, ${web.length} web results`);
-  return { videos, web };
+  console.log(`Topic anchors: ${combined.videos.length} videos, ${combined.web.length} web results`);
+  return combined;
 }
 
 async function fetchModuleResults(
@@ -1158,47 +1432,38 @@ async function fetchModuleResults(
   certificationIntent: boolean,
   serperKey: string
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
-  const normalizeQuery = (q: string) => q.replace(/\s+/g, " ").trim();
-  const dedupeQueries = (queries: string[]) => [...new Set(queries.map(normalizeQuery).filter(Boolean))];
-
-  const moduleTitle = module?.title || "";
-  const anchorTerms = (module?.anchor_terms || [])
-    .filter((t: string) => typeof t === "string" && t.trim().length > 0)
-    .slice(0, 3)
-    .join(" ");
-  const objectiveTerms = (module?.learning_objectives || [])
-    .filter((o: string) => typeof o === "string" && o.trim().length > 0)
-    .slice(0, 1)
-    .join(" ");
-
   const config = getGoalSearchConfig(goal);
-  const levelMod = getLevelSearchModifier(level);
-  const goalRes = GOAL_RESOURCES[goal] || GOAL_RESOURCES["hands_on"];
-  const certMod = certificationIntent ? "certification objective" : "";
+  const plan = buildModuleQueryPlan(module, topic, level, goal, certificationIntent);
+  const runQueryBatch = async (queries: string[]) => {
+    const promises: Promise<any>[] = [];
+    for (const q of queries) {
+      promises.push(searchSerper(q, serperKey, "videos", Math.max(config.videoCount - 1, 5)));
+      promises.push(searchSerper(q, serperKey, "search", Math.max(config.webCount - 1, 5)));
+    }
+    const results = await Promise.all(promises);
+    const batch: { videos: SerperVideoResult[]; web: SerperWebResult[] } = { videos: [], web: [] };
+    for (let i = 0; i < results.length; i++) {
+      if (i % 2 === 0) batch.videos.push(...(results[i] as SerperVideoResult[]));
+      else batch.web.push(...(results[i] as SerperWebResult[]));
+    }
+    return batch;
+  };
 
-  const queries = dedupeQueries([
-    `${moduleTitle} ${topic} ${anchorTerms} ${config.queryModifiers[0] || "explained"} ${levelMod} ${config.semanticHint}`,
-    `${moduleTitle} ${topic} ${objectiveTerms} ${config.queryModifiers[1] || "tutorial"} ${certMod}`,
-    `${moduleTitle} ${topic} ${config.queryModifiers[2] || "guide"} direct learning resource`,
-    `${moduleTitle} ${topic} ${goalRes.siteFilters[0] || ""}`,
-  ]);
-
-  const promises: Promise<any>[] = [];
-  for (const q of queries) {
-    promises.push(searchSerper(q, serperKey, "videos", Math.max(config.videoCount - 1, 5)));
-    promises.push(searchSerper(q, serperKey, "search", Math.max(config.webCount - 1, 5)));
+  let combined = await runQueryBatch(plan.precision);
+  const minUnique = Math.max(
+    12,
+    Math.min(22, RETRIEVAL_THRESHOLDS.moduleMinUnique + Math.round(Number(module?.estimated_hours || 1))),
+  );
+  const precisionUnique = countUniqueSerperResults(combined);
+  if (precisionUnique < minUnique) {
+    const expanded = await runQueryBatch(plan.expansion);
+    combined = mergeSerperResults(combined, expanded);
+    console.log(
+      `Module "${module?.title || "unknown"}" expanded: precision pool ${precisionUnique} < ${minUnique}, ran fallback queries.`,
+    );
   }
 
-  const results = await Promise.all(promises);
-  const videos: SerperVideoResult[] = [];
-  const web: SerperWebResult[] = [];
-
-  for (let i = 0; i < results.length; i++) {
-    if (i % 2 === 0) videos.push(...(results[i] as SerperVideoResult[]));
-    else web.push(...(results[i] as SerperWebResult[]));
-  }
-
-  return { videos, web };
+  return combined;
 }
 
 // ─── Merge & Deduplicate with Appearance Counting ────────────────────────────
@@ -1400,7 +1665,7 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -1411,7 +1676,7 @@ Return ONLY valid JSON:
         messages: [{ role: "user", content: rerankerPrompt }],
         response_format: { type: "json_object" },
       }),
-    });
+    }, TIMEOUTS_MS.reranker);
 
     if (!response.ok) {
       console.error(`Reranker LLM error: ${response.status}`);
@@ -1442,6 +1707,10 @@ Return ONLY valid JSON:
     console.log(`Reranker selected resources for ${result.size} modules`);
     return result;
   } catch (e) {
+    if (isAbortError(e)) {
+      console.warn("Reranker timed out; falling back to heuristic ranking.");
+      return new Map();
+    }
     console.error("Reranker failed:", e);
     return new Map();
   }
@@ -1656,21 +1925,40 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
 
     console.log(`Generating roadmap: topic="${topic}", goal=${effectiveGoal}, level=${skill_level}, hours=${totalHours}`);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
+    let response: Response | null = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            response_format: { type: "json_object" },
+          }),
+        }, TIMEOUTS_MS.agent1);
+        break;
+      } catch (e) {
+        if (attempt < 2) {
+          const reason = isAbortError(e) ? "timed out" : "failed";
+          console.warn(`Agent 1 ${reason}; retrying once...`);
+          await sleep(300);
+          continue;
+        }
+        if (isAbortError(e)) {
+          throw new Error("AI generation timed out. Please try again.");
+        }
+        throw e;
+      }
+    }
+
+    if (!response) throw new Error("AI generation failed");
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -1796,7 +2084,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
       const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
       const rescuePool = [...enriched]
         .filter(c => !isGarbage(c))
-        .filter(c => computeSemanticSimilarity(moduleText, `${c.title} ${c.description} ${c.channel || ""}`) >= 0.02)
+        .filter(c => computeHybridSimilarity(moduleText, `${c.title} ${c.description} ${c.channel || ""}`) >= 0.1)
         .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
       moduleRescuePools.set(mod.id, rescuePool);
 
@@ -1949,7 +2237,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
         if (c.channel) {
           const channelTitles = usedChannelTitles.get(c.channel.toLowerCase());
           if (channelTitles) {
-            const isDup = [...channelTitles].some(t => computeSemanticSimilarity(t, c.title) > 0.92);
+            const isDup = [...channelTitles].some(t => computeHybridSimilarity(t, c.title) > 0.92);
             if (isDup) continue;
           }
         }
