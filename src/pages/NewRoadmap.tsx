@@ -300,6 +300,7 @@ export default function NewRoadmap() {
               <p className="text-primary font-heading font-semibold text-sm text-center animate-pulse whitespace-nowrap">
                 {LOADING_MESSAGES[Math.min(loadingStep, LOADING_MESSAGES.length - 1)]}
               </p>
+              <p className="text-muted-foreground text-xs text-center mt-2">This may take a minute</p>
             </div>
           </div>
         </div>
