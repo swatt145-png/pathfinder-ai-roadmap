@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { AuthModal } from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
-import { Compass, BarChart3, Zap, Brain, Loader2 } from "lucide-react";
+import { Compass, BarChart3, Zap, Brain, Loader2, Search, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { HowItWorks } from "@/components/HowItWorks";
 import logo from "@/assets/logo.png";
 
 export default function Landing() {
@@ -81,6 +83,9 @@ export default function Landing() {
           </button>
         </div>
       </div>
+
+      <HowItWorks />
+
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
     </>
