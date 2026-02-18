@@ -297,43 +297,173 @@ function computeAuthorityScore(candidate: CandidateResource, ytMeta?: YouTubeMet
   return Math.min(score, 100);
 }
 
-// ─── STAGE 6: Context Fit Scoring ────────────────────────────────────────────
+// ─── STAGE 6: Context Fit Scoring (Heuristic Fallback) ──────────────────────
 
-function computeContextFitScore(candidate: CandidateResource, ctx: ModuleContext, ytMeta?: YouTubeMetadata): number {
+function computeContextFitScoreFallback(candidate: CandidateResource, ctx: ModuleContext, ytMeta?: YouTubeMetadata): number {
   let score = 0;
-
-  // Semantic similarity (dominant factor)
   const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")} ${ctx.goal} ${ctx.level}`;
   const resourceText = `${candidate.title} ${candidate.description} ${candidate.channel || ""}`;
   const similarity = computeSemanticSimilarity(moduleText, resourceText);
-  score += Math.round(similarity * 50); // up to 50 points
-
-  // Learning goal alignment
+  score += Math.round(similarity * 50);
   if (ctx.goal === "conceptual" && (candidate.type === "video" || candidate.type === "documentation")) score += 10;
   if (ctx.goal === "hands_on" && (candidate.type === "tutorial" || candidate.type === "practice")) score += 10;
   if (ctx.goal === "quick_overview" && candidate.estimated_minutes <= 20) score += 8;
   if (ctx.goal === "deep_mastery" && candidate.estimated_minutes >= 20) score += 8;
-
-  // Level alignment
   const titleLower = candidate.title.toLowerCase();
   if (ctx.level === "beginner" && /beginner|intro|basic|fundamental|getting started|what is/i.test(titleLower)) score += 8;
   if (ctx.level === "intermediate" && /intermediate|practical|pattern|use case/i.test(titleLower)) score += 8;
   if (ctx.level === "advanced" && /advanced|deep|expert|optimization|architecture/i.test(titleLower)) score += 8;
-
-  // Freshness (prefer newer content for fast-moving topics)
-  // Can't check date easily, so skip
-
-  // Format alignment per goal
   const goalChannels = GOAL_RESOURCES[ctx.goal]?.youtubeChannels || [];
   if (candidate.type === "video" && ytMeta) {
     const channelLower = ytMeta.channel.toLowerCase();
     if (goalChannels.some(ch => channelLower.includes(ch))) score += 10;
   }
-
-  // Time feasibility (constraint, not boost)
   if (candidate.estimated_minutes > ctx.moduleMinutes * 2) score -= 5;
-
   return Math.max(0, Math.min(score, 100));
+}
+
+// ─── STAGE 6: AI-Powered Context Fit Scoring (Agent 2) ──────────────────────
+
+interface AIFitScoringInput {
+  moduleId: string;
+  moduleTitle: string;
+  moduleDescription: string;
+  learningObjectives: string[];
+  candidates: Array<{
+    index: number;
+    title: string;
+    url: string;
+    type: string;
+    channel: string;
+    duration_minutes: number;
+    description: string;
+  }>;
+}
+
+async function batchAIContextFitScoring(
+  allModuleCandidates: Map<string, CandidateResource[]>,
+  modules: any[],
+  topic: string,
+  goal: string,
+  level: string,
+  apiKey: string
+): Promise<boolean> {
+  // Build compact input for the AI scorer
+  const scoringModules: AIFitScoringInput[] = [];
+  
+  for (const mod of modules) {
+    const candidates = allModuleCandidates.get(mod.id) || [];
+    // Only send top 20 by authority to keep payload manageable
+    const top = [...candidates]
+      .sort((a, b) => b.authority_score - a.authority_score)
+      .slice(0, 20);
+    
+    if (top.length === 0) continue;
+    
+    scoringModules.push({
+      moduleId: mod.id,
+      moduleTitle: mod.title,
+      moduleDescription: mod.description || "",
+      learningObjectives: mod.learning_objectives || [],
+      candidates: top.map((c, i) => ({
+        index: i,
+        title: c.title,
+        url: c.url,
+        type: c.type,
+        channel: c.channel || new URL(c.url).hostname.replace("www.", ""),
+        duration_minutes: c.estimated_minutes,
+        description: c.description,
+      })),
+    });
+  }
+
+  if (scoringModules.length === 0) return false;
+
+  const prompt = `You are Agent 2: the Resource Fit Scorer for a learning roadmap.
+
+Learner profile:
+- Topic: ${topic}
+- Learning Goal: ${goal}
+- Proficiency Level: ${level}
+
+Your job: Score each candidate resource's FIT (0-100) for its module. Consider:
+
+1. SEMANTIC RELEVANCE (0-40): Does this resource actually teach what the module needs? Not just keyword overlap — does the *content* align with the module's learning objectives?
+2. LEVEL ALIGNMENT (0-20): Is this resource pitched at the right difficulty? A "Python basics" video is wrong for an advanced module even if the topic matches.
+3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? (${goal === "hands_on" ? "Prefer tutorials, code-alongs, project builds" : goal === "conceptual" ? "Prefer explanations, lectures, theory deep-dives" : goal === "quick_overview" ? "Prefer short crash courses, summaries" : "Prefer comprehensive, in-depth content"})
+4. PEDAGOGICAL QUALITY (0-10): Based on title/description, does this look like quality educational content vs clickbait/listicle?
+5. TOOL/FRAMEWORK FIT (0-10): If the module is about React, a Vue tutorial scores 0 here. If tool-agnostic topic, give 5-10.
+
+Score STRICTLY. A score of 80+ means "excellent fit". 50-79 means "acceptable". Below 50 means "poor fit".
+
+Modules and candidates:
+${JSON.stringify(scoringModules, null, 1)}
+
+Return ONLY valid JSON:
+{
+  "scores": [
+    {
+      "module_id": "mod_1",
+      "candidate_scores": [
+        { "index": 0, "score": 75, "reason": "one short sentence" }
+      ]
+    }
+  ]
+}`;
+
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`AI Context Fit Scorer error: ${response.status}`);
+      return false;
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return false;
+
+    const parsed = JSON.parse(content);
+    
+    // Apply AI scores back to candidates
+    for (const modScores of (parsed.scores || [])) {
+      const candidates = allModuleCandidates.get(modScores.module_id);
+      if (!candidates) continue;
+      
+      // Build authority-sorted top 20 to map indices back
+      const top = [...candidates]
+        .sort((a, b) => b.authority_score - a.authority_score)
+        .slice(0, 20);
+      
+      for (const cs of (modScores.candidate_scores || [])) {
+        if (cs.index >= 0 && cs.index < top.length) {
+          const candidate = top[cs.index];
+          // Find it in the original array and update
+          const original = candidates.find(c => c.url === candidate.url);
+          if (original) {
+            original.context_fit_score = Math.max(0, Math.min(cs.score, 100));
+          }
+        }
+      }
+    }
+
+    console.log(`AI Context Fit Scorer: Scored candidates for ${parsed.scores?.length || 0} modules`);
+    return true;
+  } catch (e) {
+    console.error("AI Context Fit Scorer failed:", e);
+    return false;
+  }
 }
 
 // ─── STAGE 7: Clustering & Diversity (FLEXIBLE) ─────────────────────────────
@@ -716,7 +846,7 @@ function enrichCandidatesWithYouTube(
 
     // Compute authority & context fit scores
     c.authority_score = computeAuthorityScore(c, meta);
-    c.context_fit_score = computeContextFitScore(c, ctx, meta);
+    c.context_fit_score = computeContextFitScoreFallback(c, ctx, meta);
 
     return true;
   });
@@ -1186,18 +1316,36 @@ Return ONLY valid JSON with this exact structure:
         moduleMinutes: Math.floor((mod.estimated_hours || 1) * 60),
       };
 
-      // Enrich videos with YouTube data + compute authority & context scores
+      // Enrich videos with YouTube data + compute authority scores
       const enriched = enrichCandidatesWithYouTube(candidates, ytMap, ctx);
       
-      // Score non-video candidates too
+      // Score non-video candidates (authority + heuristic fallback for context fit)
       for (const c of enriched) {
         if (c.type !== "video") {
           c.authority_score = computeAuthorityScore(c);
-          c.context_fit_score = computeContextFitScore(c, ctx);
+          c.context_fit_score = computeContextFitScoreFallback(c, ctx);
         }
       }
 
       allModuleCandidates.set(mod.id, enriched);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 6.1: STAGE 6 — AI-Powered Context Fit Scoring (Agent 2)
+    // ════════════════════════════════════════════════════════════════════════
+    console.log(`Stage 6 (Agent 2): Running AI context fit scoring...`);
+    const aiScoringSuccess = await batchAIContextFitScoring(
+      allModuleCandidates,
+      roadmap.modules || [],
+      topic,
+      effectiveGoal,
+      skill_level,
+      LOVABLE_API_KEY
+    );
+    if (aiScoringSuccess) {
+      console.log(`Stage 6: AI scoring complete — heuristic scores overridden with AI scores.`);
+    } else {
+      console.warn(`Stage 6: AI scoring failed — falling back to heuristic context fit scores.`);
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -1361,7 +1509,7 @@ Return ONLY valid JSON with this exact structure:
     const totalResources = (roadmap.modules || []).reduce((sum: number, m: any) => sum + (m.resources?.length || 0), 0);
     console.log(`Final validation: ${totalResources} total resources, ${usedResourceUrls.size} unique URLs, ${Math.round(totalRoadmapMinutes)} mins used of ${Math.round(usableMinutes)} usable.`);
 
-    console.log("Roadmap generation complete (9-stage pipeline).");
+    console.log("Roadmap generation complete (10-stage pipeline with 3 AI agents).");
     return new Response(JSON.stringify(roadmap), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("generate-roadmap error:", e);
