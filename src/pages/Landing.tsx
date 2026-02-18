@@ -29,7 +29,7 @@ export default function Landing() {
 
   return (
     <>
-      <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="flex min-h-[80vh] items-center justify-center px-4 pb-0">
         <div className="text-center max-w-xl animate-fade-in">
           <img src={logo} alt="PathFinder logo" className="h-36 w-36 mx-auto mb-5 object-contain" />
           <h1 className="font-heading text-6xl md:text-7xl font-extrabold gradient-text mb-4">
