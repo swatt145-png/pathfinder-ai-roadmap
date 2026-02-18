@@ -435,12 +435,25 @@ export default function Dashboard() {
             </div>
             <div className="glass-blue p-3">
               <BookOpen className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Week {Math.min(Math.ceil((Date.now() - new Date(roadmap.created_at).getTime()) / 604800000) || 1, roadmapData.timeline_weeks)} of {roadmapData.timeline_weeks}</span>
+              <span className="text-sm text-muted-foreground">
+                {(() => {
+                  const totalDays = roadmapData.timeline_weeks * 7;
+                  const elapsed = Math.max(Math.floor((Date.now() - new Date(roadmap.created_at).getTime()) / 86400000), 0);
+                  if (totalDays <= 1) {
+                    return "Day 1 of 1";
+                  } else if (roadmapData.timeline_weeks < 1.5) {
+                    return `Day ${Math.min(elapsed + 1, Math.round(totalDays))} of ${Math.round(totalDays)}`;
+                  } else {
+                    const currentWeek = Math.min(Math.ceil((elapsed + 1) / 7) || 1, Math.ceil(roadmapData.timeline_weeks));
+                    return `Week ${currentWeek} of ${Math.ceil(roadmapData.timeline_weeks)}`;
+                  }
+                })()}
+              </span>
             </div>
             <div className="glass-blue p-3">
               <Flame className="w-5 h-5 mx-auto mb-1 text-warning" />
               <span className="text-sm text-muted-foreground">
-                {completedCount > 0 ? `${completedCount}-day streak` : "Start your streak!"}
+                {completedCount > 0 ? `${completedCount} module streak 🔥` : "Start your streak!"}
               </span>
             </div>
           </div>
