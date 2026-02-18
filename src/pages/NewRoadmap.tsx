@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, BookOpen, Layers, BookOpenCheck, Code2, Zap, GraduationCap } from "lucide-react";
+import { Loader2, BookOpen, Layers, BookOpenCheck, Code2, Zap, GraduationCap, Target, LayoutDashboard, Search, ClipboardCheck, Sparkles } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
 const SKILLS = [
@@ -193,25 +193,113 @@ export default function NewRoadmap() {
     );
   }
 
+  const CIRCULAR_STEPS = [
+    { icon: Target, label: "Analyzing goal" },
+    { icon: LayoutDashboard, label: "Building curriculum" },
+    { icon: Search, label: "Curating resources" },
+    { icon: ClipboardCheck, label: "Crafting quizzes" },
+    { icon: Sparkles, label: "Finalizing roadmap" },
+  ];
+
   if (loading) {
+    const radius = 170;
+    const startAngle = -90;
+
     return (
       <>
         <AppBar />
-        <div className="flex min-h-screen items-center justify-center px-6 pt-14 overflow-hidden">
-          <div className="text-center w-full max-w-md animate-fade-in">
-            <NeonDogAnimation />
-            <p className="text-primary font-heading font-semibold text-lg mb-6 animate-breathe">
-              {LOADING_MESSAGES[Math.min(loadingStep, LOADING_MESSAGES.length - 1)]}
-            </p>
-            <div className="space-y-3 mb-8">
-              {LOADING_STEPS.map((step, i) => (
-                <p
-                  key={step}
-                  className={`text-base transition-all duration-500 ${i === loadingStep ? "text-foreground animate-breathe font-medium" : i < loadingStep ? "text-muted-foreground/50" : "text-muted-foreground/20"}`}
+        <div className="flex min-h-screen items-center justify-center px-4 pt-14 overflow-hidden">
+          <div className="relative animate-fade-in" style={{ width: 480, height: 480 }}>
+            {/* Center dog animation */}
+            <div className="absolute inset-0 flex items-center justify-center z-10">
+              <NeonDogAnimation size="large" />
+            </div>
+
+            {/* Connecting circle track + arrows */}
+            <svg className="absolute inset-0 w-full h-full" viewBox="-240 -240 480 480">
+              <circle cx="0" cy="0" r={radius} fill="none" stroke="hsl(var(--primary) / 0.1)" strokeWidth="1.5" strokeDasharray="6 6" />
+              {CIRCULAR_STEPS.map((_, i) => {
+                const angle1 = (startAngle + (i * 360) / 5) * (Math.PI / 180);
+                const angle2 = (startAngle + ((i + 1) * 360) / 5) * (Math.PI / 180);
+                const midAngle = (angle1 + angle2) / 2;
+                const x1 = Math.cos(angle1) * radius;
+                const y1 = Math.sin(angle1) * radius;
+                const x2 = Math.cos(angle2) * radius;
+                const y2 = Math.sin(angle2) * radius;
+                const arrowX = Math.cos(midAngle) * radius;
+                const arrowY = Math.sin(midAngle) * radius;
+                const arrowAngle = (midAngle * 180) / Math.PI + 90;
+                const isActive = i <= loadingStep;
+                return (
+                  <g key={i}>
+                    <path
+                      d={`M ${x1 * 0.88 + (x2 - x1) * 0.15} ${y1 * 0.88 + (y2 - y1) * 0.15} Q ${Math.cos(midAngle) * (radius * 1.02)} ${Math.sin(midAngle) * (radius * 1.02)} ${x2 * 0.88 + (x1 - x2) * 0.15} ${y2 * 0.88 + (y1 - y2) * 0.15}`}
+                      fill="none"
+                      stroke={isActive ? "hsl(var(--primary) / 0.5)" : "hsl(var(--primary) / 0.12)"}
+                      strokeWidth="1.5"
+                      className="transition-all duration-700"
+                    />
+                    <g transform={`translate(${arrowX * 0.92}, ${arrowY * 0.92}) rotate(${arrowAngle})`}>
+                      <polygon
+                        points="0,-4 3,2 -3,2"
+                        fill={isActive ? "hsl(var(--primary) / 0.6)" : "hsl(var(--primary) / 0.15)"}
+                        className="transition-all duration-700"
+                      />
+                    </g>
+                  </g>
+                );
+              })}
+            </svg>
+
+            {/* Step icons in circle */}
+            {CIRCULAR_STEPS.map((step, i) => {
+              const angle = (startAngle + (i * 360) / 5) * (Math.PI / 180);
+              const x = Math.cos(angle) * radius;
+              const y = Math.sin(angle) * radius;
+              const isDone = i < loadingStep;
+              const isActive = i === loadingStep;
+
+              return (
+                <div
+                  key={i}
+                  className="absolute flex flex-col items-center gap-1 z-20"
+                  style={{
+                    left: `calc(50% + ${x}px)`,
+                    top: `calc(50% + ${y}px)`,
+                    transform: "translate(-50%, -50%)",
+                  }}
                 >
-                  {i < loadingStep ? "✓ " : i === loadingStep ? "● " : "○ "}{step}
-                </p>
-              ))}
+                  <div
+                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-700 ${
+                      isDone
+                        ? "bg-primary/20 border-2 border-primary shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
+                        : isActive
+                        ? "bg-primary/15 border-2 border-primary animate-pulse shadow-[0_0_18px_hsl(var(--primary)/0.5)]"
+                        : "bg-muted/30 border border-muted-foreground/20"
+                    }`}
+                  >
+                    <step.icon
+                      className={`w-5 h-5 transition-all duration-700 ${
+                        isDone ? "text-primary" : isActive ? "text-primary" : "text-muted-foreground/30"
+                      }`}
+                    />
+                  </div>
+                  <span
+                    className={`text-xs font-heading font-semibold text-center whitespace-nowrap transition-all duration-700 ${
+                      isDone ? "text-primary/70" : isActive ? "text-primary" : "text-muted-foreground/25"
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+              );
+            })}
+
+            {/* Center message below dog */}
+            <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: "calc(50% + 105px)" }}>
+              <p className="text-primary font-heading font-semibold text-sm text-center animate-pulse whitespace-nowrap">
+                {LOADING_MESSAGES[Math.min(loadingStep, LOADING_MESSAGES.length - 1)]}
+              </p>
             </div>
           </div>
         </div>
