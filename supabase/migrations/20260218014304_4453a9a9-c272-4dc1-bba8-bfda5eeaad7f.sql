@@ -1,0 +1,1 @@
+ALTER TABLE public.roadmaps ALTER COLUMN timeline_weeks TYPE numeric USING timeline_weeks::numeric;

@@ -76,9 +76,10 @@ export default function NewRoadmap() {
   const [topic, setTopic] = useState(reviseState?.topic ?? "");
   const [skillLevel, setSkillLevel] = useState(reviseState?.skill_level ?? "beginner");
   const [learningGoal, setLearningGoal] = useState(reviseState?.learning_goal ?? "hands_on");
-  const [timelineUnit, setTimelineUnit] = useState<"weeks" | "days">("weeks");
+  const [timelineUnit, setTimelineUnit] = useState<"weeks" | "days" | "hours">("weeks");
   const [timelineValue, setTimelineValue] = useState(reviseState?.timeline_weeks ?? 4);
   const [hoursPerDay, setHoursPerDay] = useState(reviseState?.hours_per_day ?? 1);
+  const [totalHoursOnly, setTotalHoursOnly] = useState(3);
   const [hardDeadline, setHardDeadline] = useState(reviseState?.hard_deadline ?? false);
   const [deadlineDate, setDeadlineDate] = useState(reviseState?.deadline_date ?? "");
   const [includeWeekends, setIncludeWeekends] = useState(true);
@@ -101,8 +102,10 @@ export default function NewRoadmap() {
 
   useEffect(() => { checkActive(); }, [user]);
 
-  const timelineWeeks = timelineUnit === "weeks" ? timelineValue : Math.ceil(timelineValue / 7);
-  const timelineDays = timelineUnit === "days" ? timelineValue : timelineValue * 7;
+  const computedTimelineWeeks = timelineUnit === "weeks" ? timelineValue : timelineUnit === "days" ? timelineValue / 7 : totalHoursOnly / (hoursPerDay || 1) / 7;
+  const computedTimelineDays = timelineUnit === "days" ? timelineValue : timelineUnit === "weeks" ? timelineValue * 7 : Math.max(1, Math.ceil(totalHoursOnly / (hoursPerDay || 1)));
+  const computedHoursPerDay = timelineUnit === "hours" ? totalHoursOnly : hoursPerDay;
+  const computedTotalHours = timelineUnit === "hours" ? totalHoursOnly : computedTimelineDays * hoursPerDay;
 
   const applyQuickStart = (qs: typeof QUICK_STARTS[0]) => {
     setTopic(qs.topic);
@@ -118,11 +121,11 @@ export default function NewRoadmap() {
     if (hardDeadline && deadlineDate) {
       const selected = new Date(deadlineDate);
       const minDate = new Date();
-      minDate.setDate(minDate.getDate() + timelineDays - 1);
+      minDate.setDate(minDate.getDate() + computedTimelineDays - 1);
       minDate.setHours(0, 0, 0, 0);
       selected.setHours(0, 0, 0, 0);
       if (selected < minDate) {
-        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from today, inclusive), or reduce your target timeline.`);
+        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${computedTimelineDays} days from today, inclusive), or reduce your target timeline.`);
         return;
       }
     }
@@ -136,7 +139,7 @@ export default function NewRoadmap() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
-        body: { topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: timelineWeeks, timeline_days: timelineDays, hours_per_day: hoursPerDay, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends },
+        body: { topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends, timeline_mode: timelineUnit },
       });
 
       clearInterval(stepInterval);
@@ -302,9 +305,17 @@ export default function NewRoadmap() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label className="text-muted-foreground text-base">
-                    How many {timelineUnit}? <span className="text-primary font-heading font-bold">{timelineValue}</span>
+                    {timelineUnit === "hours" ? (
+                      <>Total hours? <span className="text-primary font-heading font-bold">{totalHoursOnly}</span></>
+                    ) : (
+                      <>How many {timelineUnit}? <span className="text-primary font-heading font-bold">{timelineValue}</span></>
+                    )}
                   </Label>
                   <div className="flex rounded-lg overflow-hidden border border-white/10">
+                    <button
+                      onClick={() => { setTimelineUnit("hours"); setTotalHoursOnly(3); }}
+                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "hours" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                    >Hours</button>
                     <button
                       onClick={() => { setTimelineUnit("days"); setTimelineValue(7); }}
                       className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "days" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
@@ -315,29 +326,58 @@ export default function NewRoadmap() {
                     >Weeks</button>
                   </div>
                 </div>
-                <input
-                  type="range"
-                  min={timelineUnit === "days" ? 1 : 1}
-                  max={timelineUnit === "days" ? 90 : 12}
-                  value={timelineValue}
-                  onChange={(e) => setTimelineValue(Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
+                {timelineUnit === "hours" ? (
+                  <input
+                    type="range"
+                    min={1}
+                    max={40}
+                    step={0.5}
+                    value={totalHoursOnly}
+                    onChange={(e) => setTotalHoursOnly(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                ) : (
+                  <input
+                    type="range"
+                    min={1}
+                    max={timelineUnit === "days" ? 90 : 12}
+                    value={timelineValue}
+                    onChange={(e) => setTimelineValue(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                )}
+                {timelineUnit === "hours" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A single focused session — no multi-day schedule needed.
+                  </p>
+                )}
               </div>
 
-              <div>
-                <Label className="text-muted-foreground text-base mb-2 block">
-                  Hours per day? <span className="text-primary font-heading font-bold">{hoursPerDay}</span>
-                </Label>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={8}
-                  step={0.5}
-                  value={hoursPerDay}
-                  onChange={(e) => setHoursPerDay(Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
+              {timelineUnit !== "hours" && (
+                <div>
+                  <Label className="text-muted-foreground text-base mb-2 block">
+                    Hours per day? <span className="text-primary font-heading font-bold">{hoursPerDay}</span>
+                  </Label>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={8}
+                    step={0.5}
+                    value={hoursPerDay}
+                    onChange={(e) => setHoursPerDay(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                </div>
+              )}
+
+              {/* Summary of total time */}
+              <div className="glass-blue p-3">
+                <p className="text-sm text-muted-foreground">
+                  Total study time: <span className="text-primary font-heading font-bold">{computedTotalHours} hours</span>
+                  {timelineUnit !== "hours" && (
+                    <> across <span className="text-primary font-heading font-bold">{computedTimelineDays} day{computedTimelineDays !== 1 ? "s" : ""}</span></>
+                  )}
+                </p>
               </div>
 
               <div className="flex items-center justify-between glass-blue p-4">
@@ -353,11 +393,11 @@ export default function NewRoadmap() {
                     onChange={(e) => {
                       const selected = new Date(e.target.value);
                       const minDate = new Date();
-                      minDate.setDate(minDate.getDate() + timelineDays - 1);
+                      minDate.setDate(minDate.getDate() + computedTimelineDays - 1);
                       minDate.setHours(0, 0, 0, 0);
                       selected.setHours(0, 0, 0, 0);
                       if (selected < minDate) {
-                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${timelineDays} days from today, inclusive), or reduce your target timeline.`);
+                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${computedTimelineDays} days from today, inclusive), or reduce your target timeline.`);
                         setDeadlineDate(e.target.value);
                       } else {
                         setError(null);
@@ -372,13 +412,15 @@ export default function NewRoadmap() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between glass-blue p-4">
-                <div>
-                  <Label className="text-base">Include weekends?</Label>
-                  <p className="text-sm text-muted-foreground mt-0.5">Study on Saturday & Sunday too</p>
+              {timelineUnit === "weeks" && (
+                <div className="flex items-center justify-between glass-blue p-4">
+                  <div>
+                    <Label className="text-base">Include weekends?</Label>
+                    <p className="text-sm text-muted-foreground mt-0.5">Study on Saturday & Sunday too</p>
+                  </div>
+                  <Switch checked={includeWeekends} onCheckedChange={setIncludeWeekends} />
                 </div>
-                <Switch checked={includeWeekends} onCheckedChange={setIncludeWeekends} />
-              </div>
+              )}
 
               {error && <p className="text-destructive text-base">{error}</p>}
 
