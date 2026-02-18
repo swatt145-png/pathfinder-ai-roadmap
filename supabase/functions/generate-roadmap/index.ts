@@ -904,20 +904,22 @@ async function fetchTopicAnchors(
   goal: string,
   serperKey: string
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
+  const normalizeQuery = (q: string) => q.replace(/\s+/g, " ").trim();
+  const dedupeQueries = (queries: string[]) => [...new Set(queries.map(normalizeQuery).filter(Boolean))];
   const levelMod = getLevelSearchModifier(level);
   const goalConfig = getGoalSearchConfig(goal);
   const goalMod = goalConfig.queryModifiers[0] || "";
 
-  const queries = [
+  const queries = dedupeQueries([
     `${topic} ${goalMod} ${levelMod}`,
     `${topic} tutorial complete guide`,
     `${topic} full course best`,
-  ];
+  ]);
 
   const promises: Promise<any>[] = [];
   for (const q of queries) {
-    promises.push(searchSerper(q, serperKey, "videos", 15));
-    promises.push(searchSerper(q, serperKey, "search", 10));
+    promises.push(searchSerper(q, serperKey, "videos", 12));
+    promises.push(searchSerper(q, serperKey, "search", 8));
   }
 
   const results = await Promise.all(promises);
@@ -934,27 +936,39 @@ async function fetchTopicAnchors(
 }
 
 async function fetchModuleResults(
-  moduleTitle: string,
+  module: any,
   topic: string,
   level: string,
   goal: string,
   serperKey: string
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
+  const normalizeQuery = (q: string) => q.replace(/\s+/g, " ").trim();
+  const dedupeQueries = (queries: string[]) => [...new Set(queries.map(normalizeQuery).filter(Boolean))];
+
+  const moduleTitle = module?.title || "";
+  const anchorTerms = (module?.anchor_terms || [])
+    .filter((t: string) => typeof t === "string" && t.trim().length > 0)
+    .slice(0, 3)
+    .join(" ");
+  const objectiveTerms = (module?.learning_objectives || [])
+    .filter((o: string) => typeof o === "string" && o.trim().length > 0)
+    .slice(0, 1)
+    .join(" ");
+
   const config = getGoalSearchConfig(goal);
   const levelMod = getLevelSearchModifier(level);
   const goalRes = GOAL_RESOURCES[goal] || GOAL_RESOURCES["hands_on"];
 
-  const queries = [
-    `${moduleTitle} ${topic} ${config.queryModifiers[0] || "explained"}`,
-    `${moduleTitle} ${topic} ${levelMod}`,
-    `${moduleTitle} ${topic} ${config.queryModifiers[1] || "tutorial"}`,
+  const queries = dedupeQueries([
+    `${moduleTitle} ${topic} ${anchorTerms} ${config.queryModifiers[0] || "explained"} ${levelMod}`,
+    `${moduleTitle} ${topic} ${objectiveTerms} ${config.queryModifiers[1] || "tutorial"}`,
+    `${moduleTitle} ${topic} ${config.queryModifiers[2] || "guide"} ${levelMod}`,
     `${moduleTitle} ${topic} ${goalRes.siteFilters[0] || ""}`,
-    `${moduleTitle} ${config.queryModifiers[2] || "guide"} ${levelMod}`,
-  ];
+  ]);
 
   const promises: Promise<any>[] = [];
   for (const q of queries) {
-    promises.push(searchSerper(q, serperKey, "videos", 6));
+    promises.push(searchSerper(q, serperKey, "videos", 5));
     promises.push(searchSerper(q, serperKey, "search", 4));
   }
 
@@ -1065,6 +1079,7 @@ function enrichCandidatesWithYouTube(
 // ─── STAGE 8: Batch LLM Reranker ─────────────────────────────────────────────
 
 interface RerankerInput {
+  moduleId: string;
   moduleTitle: string;
   moduleDescription: string;
   candidates: Array<{
@@ -1098,6 +1113,7 @@ async function batchRerank(
       .slice(0, 12);
 
     rerankerModules.push({
+      moduleId: mod.id,
       moduleTitle: mod.title,
       moduleDescription: mod.description || "",
       candidates: top12.map((c, i) => ({
@@ -1149,7 +1165,7 @@ Return ONLY valid JSON:
 {
   "selections": [
     {
-      "module_title": "...",
+      "module_id": "...",
       "selected": [
         { "url": "...", "why_selected": "..." }
       ]
@@ -1185,7 +1201,8 @@ Return ONLY valid JSON:
     
     for (const sel of (parsed.selections || [])) {
       const urls = (sel.selected || []).map((s: any) => s.url);
-      result.set(sel.module_title, urls);
+      if (!sel.module_id) continue;
+      result.set(sel.module_id, urls);
       
       for (const s of (sel.selected || [])) {
         for (const mod of modules) {
@@ -1474,7 +1491,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2B: Fetching module-specific results for ${roadmap.modules?.length || 0} modules...`);
     const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
-      fetchModuleResults(mod.title, topic, skill_level, effectiveGoal, SERPER_API_KEY)
+      fetchModuleResults(mod, topic, skill_level, effectiveGoal, SERPER_API_KEY)
     );
     const allModuleResults = await Promise.all(moduleResultsPromises);
 
@@ -1549,12 +1566,16 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 6.1: PARALLEL — Agent 2 (AI Scoring) + Negotiation Pass
+    // STEP 6.1: PARALLEL — Agent 2 (AI Scoring) + Negotiation Pass (isolated copies)
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Running Agent 2 + Negotiation Pass in parallel...`);
     const usableMinutesForNegotiation = totalHours * 60 * 0.85;
+    const negotiationInput = new Map<string, CandidateResource[]>();
+    for (const [moduleId, candidates] of allModuleCandidates.entries()) {
+      negotiationInput.set(moduleId, candidates.map(c => ({ ...c })));
+    }
 
-    const [aiScoringSuccess] = await Promise.all([
+    const [aiScoringSuccess, negotiatedCandidates] = await Promise.all([
       // Agent 2: AI Context Fit Scoring
       batchAIContextFitScoring(
         allModuleCandidates,
@@ -1565,19 +1586,33 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
         LOVABLE_API_KEY
       ),
       // Negotiation Pass: runs on heuristic scores (good enough for span detection)
-      (async () => {
-        const negotiatedCandidates = negotiateSpanningResources(
-          allModuleCandidates,
+      Promise.resolve(
+        negotiateSpanningResources(
+          negotiationInput,
           roadmap.modules || [],
           effectiveHoursPerDay,
           usableMinutesForNegotiation,
           topic
-        );
-        for (const [key, val] of negotiatedCandidates) {
-          allModuleCandidates.set(key, val);
-        }
-      })(),
+        )
+      ),
     ]);
+
+    // Merge negotiation output into AI-scored candidates by URL.
+    for (const [moduleId, negotiatedList] of negotiatedCandidates.entries()) {
+      const scoredList = allModuleCandidates.get(moduleId) || [];
+      const merged = negotiatedList.map((neg) => {
+        if (neg.is_continuation) return neg;
+        const scored = scoredList.find(s => s.url === neg.url);
+        if (!scored) return neg;
+        return {
+          ...scored,
+          span_plan: neg.span_plan,
+          is_continuation: neg.is_continuation,
+          continuation_of: neg.continuation_of,
+        };
+      });
+      allModuleCandidates.set(moduleId, merged);
+    }
 
     if (aiScoringSuccess) {
       console.log(`Agent 2: AI scoring complete — heuristic scores overridden.`);
@@ -1614,7 +1649,11 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
       const candidates = allModuleCandidates.get(mod.id) || [];
       const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
       const dailyCapMinutes = effectiveHoursPerDay * 60 * 1.1;
-      const moduleBudgetCap = Math.min(moduleMinutes * 1.05, dailyCapMinutes);
+      const dayStart = Number(mod.day_start || 1);
+      const dayEnd = Number(mod.day_end || dayStart);
+      const moduleDays = Math.max(1, dayEnd - dayStart + 1);
+      const windowBudgetCap = moduleDays * dailyCapMinutes;
+      const moduleBudgetCap = Math.min(moduleMinutes * 1.05, windowBudgetCap);
       const ctx: ModuleContext = {
         topic,
         moduleTitle: mod.title,
@@ -1625,7 +1664,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
         moduleMinutes,
       };
 
-      const rerankedUrls = rerankerSelections.get(mod.title);
+      const rerankedUrls = rerankerSelections.get(mod.id);
 
       let finalResources: CandidateResource[];
 
@@ -1635,7 +1674,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
           const match = candidates.find(c => c.url === url);
           if (match) reranked.push(match);
         }
-        finalResources = reranked.length < 2 ? clusterAndDiversify(candidates, ctx) : reranked;
+        finalResources = reranked.length > 0 ? reranked : clusterAndDiversify(candidates, ctx);
       } else {
         finalResources = clusterAndDiversify(candidates, ctx);
       }
@@ -1683,7 +1722,9 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
 
       // If no resources fit budget, pick the shortest candidate
       if (budgetedResources.length === 0 && uniqueResources.length > 0) {
-        const shortest = [...uniqueResources].sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
+        const shortest = [...uniqueResources]
+          .filter(c => totalRoadmapMinutes + c.estimated_minutes <= usableMinutes)
+          .sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
         if (shortest) {
           budgetedResources.push(shortest);
           moduleTotal = shortest.estimated_minutes;
