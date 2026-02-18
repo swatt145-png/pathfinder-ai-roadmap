@@ -1,0 +1,1 @@
+ALTER TABLE public.roadmaps ALTER COLUMN hours_per_day TYPE numeric USING hours_per_day::numeric;
