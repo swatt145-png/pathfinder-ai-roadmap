@@ -680,6 +680,20 @@ Rules:
 - Time is a constraint (resources must fit module budget), NOT a ranking boost
 - Your selections override heuristic ordering
 
+=== GLOBAL CONSTRAINTS (MANDATORY) ===
+
+1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules. Do NOT select the same URL for multiple modules.
+
+2. HARD TIME BUDGET: Each module's total resource minutes must not exceed its budget. Remove lowest-value resource if over budget. Never exceed total roadmap time.
+
+3. STACK CONSISTENCY: If user did not specify a language/framework:
+   - For conceptual goals: prefer tool-agnostic resources
+   - For hands-on goals: pick ONE consistent stack across all modules, do NOT mix Python/JS/no-code randomly
+
+4. SHORT TIMELINE COMPRESSION: If total time < 5 hours, prefer fewer but stronger resources. Avoid padding with small redundant videos.
+
+5. COVERAGE BEFORE REDUNDANCY: Maximize coverage of module learning objectives. Never select multiple resources teaching identical content from the same channel.
+
 For each module, return the URLs of your selected resources and a 1-sentence "why_selected" for each.
 
 Modules and candidates:
@@ -779,6 +793,15 @@ PRIORITY 4 — TIME CONSTRAINTS:
 - Build in a 10-15% buffer. Plan for ~${Math.round(totalHours * 0.88)} hours of content.
 - Each module's estimated_hours must be realistic and proportional.
 - If not enough time for full topic coverage, be honest in the summary about what's covered and what would need more time.
+
+=== GLOBAL ROADMAP CONSTRAINTS (MANDATORY) ===
+
+1. RESOURCE UNIQUENESS: No resource URL may appear in more than one module. Each module must have distinct resources.
+2. TIME BUDGET: total_minutes = weeks × 7 × hours_per_day × 60; usable = total_minutes × 0.85. Sum of all module estimated_hours must not exceed usable time. No module may exceed its budget by >5%.
+3. STACK CONSISTENCY: If user does not specify a language/framework/tool — for conceptual goals use tool-agnostic resources; for hands-on goals declare ONE stack and use it consistently across all modules.
+4. SHORT TIMELINE COMPRESSION: If total time < 5 hours, reduce module count, increase density, avoid over-fragmentation and repeated introductory content.
+5. COVERAGE BEFORE REDUNDANCY: Maximize coverage of learning objectives. Never have two modules teaching identical content.
+6. FINAL VALIDATION: Before outputting JSON, verify: no duplicate resources, all modules respect time budget, stack consistency, each module has 3-5 quiz questions.
 
 RULES:
 - Break the topic into sequential modules. Module count depends on learning goal.
@@ -1059,8 +1082,17 @@ Return ONLY valid JSON with this exact structure:
     // ════════════════════════════════════════════════════════════════════════
     // STEP 9: STAGE 9 — Final Assembly
     // ════════════════════════════════════════════════════════════════════════
+    // ── Global uniqueness set ──
+    const usedResourceUrls = new Set<string>();
+    const usedVideoIds = new Set<string>();
+    const usedChannelTitles = new Map<string, Set<string>>(); // channel -> set of titles
+    const usableMinutes = totalHours * 60 * 0.85;
+    let totalRoadmapMinutes = 0;
+
     for (const mod of (roadmap.modules || [])) {
       const candidates = allModuleCandidates.get(mod.id) || [];
+      const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
+      const moduleBudgetCap = moduleMinutes * 1.05; // 5% tolerance
       const ctx: ModuleContext = {
         topic,
         moduleTitle: mod.title,
@@ -1068,7 +1100,7 @@ Return ONLY valid JSON with this exact structure:
         learningObjectives: mod.learning_objectives || [],
         goal: effectiveGoal,
         level: skill_level,
-        moduleMinutes: Math.floor((mod.estimated_hours || 1) * 60),
+        moduleMinutes,
       };
 
       const rerankedUrls = rerankerSelections.get(mod.title);
@@ -1076,26 +1108,65 @@ Return ONLY valid JSON with this exact structure:
       let finalResources: CandidateResource[];
 
       if (rerankedUrls && rerankedUrls.length > 0) {
-        // Use reranker ordering, but fall back to heuristic for any not found
         const reranked: CandidateResource[] = [];
         for (const url of rerankedUrls) {
           const match = candidates.find(c => c.url === url);
           if (match) reranked.push(match);
         }
-        // If reranker returned fewer than minimum, fill from heuristic
-        if (reranked.length < 2) {
-          finalResources = clusterAndDiversify(candidates, ctx);
-        } else {
-          finalResources = reranked;
-        }
+        finalResources = reranked.length < 2 ? clusterAndDiversify(candidates, ctx) : reranked;
       } else {
-        // Reranker failed for this module — use heuristic clustering
         finalResources = clusterAndDiversify(candidates, ctx);
       }
 
+      // ── Constraint 1: Global uniqueness enforcement ──
+      const uniqueResources: CandidateResource[] = [];
+      for (const c of finalResources) {
+        const normalizedUrl = c.url.split("&")[0];
+        const videoId = extractYouTubeVideoId(normalizedUrl);
+
+        // Check exact URL duplicate
+        if (usedResourceUrls.has(normalizedUrl)) continue;
+        // Check same video ID
+        if (videoId && usedVideoIds.has(videoId)) continue;
+        // Check same channel + similar title (near-duplicate)
+        if (c.channel) {
+          const channelTitles = usedChannelTitles.get(c.channel.toLowerCase());
+          if (channelTitles) {
+            const isDup = [...channelTitles].some(t => computeSemanticSimilarity(t, c.title) > 0.92);
+            if (isDup) continue;
+          }
+        }
+
+        uniqueResources.push(c);
+      }
+
+      // ── Constraint 2: Hard time budget enforcement ──
+      const budgetedResources: CandidateResource[] = [];
+      let moduleTotal = 0;
+      for (const c of uniqueResources) {
+        if (moduleTotal + c.estimated_minutes > moduleBudgetCap && budgetedResources.length > 0) continue;
+        if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes && budgetedResources.length > 0) continue;
+        budgetedResources.push(c);
+        moduleTotal += c.estimated_minutes;
+      }
+
+      // Register used resources globally
+      for (const c of budgetedResources) {
+        const normalizedUrl = c.url.split("&")[0];
+        usedResourceUrls.add(normalizedUrl);
+        const videoId = extractYouTubeVideoId(normalizedUrl);
+        if (videoId) usedVideoIds.add(videoId);
+        if (c.channel) {
+          const key = c.channel.toLowerCase();
+          if (!usedChannelTitles.has(key)) usedChannelTitles.set(key, new Set());
+          usedChannelTitles.get(key)!.add(c.title);
+        }
+      }
+      totalRoadmapMinutes += moduleTotal;
+
       // Convert to output format
-      if (finalResources.length > 0) {
-        mod.resources = finalResources.map(c => ({
+      if (budgetedResources.length > 0) {
+        mod.resources = budgetedResources.map(c => ({
           title: c.title,
           url: c.url,
           type: c.type,
@@ -1108,7 +1179,6 @@ Return ONLY valid JSON with this exact structure:
           quality_signal: c.quality_signal,
         } as Resource));
       } else {
-        // Last resort fallback
         console.warn(`Module "${mod.title}" has 0 resources after full pipeline, using fallback`);
         mod.resources = [{
           title: `${mod.title} - Official Documentation`,
@@ -1119,6 +1189,10 @@ Return ONLY valid JSON with this exact structure:
         }];
       }
     }
+
+    // ── Final validation log ──
+    const totalResources = (roadmap.modules || []).reduce((sum: number, m: any) => sum + (m.resources?.length || 0), 0);
+    console.log(`Final validation: ${totalResources} total resources, ${usedResourceUrls.size} unique URLs, ${Math.round(totalRoadmapMinutes)} mins used of ${Math.round(usableMinutes)} usable.`);
 
     console.log("Roadmap generation complete (9-stage pipeline).");
     return new Response(JSON.stringify(roadmap), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
