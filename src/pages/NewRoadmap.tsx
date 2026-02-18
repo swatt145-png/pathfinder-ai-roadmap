@@ -57,6 +57,43 @@ const LOADING_MESSAGES = [
   "Almost done — your learning journey is taking shape! ✨",
 ];
 
+const isTransientRelayError = (message: string): boolean =>
+  /Failed to send a request|FunctionsRelayError|NetworkError|fetch failed/i.test(message);
+
+const extractFunctionErrorMessage = async (fnError: any): Promise<string> => {
+  const fallback = typeof fnError?.message === "string" ? fnError.message : "";
+  const context = fnError?.context;
+
+  if (context?.json) {
+    try {
+      const body = await context.json();
+      if (typeof body?.error === "string" && body.error.trim()) return body.error;
+      if (typeof body?.message === "string" && body.message.trim()) return body.message;
+    } catch {
+      // ignore and use fallback
+    }
+  }
+
+  if (context?.text) {
+    try {
+      const raw = await context.text();
+      if (raw?.trim()) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (typeof parsed?.error === "string" && parsed.error.trim()) return parsed.error;
+          if (typeof parsed?.message === "string" && parsed.message.trim()) return parsed.message;
+        } catch {
+          return raw;
+        }
+      }
+    } catch {
+      // ignore and use fallback
+    }
+  }
+
+  return fallback || "Failed to generate roadmap. Please try again.";
+};
+
 
 export default function NewRoadmap() {
   const { user, profile, isGuest } = useAuth();
@@ -145,7 +182,10 @@ export default function NewRoadmap() {
 
       clearInterval(stepInterval);
 
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) {
+        const detailedMessage = await extractFunctionErrorMessage(fnError);
+        throw new Error(detailedMessage);
+      }
       if (data?.error) throw new Error(data.error);
 
       const roadmapData = data as RoadmapData;
@@ -186,7 +226,7 @@ export default function NewRoadmap() {
     } catch (err: any) {
       clearInterval(stepInterval);
       const msg = err.message || "";
-      if (msg.includes("Failed to send a request") || msg.includes("FunctionsHttpError") || msg.includes("FunctionsRelayError")) {
+      if (isTransientRelayError(msg)) {
         setError("Our servers are busy right now. Please try again in a moment.");
       } else {
         setError(msg || "Failed to generate roadmap. Please try again.");
