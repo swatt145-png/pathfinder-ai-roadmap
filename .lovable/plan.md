@@ -2,58 +2,56 @@
 
 # Serper API Integration for Real Learning Resources
 
-## Problem
-The AI currently generates resource URLs from memory, which often leads to broken links or expired pages. We need to fetch real, verified links from Google and YouTube.
+## Current Architecture (v2 — Enhanced Pipeline)
 
-## Approach
-We'll use a **two-step generation process** inside the existing `generate-roadmap` edge function:
+### 10-Stage Curation Pipeline
 
-1. **Step 1 -- AI generates the curriculum structure** (modules, objectives, quizzes) but WITHOUT resource URLs
-2. **Step 2 -- Serper API searches** for each module's topic to find real Google web results and YouTube videos
-3. **Step 3 -- Assemble** the final roadmap by injecting the verified resources into each module
+1. **Stage 1: AI Curriculum Generation** (Agent 1 — gemini-2.5-flash)
+   - Generates modules with `anchor_terms[]` per module for Stage 4 precision filtering
+   - No resources/URLs — just structure
 
-## What You Need To Do
-1. Get your Serper API key from [serper.dev](https://serper.dev) (free tier gives 2,500 searches)
-2. When prompted, paste the key so it can be stored securely as a backend secret
+2. **Stage 2A/2B: High-Recall Retrieval** (Serper API)
+   - Topic-wide anchors + module-specific searches in parallel
 
-## Technical Details
+3. **Stage 3: YouTube API Enrichment** (batch metadata fetch)
 
-### Secret Setup
-- Store `SERPER_API_KEY` as a backend secret accessible by the edge function
+4. **Stage 4: Enhanced Hard Filtering** (3-layer)
+   - 4.1: Embedding similarity threshold (≥0.05)
+   - 4.2: **Anchor Precision Gate** — module-specific anchor terms, hard reject if 0 match
+   - 4.3: **Scope Mismatch Penalty** — penalizes broad "roadmap/full course" content for non-intro modules (10-15 points)
 
-### Edge Function Changes (`supabase/functions/generate-roadmap/index.ts`)
+5. **Stage 5: Light Authority Scoring** (bounded priors, NOT selection driver)
+   - Tier-based normalized priors (0-1) with max impact caps:
+     - OFFICIAL_DOCS: 1.00, max +5
+     - VENDOR_DOCS: 0.90, max +4
+     - UNIVERSITY_DIRECT: 0.85, max +4
+     - EDUCATION_DOMAIN: 0.75, max +3
+     - BLOG: 0.60, max +3
+     - YOUTUBE_TRUSTED: 0.80, max +3
+     - YOUTUBE_UNKNOWN: 0.50, max +2
+     - COMMUNITY: 0.42, max +2
+   - Garbage filter (spam domains, thin pages only)
+   - **Diversity caps** before Agent 2: max 40% videos, max 40% docs
 
-**Modified AI prompt:** Tell the AI to generate modules with empty `resources: []` arrays -- no URLs, no guessing.
+6. **Stage 6: AI Context Fit Scoring** (Agent 2 — gemini-3-pro-preview)
+   - Receives authority metadata but scores independently on content fit
+   - Runs **in parallel** with Negotiation Pass for speed
 
-**New Serper search step:** After the AI returns the curriculum, loop through each module and:
-- Call Serper's `/search` endpoint with a query like `"learn {module.title} {skill_level} tutorial"` to get 2-3 web articles/docs
-- Call Serper's `/search` endpoint with `type: "videos"` for 1-2 YouTube results
-- Map results into the existing `Resource` format (`title`, `url`, `type`, `estimated_minutes`, `description`)
+7. **Negotiation Pass** (span detection for oversized resources)
+   - Runs in parallel with Agent 2
+   - Uses heuristic context_fit for quality gate (≥30)
 
-**Assembly:** Merge the Serper results into each module's `resources` array before returning the final roadmap.
+8. **Stage 7: Clustering & Diversity**
 
-### Serper API Calls (per module)
+9. **Stage 8: Batch LLM Reranker** (Agent 3 — gemini-2.5-flash-lite)
 
-```text
-POST https://google.serper.dev/search
-Headers: X-API-KEY: {SERPER_API_KEY}
-Body: { "q": "learn [module title] [skill level] tutorial", "num": 3 }
+10. **Stage 9: Final Assembly**
+    - Budget enforcement even for first/single resources (bug fixed)
+    - Orphan continuation validation (bug fixed — skips if primary not selected)
 
-POST https://google.serper.dev/videos  
-Headers: X-API-KEY: {SERPER_API_KEY}
-Body: { "q": "[module title] tutorial [skill level]", "num": 2 }
-```
-
-### Resource Mapping
-Each Serper result will be converted to:
-- **Web results** -> `type: "article"` or `"documentation"` (based on domain detection)
-- **Video results** -> `type: "video"`, with `estimated_minutes` extracted from duration if available
-
-### No Frontend Changes
-The `Resource` type and all UI components remain unchanged -- the data shape is identical, just with real URLs.
+### Bug Fixes Applied
+- First resource in module no longer bypasses budget check (was allowing 693-min videos)
+- "Continue watching" only shows if the primary resource was actually selected in a prior module
 
 ### Performance
-- For a 6-module roadmap: ~12 Serper API calls (2 per module)
-- Serper responses are fast (~200ms each)
-- Total added latency: ~1-2 seconds (calls can be parallelized per module)
-
+- Agent 2 + Negotiation Pass run in parallel (~20-30s saved)
