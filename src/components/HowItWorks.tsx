@@ -7,26 +7,22 @@ const steps = [
 {
   icon: Compass,
   title: "You Set the Direction",
-  description:
-  "Tell us what you want to learn, your skill level, learning goal, and available time. This becomes the blueprint."
+  description: "Pick your topic, level, goal, and timeline."
 },
 {
   icon: Brain,
   title: "AI Architect Designs Your Curriculum",
-  description:
-  "An AI agent breaks your topic into logical modules, sequences them by prerequisites, calibrates depth, and allocates time using a priority framework."
+  description: "AI breaks your topic into structured, sequenced modules."
 },
 {
   icon: Search,
   title: "Research Agents Find the Best Resources",
-  description:
-  "Search agents scan the web and YouTube for high-quality content, scoring each on relevance, source reputation, goal fit, and duration — filtering out spam automatically."
+  description: "Agents score and curate top resources from the web."
 },
 {
   icon: RefreshCw,
   title: "Adaptive Agent Evolves With You",
-  description:
-  "As you complete modules and quizzes, an adaptation agent monitors performance — inserting reviews or compressing modules so your roadmap stays aligned."
+  description: "Your roadmap adapts based on your quiz performance."
 }];
 
 

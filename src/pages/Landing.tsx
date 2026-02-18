@@ -5,6 +5,7 @@ import { Compass, BarChart3, Zap, Brain, Loader2, Search, RefreshCw } from "luci
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { HowItWorks } from "@/components/HowItWorks";
+import { ExploreCategories } from "@/components/ExploreCategories";
 import logo from "@/assets/logo.png";
 
 export default function Landing() {
@@ -85,7 +86,7 @@ export default function Landing() {
       </div>
 
       <HowItWorks />
-
+      <ExploreCategories />
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
     </>
