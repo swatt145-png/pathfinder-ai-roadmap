@@ -43,7 +43,7 @@ export function HowItWorks() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="w-full max-w-5xl mx-auto px-4 pt-20 pb-16">
+    <section ref={sectionRef} className="w-full max-w-5xl mx-auto px-4 pt-20 pb-6">
       {/* Header */}
       <div
         className={`text-center mb-14 transition-all duration-700 ${

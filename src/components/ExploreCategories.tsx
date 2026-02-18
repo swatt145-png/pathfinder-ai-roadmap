@@ -47,7 +47,7 @@ export function ExploreCategories() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="w-full max-w-5xl mx-auto px-4 pt-16 pb-20">
+    <section ref={sectionRef} className="w-full max-w-5xl mx-auto px-4 pt-6 pb-20">
       <div
         className={`text-center mb-10 transition-all duration-700 ${
           visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
