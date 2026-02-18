@@ -209,7 +209,8 @@ export default function NewRoadmap() {
       <>
         <AppBar />
         <div className="flex min-h-screen items-center justify-center px-4 pt-14 overflow-hidden">
-          <div className="relative animate-fade-in" style={{ width: 480, height: 480 }}>
+          <div className="flex flex-col items-center animate-fade-in">
+            <div className="relative" style={{ width: 480, height: 480 }}>
             {/* Center dog animation */}
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <NeonDogAnimation size="large" />
@@ -295,12 +296,13 @@ export default function NewRoadmap() {
               );
             })}
 
-            {/* Center message below dog */}
-            <div className="absolute left-1/2 -translate-x-1/2 z-10" style={{ top: "calc(50% + 105px)" }}>
-              <p className="text-primary font-heading font-semibold text-sm text-center animate-pulse whitespace-nowrap">
+            </div>
+            {/* Messages below the circular loader */}
+            <div className="mt-6 text-center">
+              <p className="text-primary font-heading font-semibold text-sm animate-pulse">
                 {LOADING_MESSAGES[Math.min(loadingStep, LOADING_MESSAGES.length - 1)]}
               </p>
-              <p className="text-muted-foreground text-xs text-center mt-2">This may take a minute</p>
+              <p className="text-muted-foreground text-xs mt-2">This may take a minute</p>
             </div>
           </div>
         </div>
