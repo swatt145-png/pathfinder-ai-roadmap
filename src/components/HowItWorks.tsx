@@ -22,7 +22,7 @@ const steps = [
 {
   icon: RefreshCw,
   title: "Adaptive Agent Evolves With You",
-  description: "Your roadmap adapts based on your quiz performance."
+  description: "Your roadmap adapts based on your inputs."
 }];
 
 
