@@ -177,7 +177,12 @@ export default function NewRoadmap() {
       navigate(newId ? `/dashboard/${newId}` : "/my-roadmaps");
     } catch (err: any) {
       clearInterval(stepInterval);
-      setError(err.message || "Failed to generate roadmap");
+      const msg = err.message || "";
+      if (msg.includes("Failed to send a request") || msg.includes("FunctionsHttpError") || msg.includes("FunctionsRelayError")) {
+        setError("Our servers are busy right now. Please try again in a moment.");
+      } else {
+        setError(msg || "Failed to generate roadmap. Please try again.");
+      }
       setLoading(false);
     }
   };
