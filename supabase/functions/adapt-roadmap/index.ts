@@ -104,6 +104,7 @@ interface CandidateResource {
   source?: string;
   quality_signal?: string;
   score: number;
+  listing_penalty?: number;
 }
 
 const STACK_KEYWORDS: Record<string, string[]> = {
@@ -179,18 +180,32 @@ function computeSemanticSimilarity(text1: string, text2: string): number {
   return overlap / Math.min(words1.size, words2.size);
 }
 
-function getGoalSearchConfig(goal: string): { queryModifiers: string[] } {
+function detectCertificationIntent(text: string): boolean {
+  return /\b(certification|cert|exam|associate|professional|practitioner|architect)\b/i.test(text.toLowerCase());
+}
+
+function looksLikeListingPage(url: string, title: string, snippet: string): boolean {
+  const text = `${url} ${title} ${snippet}`.toLowerCase();
+  const signals = ["search", "results", "catalog", "paths", "course list", "browse courses", "certification path"];
+  let hit = 0;
+  for (const signal of signals) {
+    if (text.includes(signal)) hit++;
+  }
+  return hit >= 2;
+}
+
+function getGoalSearchConfig(goal: string): { queryModifiers: string[]; semanticHint: string } {
   switch (goal) {
     case "conceptual":
-      return { queryModifiers: ["explained", "theory", "lecture", "concepts"] };
+      return { queryModifiers: ["explained", "theory", "lecture", "concepts"], semanticHint: "mental model explained with examples" };
     case "hands_on":
-      return { queryModifiers: ["tutorial", "build", "project", "step by step"] };
+      return { queryModifiers: ["tutorial", "build", "project", "step by step"], semanticHint: "project based practical walkthrough" };
     case "quick_overview":
-      return { queryModifiers: ["crash course", "quick guide", "overview", "essentials"] };
+      return { queryModifiers: ["crash course", "quick guide", "overview", "essentials"], semanticHint: "high level summary key concepts" };
     case "deep_mastery":
-      return { queryModifiers: ["advanced", "in depth", "comprehensive", "full course"] };
+      return { queryModifiers: ["advanced", "in depth", "comprehensive", "full course"], semanticHint: "deep dive architecture and tradeoffs" };
     default:
-      return { queryModifiers: ["tutorial", "guide"] };
+      return { queryModifiers: ["tutorial", "guide"], semanticHint: "clear explanation practical relevance" };
   }
 }
 
@@ -219,12 +234,16 @@ async function searchSerper(query: string, apiKey: string, type: "search" | "vid
   }
 }
 
-async function fetchTopicAnchors(topic: string, level: string, goal: string, serperKey: string): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
+async function fetchTopicAnchors(topic: string, level: string, goal: string, certificationIntent: boolean, serperKey: string): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const levelMod = getLevelSearchModifier(level);
-  const goalMod = getGoalSearchConfig(goal).queryModifiers[0] || "";
+  const goalCfg = getGoalSearchConfig(goal);
+  const goalMod = goalCfg.queryModifiers[0] || "";
+  const certMod = certificationIntent ? "certification exam guide" : "";
   const queries = dedupeQueries([
-    `${topic} ${goalMod} ${levelMod}`,
-    `${topic} tutorial complete guide`,
+    `${topic} ${goalMod} ${levelMod} ${goalCfg.semanticHint}`,
+    `${topic} ${goalCfg.queryModifiers[1] || "guide"} practical examples ${levelMod}`,
+    `${topic} ${goalCfg.queryModifiers[2] || "overview"} ${certMod}`,
+    `${topic} direct tutorial lecture article`,
   ]);
   const promises: Promise<any>[] = [];
   for (const q of queries) {
@@ -241,17 +260,18 @@ async function fetchTopicAnchors(topic: string, level: string, goal: string, ser
   return { videos, web };
 }
 
-async function fetchModuleResults(module: any, topic: string, level: string, goal: string, serperKey: string): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
+async function fetchModuleResults(module: any, topic: string, level: string, goal: string, certificationIntent: boolean, serperKey: string): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const config = getGoalSearchConfig(goal);
   const levelMod = getLevelSearchModifier(level);
   const moduleTitle = module?.title || "";
   const anchorTerms = (module?.anchor_terms || []).slice(0, 3).join(" ");
   const objectiveTerms = (module?.learning_objectives || []).slice(0, 1).join(" ");
+  const certMod = certificationIntent ? "certification objective" : "";
 
   const queries = dedupeQueries([
-    `${moduleTitle} ${topic} ${anchorTerms} ${config.queryModifiers[0] || "explained"} ${levelMod}`,
-    `${moduleTitle} ${topic} ${objectiveTerms} ${config.queryModifiers[1] || "tutorial"}`,
-    `${moduleTitle} ${topic} ${config.queryModifiers[2] || "guide"}`,
+    `${moduleTitle} ${topic} ${anchorTerms} ${config.queryModifiers[0] || "explained"} ${levelMod} ${config.semanticHint}`,
+    `${moduleTitle} ${topic} ${objectiveTerms} ${config.queryModifiers[1] || "tutorial"} ${certMod}`,
+    `${moduleTitle} ${topic} ${config.queryModifiers[2] || "guide"} direct learning resource`,
   ]);
 
   const promises: Promise<any>[] = [];
@@ -290,6 +310,7 @@ function mergeAndDeduplicate(topicAnchors: { videos: SerperVideoResult[]; web: S
     if (!w.link) return;
     if (w.link.includes("youtube.com/watch") || w.link.includes("youtu.be/")) return;
     if (map.has(w.link)) return;
+    const listingLike = looksLikeListingPage(w.link, w.title || "", w.snippet || "");
     map.set(w.link, {
       title: w.title || "Learning resource",
       url: w.link,
@@ -297,6 +318,7 @@ function mergeAndDeduplicate(topicAnchors: { videos: SerperVideoResult[]; web: S
       estimated_minutes: estimateArticleMinutes(w.snippet || ""),
       description: w.snippet || `Resource for ${moduleTitle}`,
       score: 0,
+      listing_penalty: listingLike ? 20 : 0,
     });
   };
 
@@ -338,25 +360,40 @@ function scoreCandidate(
     if (!hasAnchor) return -1;
   }
 
-  let score = Math.round(sim * 60);
-  if (goal === "conceptual" && (c.type === "video" || c.type === "documentation")) score += 10;
-  if (goal === "hands_on" && (c.type === "tutorial" || c.type === "practice")) score += 10;
-  if (goal === "quick_overview" && c.estimated_minutes <= 20) score += 10;
-  if (goal === "deep_mastery" && c.estimated_minutes >= 20) score += 10;
+  const topicFit = Math.round(sim * 35);
+  let goalFit = 10;
+  if (goal === "conceptual" && (c.type === "video" || c.type === "documentation" || c.type === "article")) goalFit = 20;
+  if (goal === "hands_on" && (c.type === "tutorial" || c.type === "practice" || c.type === "video")) goalFit = 20;
+  if (goal === "quick_overview" && c.estimated_minutes <= 25) goalFit = 20;
+  if (goal === "deep_mastery" && c.estimated_minutes >= 20) goalFit = 20;
+
+  let levelFit = 8;
   const titleLower = c.title.toLowerCase();
-  if (level === "beginner" && /beginner|intro|basic|fundamental|getting started/.test(titleLower)) score += 8;
-  if (level === "intermediate" && /intermediate|practical|pattern|use case/.test(titleLower)) score += 8;
-  if (level === "advanced" && /advanced|deep|expert|optimization|architecture/.test(titleLower)) score += 8;
-  if (c.estimated_minutes > moduleMinutes * 2) score -= 6;
+  if (level === "beginner" && /beginner|intro|basic|fundamental|getting started/.test(titleLower)) levelFit = 15;
+  if (level === "intermediate" && /intermediate|practical|pattern|use case/.test(titleLower)) levelFit = 15;
+  if (level === "advanced" && /advanced|deep|expert|optimization|architecture/.test(titleLower)) levelFit = 15;
+
+  let timeFit = 15;
+  if (c.estimated_minutes > moduleMinutes * 1.2) timeFit = 6;
+  if (c.estimated_minutes > moduleMinutes * 2) timeFit = 0;
+
+  let qualityFit = looksLikeListingPage(c.url, c.title, c.description) ? 6 : 12;
+  if (/freecodecamp|coursera|edx|learn.microsoft.com|aws|cloud\.google/i.test(c.url)) qualityFit = 15;
 
   if (goal === "hands_on" && preferredStack) {
     const mentioned = detectMentionedStacks(`${c.title} ${c.description}`);
     if (mentioned.length > 0) {
-      if (mentioned.includes(preferredStack)) score += 10;
-      else score -= 25;
+      if (mentioned.includes(preferredStack)) qualityFit = Math.min(qualityFit + 2, 15);
+      else qualityFit = Math.max(qualityFit - 8, 0);
     }
   }
 
+  if (detectCertificationIntent(`${topic} ${mod.title || ""}`) && /certification|exam|associate|professional/i.test(titleLower)) {
+    qualityFit = Math.min(qualityFit + 2, 15);
+  }
+
+  let score = topicFit + goalFit + levelFit + timeFit + qualityFit;
+  score -= c.listing_penalty || 0;
   return Math.max(0, Math.min(score, 100));
 }
 
@@ -372,13 +409,14 @@ async function refreshResourcesForAdaptedRoadmap(
 ): Promise<void> {
   if (!serperKey || !roadmap?.modules?.length) return;
   const modules = roadmap.modules || [];
-  const topicAnchors = await fetchTopicAnchors(topic, level, goal, serperKey);
+  const certificationIntent = detectCertificationIntent(topic);
+  const topicAnchors = await fetchTopicAnchors(topic, level, goal, certificationIntent, serperKey);
   const preferredStack = goal === "hands_on" ? inferPreferredStack(topic, modules) : null;
 
   const moduleResults = await Promise.all(
     modules.map((mod: any) => completedModuleIds.has(mod.id)
       ? Promise.resolve({ videos: [], web: [] })
-      : fetchModuleResults(mod, topic, level, goal, serperKey))
+      : fetchModuleResults(mod, topic, level, goal, certificationIntent, serperKey))
   );
 
   const usedUrls = new Set<string>();
@@ -437,6 +475,47 @@ async function refreshResourcesForAdaptedRoadmap(
       if (shortest) {
         selected.push(shortest);
         moduleTotal = shortest.estimated_minutes;
+      }
+    }
+
+    // Soft diversity rule: add one strong video when feasible.
+    if (!selected.some(r => r.type === "video")) {
+      const videoCandidate = scored.find(c => {
+        const normalized = c.url.split("&")[0];
+        const videoId = extractYouTubeVideoId(normalized);
+        if (c.type !== "video") return false;
+        if (usedUrls.has(normalized)) return false;
+        if (videoId && usedVideoIds.has(videoId)) return false;
+        if (moduleTotal + c.estimated_minutes > moduleBudgetCap) return false;
+        if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes) return false;
+        return true;
+      });
+      if (videoCandidate) {
+        selected.push(videoCandidate);
+        moduleTotal += videoCandidate.estimated_minutes;
+        const normalized = videoCandidate.url.split("&")[0];
+        usedUrls.add(normalized);
+        const videoId = extractYouTubeVideoId(normalized);
+        if (videoId) usedVideoIds.add(videoId);
+      }
+    }
+
+    // Coverage repair for major mismatch: fill until 60% of module time if possible.
+    const coverageTarget = moduleMinutes * 0.6;
+    if (moduleTotal < coverageTarget) {
+      for (const c of scored) {
+        if (selected.some(s => s.url === c.url)) continue;
+        const normalized = c.url.split("&")[0];
+        const videoId = extractYouTubeVideoId(normalized);
+        if (usedUrls.has(normalized)) continue;
+        if (videoId && usedVideoIds.has(videoId)) continue;
+        if (moduleTotal + c.estimated_minutes > moduleBudgetCap) continue;
+        if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes) continue;
+        selected.push(c);
+        moduleTotal += c.estimated_minutes;
+        usedUrls.add(normalized);
+        if (videoId) usedVideoIds.add(videoId);
+        if (moduleTotal >= coverageTarget) break;
       }
     }
 

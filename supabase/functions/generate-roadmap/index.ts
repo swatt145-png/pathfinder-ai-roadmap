@@ -280,6 +280,80 @@ function computeSemanticSimilarity(text1: string, text2: string): number {
   return overlap / Math.min(words1.size, words2.size);
 }
 
+function detectCertificationIntent(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(certification|cert|exam|associate|professional|practitioner|architect)\b/i.test(lower);
+}
+
+function looksLikeListingPage(url: string, title: string, snippet: string): boolean {
+  const text = `${url} ${title} ${snippet}`.toLowerCase();
+  const listingSignals = [
+    "search",
+    "results",
+    "catalog",
+    "paths",
+    "certification path",
+    "course list",
+    "browse courses",
+  ];
+  let hits = 0;
+  for (const signal of listingSignals) {
+    if (text.includes(signal)) hits++;
+  }
+  return hits >= 2;
+}
+
+function getModuleBoundsFromTotalHours(totalHours: number): { min: number; max: number } {
+  if (totalHours <= 3) return { min: 1, max: 2 };
+  if (totalHours <= 8) return { min: 3, max: 4 };
+  if (totalHours <= 14) return { min: 4, max: 6 };
+  return { min: 5, max: 8 };
+}
+
+function normalizeModulePlan(roadmap: any, totalHours: number, daysInTimeline: number): void {
+  if (!roadmap || !Array.isArray(roadmap.modules) || roadmap.modules.length === 0) return;
+  const modules = roadmap.modules as any[];
+  const bounds = getModuleBoundsFromTotalHours(totalHours);
+  if (modules.length < bounds.min) {
+    console.log(`Module planner: keeping ${modules.length} modules (min target ${bounds.min}) to avoid artificial splitting.`);
+  }
+
+  while (modules.length > bounds.max) {
+    const idx = modules.length - 2;
+    const left = modules[idx];
+    const right = modules[idx + 1];
+    left.title = `${left.title} + ${right.title}`;
+    left.description = `${left.description || ""} ${right.description || ""}`.trim();
+    left.estimated_hours = Number(left.estimated_hours || 0) + Number(right.estimated_hours || 0);
+    left.day_start = Math.min(Number(left.day_start || 1), Number(right.day_start || 1));
+    left.day_end = Math.max(Number(left.day_end || left.day_start || 1), Number(right.day_end || right.day_start || 1));
+    left.week = Math.ceil((Number(left.day_start || 1)) / 7);
+    left.learning_objectives = [...new Set([...(left.learning_objectives || []), ...(right.learning_objectives || [])])].slice(0, 8);
+    left.prerequisites = [...new Set([...(left.prerequisites || []), ...(right.prerequisites || [])])].slice(0, 8);
+    left.quiz = [...(left.quiz || []), ...(right.quiz || [])].slice(0, 5);
+    left.anchor_terms = [...new Set([...(left.anchor_terms || []), ...(right.anchor_terms || [])])].slice(0, 8);
+    left.id = `mod_${idx + 1}`;
+    modules.splice(idx + 1, 1);
+  }
+
+  const sum = modules.reduce((acc, m) => acc + Number(m.estimated_hours || 0), 0);
+  const target = Math.max(totalHours * 0.85, 0.5);
+  const factor = sum > 0 ? target / sum : 1;
+  let consumedDays = 0;
+  for (let i = 0; i < modules.length; i++) {
+    const m = modules[i];
+    m.id = `mod_${i + 1}`;
+    m.estimated_hours = Math.max(0.5, Math.round((Number(m.estimated_hours || 1) * factor) * 10) / 10);
+    const remainingModules = modules.length - i;
+    const remainingDays = Math.max(daysInTimeline - consumedDays, remainingModules);
+    const span = Math.max(1, Math.floor(remainingDays / remainingModules));
+    m.day_start = consumedDays + 1;
+    m.day_end = Math.min(daysInTimeline, consumedDays + span);
+    m.week = Math.max(1, Math.ceil(m.day_start / 7));
+    consumedDays = m.day_end;
+  }
+}
+
 // ─── STAGE 4: Enhanced Hard Filter ───────────────────────────────────────────
 
 // 4.0: Basic disqualification (spam/garbage)
@@ -526,27 +600,42 @@ function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: numbe
 // ─── STAGE 6: Context Fit Scoring (Heuristic Fallback) ──────────────────────
 
 function computeContextFitScoreFallback(candidate: CandidateResource, ctx: ModuleContext, ytMeta?: YouTubeMetadata): number {
-  let score = 0;
   const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")} ${ctx.goal} ${ctx.level}`;
   const resourceText = `${candidate.title} ${candidate.description} ${candidate.channel || ""}`;
-  const similarity = computeSemanticSimilarity(moduleText, resourceText);
-  score += Math.round(similarity * 50);
-  if (ctx.goal === "conceptual" && (candidate.type === "video" || candidate.type === "documentation")) score += 10;
-  if (ctx.goal === "hands_on" && (candidate.type === "tutorial" || candidate.type === "practice")) score += 10;
-  if (ctx.goal === "quick_overview" && candidate.estimated_minutes <= 20) score += 8;
-  if (ctx.goal === "deep_mastery" && candidate.estimated_minutes >= 20) score += 8;
+  const topicFit = Math.round(computeSemanticSimilarity(moduleText, resourceText) * 35);
+  let goalFit = 0;
+  if (ctx.goal === "conceptual" && (candidate.type === "video" || candidate.type === "documentation" || candidate.type === "article")) goalFit = 20;
+  else if (ctx.goal === "hands_on" && (candidate.type === "tutorial" || candidate.type === "practice" || candidate.type === "video")) goalFit = 20;
+  else if (ctx.goal === "quick_overview" && candidate.estimated_minutes <= 25) goalFit = 20;
+  else if (ctx.goal === "deep_mastery" && candidate.estimated_minutes >= 20) goalFit = 20;
+  else goalFit = 10;
+
+  let levelFit = 8;
   const titleLower = candidate.title.toLowerCase();
-  if (ctx.level === "beginner" && /beginner|intro|basic|fundamental|getting started|what is/i.test(titleLower)) score += 8;
-  if (ctx.level === "intermediate" && /intermediate|practical|pattern|use case/i.test(titleLower)) score += 8;
-  if (ctx.level === "advanced" && /advanced|deep|expert|optimization|architecture/i.test(titleLower)) score += 8;
+  if (ctx.level === "beginner" && /beginner|intro|basic|fundamental|getting started|what is/i.test(titleLower)) levelFit = 15;
+  if (ctx.level === "intermediate" && /intermediate|practical|pattern|use case/i.test(titleLower)) levelFit = 15;
+  if (ctx.level === "advanced" && /advanced|deep|expert|optimization|architecture/i.test(titleLower)) levelFit = 15;
+
+  let timeFit = 15;
+  if (candidate.estimated_minutes > ctx.moduleMinutes * 1.2) timeFit = 6;
+  if (candidate.estimated_minutes > ctx.moduleMinutes * 2) timeFit = 0;
+
+  let qualityFit = 8;
+  if ((candidate.authority_score_norm || 0) >= 0.75) qualityFit = 15;
+  else if ((candidate.authority_score_norm || 0) >= 0.5) qualityFit = 12;
+  if (looksLikeListingPage(candidate.url, candidate.title, candidate.description)) qualityFit = Math.max(qualityFit - 8, 0);
+
   const goalChannels = GOAL_RESOURCES[ctx.goal]?.youtubeChannels || [];
   if (candidate.type === "video" && ytMeta) {
     const channelLower = ytMeta.channel.toLowerCase();
-    if (goalChannels.some(ch => channelLower.includes(ch))) score += 10;
+    if (goalChannels.some(ch => channelLower.includes(ch))) qualityFit = Math.min(qualityFit + 3, 15);
   }
-  if (candidate.estimated_minutes > ctx.moduleMinutes * 2) score -= 5;
+
+  const topicOrModuleCert = detectCertificationIntent(`${ctx.topic} ${ctx.moduleTitle}`);
+  if (topicOrModuleCert && /certification|exam|associate|professional/i.test(titleLower)) qualityFit = Math.min(qualityFit + 2, 15);
 
   // Apply scope penalty from Stage 4
+  let score = topicFit + goalFit + levelFit + timeFit + qualityFit;
   score -= (candidate.scope_penalty || 0);
 
   return Math.max(0, Math.min(score, 100));
@@ -872,20 +961,21 @@ interface GoalSearchConfig {
   queryModifiers: string[];
   videoCount: number;
   webCount: number;
+  semanticHint: string;
 }
 
 function getGoalSearchConfig(goal: string): GoalSearchConfig {
   switch (goal) {
     case "conceptual":
-      return { queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"], videoCount: 8, webCount: 6 };
+      return { queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"], videoCount: 8, webCount: 6, semanticHint: "mental model explained with examples" };
     case "hands_on":
-      return { queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"], videoCount: 6, webCount: 8 };
+      return { queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"], videoCount: 6, webCount: 8, semanticHint: "project based practical walkthrough" };
     case "quick_overview":
-      return { queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "essentials"], videoCount: 6, webCount: 4 };
+      return { queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "essentials"], videoCount: 6, webCount: 4, semanticHint: "high level summary key concepts" };
     case "deep_mastery":
-      return { queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "full course", "masterclass"], videoCount: 6, webCount: 8 };
+      return { queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "full course", "masterclass"], videoCount: 6, webCount: 8, semanticHint: "deep dive architecture and tradeoffs" };
     default:
-      return { queryModifiers: ["tutorial", "guide"], videoCount: 6, webCount: 6 };
+      return { queryModifiers: ["tutorial", "guide"], videoCount: 6, webCount: 6, semanticHint: "clear explanation practical relevance" };
   }
 }
 
@@ -902,6 +992,7 @@ async function fetchTopicAnchors(
   topic: string,
   level: string,
   goal: string,
+  certificationIntent: boolean,
   serperKey: string
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const normalizeQuery = (q: string) => q.replace(/\s+/g, " ").trim();
@@ -909,17 +1000,19 @@ async function fetchTopicAnchors(
   const levelMod = getLevelSearchModifier(level);
   const goalConfig = getGoalSearchConfig(goal);
   const goalMod = goalConfig.queryModifiers[0] || "";
+  const certMod = certificationIntent ? "certification exam guide" : "";
 
   const queries = dedupeQueries([
-    `${topic} ${goalMod} ${levelMod}`,
-    `${topic} tutorial complete guide`,
-    `${topic} full course best`,
+    `${topic} ${goalMod} ${levelMod} ${goalConfig.semanticHint}`,
+    `${topic} ${goalConfig.queryModifiers[1] || "guide"} practical examples ${levelMod}`,
+    `${topic} ${goalConfig.queryModifiers[2] || "overview"} ${certMod}`,
+    `${topic} direct tutorial lecture article`,
   ]);
 
   const promises: Promise<any>[] = [];
   for (const q of queries) {
-    promises.push(searchSerper(q, serperKey, "videos", 12));
-    promises.push(searchSerper(q, serperKey, "search", 8));
+    promises.push(searchSerper(q, serperKey, "videos", Math.max(goalConfig.videoCount, 8)));
+    promises.push(searchSerper(q, serperKey, "search", Math.max(goalConfig.webCount, 8)));
   }
 
   const results = await Promise.all(promises);
@@ -940,6 +1033,7 @@ async function fetchModuleResults(
   topic: string,
   level: string,
   goal: string,
+  certificationIntent: boolean,
   serperKey: string
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const normalizeQuery = (q: string) => q.replace(/\s+/g, " ").trim();
@@ -958,18 +1052,19 @@ async function fetchModuleResults(
   const config = getGoalSearchConfig(goal);
   const levelMod = getLevelSearchModifier(level);
   const goalRes = GOAL_RESOURCES[goal] || GOAL_RESOURCES["hands_on"];
+  const certMod = certificationIntent ? "certification objective" : "";
 
   const queries = dedupeQueries([
-    `${moduleTitle} ${topic} ${anchorTerms} ${config.queryModifiers[0] || "explained"} ${levelMod}`,
-    `${moduleTitle} ${topic} ${objectiveTerms} ${config.queryModifiers[1] || "tutorial"}`,
-    `${moduleTitle} ${topic} ${config.queryModifiers[2] || "guide"} ${levelMod}`,
+    `${moduleTitle} ${topic} ${anchorTerms} ${config.queryModifiers[0] || "explained"} ${levelMod} ${config.semanticHint}`,
+    `${moduleTitle} ${topic} ${objectiveTerms} ${config.queryModifiers[1] || "tutorial"} ${certMod}`,
+    `${moduleTitle} ${topic} ${config.queryModifiers[2] || "guide"} direct learning resource`,
     `${moduleTitle} ${topic} ${goalRes.siteFilters[0] || ""}`,
   ]);
 
   const promises: Promise<any>[] = [];
   for (const q of queries) {
-    promises.push(searchSerper(q, serperKey, "videos", 5));
-    promises.push(searchSerper(q, serperKey, "search", 4));
+    promises.push(searchSerper(q, serperKey, "videos", Math.max(config.videoCount - 1, 5)));
+    promises.push(searchSerper(q, serperKey, "search", Math.max(config.webCount - 1, 5)));
   }
 
   const results = await Promise.all(promises);
@@ -1024,6 +1119,7 @@ function mergeAndDeduplicate(
     if (urlMap.has(r.link)) {
       urlMap.get(r.link)!.appearances_count++;
     } else {
+      const listingLike = looksLikeListingPage(r.link, title, r.snippet || "");
       urlMap.set(r.link, {
         title, url: r.link,
         type: detectResourceType(r.link),
@@ -1032,6 +1128,7 @@ function mergeAndDeduplicate(
         appearances_count: 1,
         authority_score: 0,
         context_fit_score: 0,
+        scope_penalty: listingLike ? 20 : 0,
       });
     }
   }
@@ -1480,18 +1577,21 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
       throw new Error("AI returned malformed roadmap data. Please try again.");
     }
 
+    normalizeModulePlan(roadmap, totalHours, daysInTimeline);
+    const certificationIntent = detectCertificationIntent(topic);
+
     // ════════════════════════════════════════════════════════════════════════
     // STEP 2: STAGE 2A — Topic-Wide Anchor Retrieval
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2A: Fetching topic-wide anchors for "${topic}"...`);
-    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, SERPER_API_KEY);
+    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY);
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 3: STAGE 2B — Module-Specific Retrieval (parallelized)
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2B: Fetching module-specific results for ${roadmap.modules?.length || 0} modules...`);
     const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
-      fetchModuleResults(mod, topic, skill_level, effectiveGoal, SERPER_API_KEY)
+      fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY)
     );
     const allModuleResults = await Promise.all(moduleResultsPromises);
 
@@ -1728,6 +1828,41 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
         if (shortest) {
           budgetedResources.push(shortest);
           moduleTotal = shortest.estimated_minutes;
+        }
+      }
+
+      // Soft diversity rule: include at least one strong video when feasible.
+      const hasVideo = budgetedResources.some(r => r.type === "video");
+      if (!hasVideo) {
+        const candidateVideo = uniqueResources.find(c =>
+          c.type === "video" &&
+          !budgetedResources.some(r => r.url === c.url) &&
+          moduleTotal + c.estimated_minutes <= moduleBudgetCap &&
+          totalRoadmapMinutes + moduleTotal + c.estimated_minutes <= usableMinutes
+        );
+        if (candidateVideo) {
+          budgetedResources.push(candidateVideo);
+          moduleTotal += candidateVideo.estimated_minutes;
+        }
+      }
+
+      // Coverage repair: if resource time is below 60% of module time, keep filling with best remaining fits.
+      const coverageTarget = moduleMinutes * 0.6;
+      if (moduleTotal < coverageTarget) {
+        const recoveryPool = [...candidates]
+          .filter(c => !budgetedResources.some(b => b.url === c.url))
+          .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+
+        for (const c of recoveryPool) {
+          const normalized = c.url.split("&")[0];
+          const videoId = extractYouTubeVideoId(normalized);
+          if (usedResourceUrls.has(normalized)) continue;
+          if (videoId && usedVideoIds.has(videoId)) continue;
+          if (moduleTotal + c.estimated_minutes > moduleBudgetCap) continue;
+          if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes) continue;
+          budgetedResources.push(c);
+          moduleTotal += c.estimated_minutes;
+          if (moduleTotal >= coverageTarget) break;
         }
       }
 
