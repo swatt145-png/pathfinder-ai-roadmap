@@ -340,6 +340,45 @@ function looksLikeListingPage(url: string, title: string, snippet: string): bool
   return hits >= 2;
 }
 
+function isDiscussionOrMetaResource(url: string, title: string, snippet: string): boolean {
+  const combined = `${title} ${snippet}`.toLowerCase();
+  const urlLower = url.toLowerCase();
+  const discussionSignals = [
+    "what are the best",
+    "best resources",
+    "where to start",
+    "how do i start",
+    "any recommendations",
+    "recommend me",
+    "which course should",
+    "is this worth it",
+    "question",
+    "discussion",
+    "thread",
+  ];
+  const educationalSignals = [
+    "tutorial",
+    "guide",
+    "lesson",
+    "course",
+    "documentation",
+    "docs",
+    "walkthrough",
+    "lecture",
+    "reference",
+    "syllabus",
+  ];
+  const hasDiscussionSignal = discussionSignals.some(s => combined.includes(s));
+  const hasEducationalSignal = educationalSignals.some(s => combined.includes(s));
+  const isQuestionTitle = title.trim().endsWith("?") || /\b(what|how|which|where|why)\b/i.test(title);
+  const isCommunityPath = /\/(r\/|questions?|discussion|threads?|forum|community)\b/.test(urlLower);
+
+  if (isCommunityPath && hasDiscussionSignal) return true;
+  if (isQuestionTitle && hasDiscussionSignal && !hasEducationalSignal) return true;
+  if (urlLower.includes("reddit.com") && !hasEducationalSignal) return true;
+  return false;
+}
+
 function getModuleBoundsFromTotalHours(totalHours: number): { min: number; max: number } {
   if (totalHours <= 3) return { min: 1, max: 2 };
   if (totalHours <= 8) return { min: 3, max: 4 };
@@ -388,6 +427,30 @@ function normalizeModulePlan(roadmap: any, totalHours: number, daysInTimeline: n
     m.day_end = Math.min(daysInTimeline, consumedDays + span);
     m.week = Math.max(1, Math.ceil(m.day_start / 7));
     consumedDays = m.day_end;
+  }
+}
+
+function enforceModuleTimeWindowConsistency(modules: any[], hoursPerDay: number): void {
+  if (!Array.isArray(modules) || modules.length === 0) return;
+  const safeHoursPerDay = Math.max(Number(hoursPerDay || 0), 0.1);
+
+  for (const mod of modules) {
+    const dayStart = Math.max(1, Number(mod.day_start || 1));
+    const dayEnd = Math.max(dayStart, Number(mod.day_end || dayStart));
+    const moduleDays = Math.max(1, dayEnd - dayStart + 1);
+    const windowHours = moduleDays * safeHoursPerDay;
+    const capHours = Math.max(0.5, Math.round(windowHours * 10) / 10);
+    const est = Number(mod.estimated_hours || 0.5);
+
+    if (est > capHours * 1.05) {
+      mod.estimated_hours = capHours;
+    } else if (est < 0.5) {
+      mod.estimated_hours = 0.5;
+    }
+
+    mod.day_start = dayStart;
+    mod.day_end = dayEnd;
+    mod.week = Math.max(1, Math.ceil(dayStart / 7));
   }
 }
 
@@ -491,32 +554,47 @@ function applyStage4Filter(
   ctx: ModuleContext
 ): CandidateResource[] {
   const anchors = ctx.anchorTerms || [];
-  const filtered: CandidateResource[] = [];
+  const strictFiltered: CandidateResource[] = [];
+  const relaxedPool: CandidateResource[] = [];
+  const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
 
   for (const c of candidates) {
     // 4.0: Basic spam check (already done in mergeAndDeduplicate, but double-check)
     if (isDisqualified(c.title, c.url)) continue;
 
     // 4.1: Embedding similarity threshold
-    const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
     const resourceText = `${c.title} ${c.description} ${c.channel || ""}`;
     const similarity = computeSemanticSimilarity(moduleText, resourceText);
-    if (similarity < 0.05) continue;
+    if (similarity < 0.03) continue;
+
+    // Keep a relaxed pool to prevent starvation when anchors are too narrow/noisy.
+    const penalty = computeScopePenalty(c, ctx);
+    c.scope_penalty = penalty;
+    relaxedPool.push(c);
 
     // 4.2: Anchor precision gate — hard reject if no anchors match
     if (!passesAnchorGate(c, anchors)) {
       continue;
     }
-
-    // 4.3: Scope penalty (applied as negative score adjustment, not hard reject)
-    const penalty = computeScopePenalty(c, ctx);
-    c.scope_penalty = penalty;
-
-    filtered.push(c);
+    strictFiltered.push(c);
   }
 
-  console.log(`Stage 4: ${candidates.length} → ${filtered.length} candidates for "${ctx.moduleTitle}" (${anchors.length} anchors)`);
-  return filtered;
+  // If strict anchor gate leaves too little headroom, blend best relaxed candidates.
+  const minTarget = Math.min(8, Math.max(4, Math.floor(ctx.moduleMinutes / 35)));
+  if (strictFiltered.length >= minTarget || relaxedPool.length <= strictFiltered.length) {
+    console.log(`Stage 4: ${candidates.length} → ${strictFiltered.length} candidates for "${ctx.moduleTitle}" (${anchors.length} anchors, strict)`);
+    return strictFiltered;
+  }
+
+  const merged = [...strictFiltered];
+  for (const c of relaxedPool) {
+    if (merged.length >= minTarget) break;
+    if (merged.some(m => m.url === c.url)) continue;
+    merged.push(c);
+  }
+
+  console.log(`Stage 4: ${candidates.length} → ${strictFiltered.length} strict, expanded to ${merged.length} for "${ctx.moduleTitle}"`);
+  return merged;
 }
 
 // ─── STAGE 5: Light Authority Scoring ────────────────────────────────────────
@@ -604,6 +682,8 @@ function isGarbage(candidate: CandidateResource): boolean {
   if (looksLikeListingPage(candidate.url, candidate.title, candidate.description)) return true;
   // Catalog/search style titles are almost always poor module resources.
   if (/\b(search results|course catalog|browse courses|learning paths?)\b/i.test(titleLower)) return true;
+  // Discussion/recommendation threads are not direct instructional resources.
+  if (isDiscussionOrMetaResource(candidate.url, candidate.title, candidate.description)) return true;
   // Suspicious URL patterns
   if (/\.(xyz|tk|ml|ga|cf)\//.test(urlLower)) return true;
   // Empty or suspiciously short descriptions that suggest thin content
@@ -1136,6 +1216,7 @@ function mergeAndDeduplicate(
     const normalizedUrl = v.link.split("&")[0];
     if (!isAllowedResourceUrl(normalizedUrl)) return;
     const title = v.title || "Video Tutorial";
+    if (isDiscussionOrMetaResource(normalizedUrl, title, "")) return;
     if (isDisqualified(title, normalizedUrl)) return;
     const mins = parseDurationToMinutes(v.duration);
 
@@ -1157,6 +1238,7 @@ function mergeAndDeduplicate(
     if (!r.link) return;
     if (!isAllowedResourceUrl(r.link)) return;
     const title = r.title || "Learning Resource";
+    if (isDiscussionOrMetaResource(r.link, title, r.snippet || "")) return;
     if (isDisqualified(title, r.link)) return;
     if (r.link.includes("youtube.com/watch") || r.link.includes("youtu.be/")) return;
 
@@ -1199,6 +1281,7 @@ function enrichCandidatesWithYouTube(
     if (!videoId) return true;
     const meta = ytMap.get(videoId);
     if (!meta) return false;
+    if (isDiscussionOrMetaResource(c.url, meta.title || c.title, "")) return false;
 
     // Enrich
     c.title = meta.title || c.title;
@@ -1289,6 +1372,7 @@ Rules:
 - Avoid redundancy — don't pick 3 similar videos
 - Time is a HARD FEASIBILITY CONSTRAINT, NOT a ranking bonus
 - If a single long high-quality resource fits the module budget perfectly, prefer it over multiple short ones
+- Exclude discussion/recommendation threads (for example "best resources to learn X" posts)
 
 === GLOBAL CONSTRAINTS (MANDATORY) ===
 
@@ -1623,6 +1707,12 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
     }
 
     normalizeModulePlan(roadmap, totalHours, daysInTimeline);
+    enforceModuleTimeWindowConsistency(roadmap.modules || [], effectiveHoursPerDay);
+    if (Array.isArray(roadmap.modules)) {
+      roadmap.total_hours = Math.round(
+        roadmap.modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10
+      ) / 10;
+    }
     const certificationIntent = detectCertificationIntent(topic);
 
     // ════════════════════════════════════════════════════════════════════════
@@ -1960,7 +2050,9 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
       }
 
       const cleanedResources = budgetedResources.filter(c =>
-        isAllowedResourceUrl(c.url) && !looksLikeListingPage(c.url, c.title, c.description)
+        isAllowedResourceUrl(c.url) &&
+        !looksLikeListingPage(c.url, c.title, c.description) &&
+        !isDiscussionOrMetaResource(c.url, c.title, c.description)
       );
 
       if (cleanedResources.length > 0) {

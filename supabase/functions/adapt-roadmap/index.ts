@@ -214,6 +214,70 @@ function looksLikeListingPage(url: string, title: string, snippet: string): bool
   return hit >= 2;
 }
 
+function isDiscussionOrMetaResource(url: string, title: string, snippet: string): boolean {
+  const combined = `${title} ${snippet}`.toLowerCase();
+  const urlLower = url.toLowerCase();
+  const discussionSignals = [
+    "what are the best",
+    "best resources",
+    "where to start",
+    "how do i start",
+    "any recommendations",
+    "recommend me",
+    "which course should",
+    "question",
+    "discussion",
+    "thread",
+  ];
+  const educationalSignals = [
+    "tutorial",
+    "guide",
+    "lesson",
+    "course",
+    "documentation",
+    "docs",
+    "walkthrough",
+    "lecture",
+    "reference",
+  ];
+  const hasDiscussionSignal = discussionSignals.some(s => combined.includes(s));
+  const hasEducationalSignal = educationalSignals.some(s => combined.includes(s));
+  const isQuestionTitle = title.trim().endsWith("?") || /\b(what|how|which|where|why)\b/i.test(title);
+  const isCommunityPath = /\/(r\/|questions?|discussion|threads?|forum|community)\b/.test(urlLower);
+
+  if (isCommunityPath && hasDiscussionSignal) return true;
+  if (isQuestionTitle && hasDiscussionSignal && !hasEducationalSignal) return true;
+  if (urlLower.includes("reddit.com") && !hasEducationalSignal) return true;
+  return false;
+}
+
+function enforceModuleTimeWindowConsistency(
+  modules: any[],
+  hoursPerDay: number,
+  skipModuleIds: Set<string>
+): void {
+  if (!Array.isArray(modules) || modules.length === 0) return;
+  const safeHoursPerDay = Math.max(Number(hoursPerDay || 0), 0.1);
+
+  for (const mod of modules) {
+    if (skipModuleIds.has(String(mod.id || ""))) continue;
+
+    const dayStart = Math.max(1, Number(mod.day_start || 1));
+    const dayEnd = Math.max(dayStart, Number(mod.day_end || dayStart));
+    const moduleDays = Math.max(1, dayEnd - dayStart + 1);
+    const windowHours = moduleDays * safeHoursPerDay;
+    const capHours = Math.max(0.5, Math.round(windowHours * 10) / 10);
+    const est = Number(mod.estimated_hours || 0.5);
+
+    if (est > capHours * 1.05) mod.estimated_hours = capHours;
+    else if (est < 0.5) mod.estimated_hours = 0.5;
+
+    mod.day_start = dayStart;
+    mod.day_end = dayEnd;
+    mod.week = Math.max(1, Math.ceil(dayStart / 7));
+  }
+}
+
 function getGoalSearchConfig(goal: string): { queryModifiers: string[]; semanticHint: string } {
   switch (goal) {
     case "conceptual":
@@ -316,6 +380,7 @@ function mergeAndDeduplicate(topicAnchors: { videos: SerperVideoResult[]; web: S
     if (!v.link) return;
     const normalizedUrl = v.link.split("&")[0];
     if (!isAllowedResourceUrl(normalizedUrl)) return;
+    if (isDiscussionOrMetaResource(normalizedUrl, v.title || "Video tutorial", "")) return;
     if (map.has(normalizedUrl)) return;
     map.set(normalizedUrl, {
       title: v.title || "Video tutorial",
@@ -330,6 +395,7 @@ function mergeAndDeduplicate(topicAnchors: { videos: SerperVideoResult[]; web: S
   const pushWeb = (w: SerperWebResult) => {
     if (!w.link) return;
     if (!isAllowedResourceUrl(w.link)) return;
+    if (isDiscussionOrMetaResource(w.link, w.title || "Learning resource", w.snippet || "")) return;
     if (w.link.includes("youtube.com/watch") || w.link.includes("youtu.be/")) return;
     if (map.has(w.link)) return;
     const listingLike = looksLikeListingPage(w.link, w.title || "", w.snippet || "");
@@ -371,15 +437,21 @@ function scoreCandidate(
   anchors: string[],
   preferredStack: string | null
 ): number {
+  if (isDiscussionOrMetaResource(c.url, c.title, c.description)) return -1;
   const moduleText = `${topic} ${mod.title || ""} ${mod.description || ""} ${((mod.learning_objectives || []) as string[]).join(" ")} ${goal} ${level}`;
   const resourceText = `${c.title} ${c.description}`;
   const sim = computeSemanticSimilarity(moduleText, resourceText);
-  if (sim < 0.05) return -1;
+  if (sim < 0.03) return -1;
 
   if (anchors.length > 0) {
     const text = resourceText.toLowerCase();
     const hasAnchor = anchors.some(a => text.includes(a));
-    if (!hasAnchor) return -1;
+    if (!hasAnchor) {
+      // Soft-penalize anchor misses instead of hard reject to avoid starving modules.
+      // Semantic relevance still determines eligibility.
+      // Penalty applied later in final score.
+      c.listing_penalty = (c.listing_penalty || 0) + 12;
+    }
   }
 
   const topicFit = Math.round(sim * 35);
@@ -542,7 +614,9 @@ async function refreshResourcesForAdaptedRoadmap(
     }
 
     const cleaned = selected.filter(c =>
-      isAllowedResourceUrl(c.url) && !looksLikeListingPage(c.url, c.title, c.description)
+      isAllowedResourceUrl(c.url) &&
+      !looksLikeListingPage(c.url, c.title, c.description) &&
+      !isDiscussionOrMetaResource(c.url, c.title, c.description)
     );
     mod.resources = cleaned.map(c => ({
       title: c.title,
@@ -609,6 +683,9 @@ async function enrichRoadmapYouTube(roadmap: any, apiKey: string): Promise<void>
       if (!meta) return false;
       if (!isVideoRelevant(meta.title, meta.channel, mod.title, topic)) {
         console.warn(`Excluding off-topic video: "${meta.title}" by ${meta.channel}`);
+        return false;
+      }
+      if (isDiscussionOrMetaResource(r.url, meta.title || r.title || "", "")) {
         return false;
       }
       r.title = meta.title || r.title;
@@ -776,6 +853,16 @@ Return ONLY valid JSON:
     if (result.options) {
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
+          enforceModuleTimeWindowConsistency(
+            opt.updated_roadmap.modules || [],
+            hrsPerDay,
+            completedModuleIdSet
+          );
+          if (Array.isArray(opt.updated_roadmap.modules)) {
+            opt.updated_roadmap.total_hours = Math.round(
+              opt.updated_roadmap.modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10
+            ) / 10;
+          }
           await refreshResourcesForAdaptedRoadmap(
             opt.updated_roadmap,
             completedModuleIdSet,
