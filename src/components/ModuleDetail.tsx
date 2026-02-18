@@ -167,6 +167,12 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                     className="flex-1 min-w-0 hover:opacity-80 transition-opacity"
                   >
                     <p className={`text-base font-heading font-semibold flex items-center gap-2 ${isChecked ? "line-through" : ""}`}>
+                      {(r as any).is_continuation && (
+                        <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded font-normal shrink-0">Continue watching</span>
+                      )}
+                      {(r as any).span_plan && !(r as any).is_continuation && (
+                        <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded font-normal shrink-0">Spans modules</span>
+                      )}
                       {r.title} <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     </p>
                     {(r as any).channel && (r as any).view_count ? (

@@ -1,9 +1,19 @@
+export interface ResourceSegment {
+  module_id: string;
+  module_title: string;
+  start_minute: number;
+  end_minute: number;
+}
+
 export interface Resource {
   title: string;
   url: string;
   type: "video" | "article" | "documentation" | "tutorial" | "practice";
   estimated_minutes: number;
   description: string;
+  span_plan?: ResourceSegment[];
+  is_continuation?: boolean;
+  continuation_of?: string;
 }
 
 export interface QuizQuestion {
