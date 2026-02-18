@@ -323,29 +323,9 @@ function computeContextFitScore(candidate: CandidateResource, ctx: ModuleContext
   return Math.max(0, Math.min(score, 100));
 }
 
-// ─── STAGE 7: Clustering & Diversity ─────────────────────────────────────────
-
-interface GoalDiversityConfig {
-  videos: number;
-  articles: number; // includes docs, tutorials
-  practice: number;
-  maxPerModule: number;
-  minPerModule: number;
-}
-
-function getGoalDiversity(goal: string): GoalDiversityConfig {
-  switch (goal) {
-    case "conceptual": return { videos: 2, articles: 2, practice: 0, maxPerModule: 5, minPerModule: 2 };
-    case "hands_on": return { videos: 1, articles: 2, practice: 1, maxPerModule: 5, minPerModule: 2 };
-    case "quick_overview": return { videos: 1, articles: 1, practice: 0, maxPerModule: 3, minPerModule: 1 };
-    case "deep_mastery": return { videos: 2, articles: 1, practice: 1, maxPerModule: 5, minPerModule: 2 };
-    default: return { videos: 1, articles: 2, practice: 0, maxPerModule: 5, minPerModule: 2 };
-  }
-}
+// ─── STAGE 7: Clustering & Diversity (FLEXIBLE) ─────────────────────────────
 
 function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext): CandidateResource[] {
-  const diversity = getGoalDiversity(ctx.goal);
-  
   // Sort by combined score (authority + context fit)
   const sorted = [...candidates].sort((a, b) => 
     (b.authority_score + b.context_fit_score) - (a.authority_score + a.context_fit_score)
@@ -356,42 +336,30 @@ function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext
   for (const c of sorted) {
     const isDuplicate = deduplicated.some(existing => {
       const sim = computeSemanticSimilarity(existing.title, c.title);
-      return sim > 0.7; // 70%+ title overlap = near duplicate
+      return sim > 0.7;
     });
     if (!isDuplicate) deduplicated.push(c);
   }
 
-  // Select with diversity constraints
+  // FLEXIBLE: 1-5 resources per module based on time budget
+  const maxResources = 5;
   const selected: CandidateResource[] = [];
-  const typeCounts = { video: 0, article: 0, practice: 0 };
   let totalMinutes = 0;
+  const dailyCapMinutes = ctx.moduleMinutes * 1.1; // 10% overflow allowed
 
   for (const c of deduplicated) {
-    if (selected.length >= diversity.maxPerModule) break;
+    if (selected.length >= maxResources) break;
 
-    const typeGroup = c.type === "video" ? "video" : 
-      c.type === "practice" ? "practice" : "article";
-    
-    const maxForType = typeGroup === "video" ? diversity.videos :
-      typeGroup === "practice" ? diversity.practice : diversity.articles;
-
-    if (typeCounts[typeGroup] >= maxForType + 1) continue;
-
-    // Time constraint: allow first resource even if exceeds, cap subsequent
-    if (selected.length > 0 && totalMinutes + c.estimated_minutes > ctx.moduleMinutes * 1.2) continue;
+    // A resource is feasible if it fits within the module's daily cap
+    if (selected.length > 0 && totalMinutes + c.estimated_minutes > dailyCapMinutes) continue;
 
     selected.push(c);
     totalMinutes += c.estimated_minutes;
-    typeCounts[typeGroup]++;
   }
 
-  // Fill to minimum
-  if (selected.length < diversity.minPerModule) {
-    for (const c of deduplicated) {
-      if (selected.includes(c)) continue;
-      if (selected.length >= diversity.minPerModule) break;
-      selected.push(c);
-    }
+  // Minimum 1 resource per module — always include at least the top candidate
+  if (selected.length === 0 && deduplicated.length > 0) {
+    selected.push(deduplicated[0]);
   }
 
   return selected;
@@ -666,7 +634,7 @@ async function batchRerank(
     });
   }
 
-  const rerankerPrompt = `You are an Expert Curriculum Curator. Given a learner profile and module candidates, select the best 3-5 resources per module.
+  const rerankerPrompt = `You are an Expert Curriculum Curator. Given a learner profile and module candidates, select the best 1-5 resources per module. The number of resources per module is VARIABLE — use fewer if time is tight or if one excellent resource covers everything.
 
 Learner profile:
 - Topic: ${topic}
@@ -674,27 +642,22 @@ Learner profile:
 - Level: ${level}
 
 Rules:
+- A module CAN have just 1 resource if it's excellent and fits the time budget perfectly.
+- Do NOT add filler resources just to reach a count. Each must add unique value.
 - Prefer canonical, widely trusted sources (high authority_score)
 - Avoid low-view unknown creators unless uniquely valuable
 - Avoid redundancy — don't pick 3 similar videos
-- Time is a constraint (resources must fit module budget), NOT a ranking boost
-- Your selections override heuristic ordering
+- Time is a HARD FEASIBILITY CONSTRAINT, NOT a ranking bonus
+- If a single long high-quality resource fits the module budget perfectly, prefer it over multiple short ones
 
 === GLOBAL CONSTRAINTS (MANDATORY) ===
 
-1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules. Do NOT select the same URL for multiple modules.
+1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules.
+2. HARD TIME BUDGET: Each module's total resource minutes must not exceed its budget. Remove lowest-value resource if over budget.
+3. STACK CONSISTENCY: If user did not specify a language/framework — for conceptual goals prefer tool-agnostic resources; for hands-on goals pick ONE consistent stack.
+4. COVERAGE BEFORE REDUNDANCY: Maximize coverage of module learning objectives. Never select multiple resources teaching identical content from the same channel.
 
-2. HARD TIME BUDGET: Each module's total resource minutes must not exceed its budget. Remove lowest-value resource if over budget. Never exceed total roadmap time.
-
-3. STACK CONSISTENCY: If user did not specify a language/framework:
-   - For conceptual goals: prefer tool-agnostic resources
-   - For hands-on goals: pick ONE consistent stack across all modules, do NOT mix Python/JS/no-code randomly
-
-4. SHORT TIMELINE COMPRESSION: If total time < 5 hours, prefer fewer but stronger resources. Avoid padding with small redundant videos.
-
-5. COVERAGE BEFORE REDUNDANCY: Maximize coverage of module learning objectives. Never select multiple resources teaching identical content from the same channel.
-
-For each module, return the URLs of your selected resources and a 1-sentence "why_selected" for each.
+For each module, return the URLs of your selected resources (1-5) and a 1-sentence "why_selected" for each.
 
 Modules and candidates:
 ${JSON.stringify(rerankerModules, null, 1)}
@@ -768,6 +731,9 @@ function buildSystemPrompt(totalHours: number, learningGoal: string, skillLevel:
   const levelBlock = getLevelPromptBlock(skillLevel);
   const interactionBlock = getInteractionBlock(learningGoal, skillLevel);
 
+  const totalMinutes = totalHours * 60;
+  const usableMinutes = Math.floor(totalMinutes * 0.85);
+
   return `You are Pathfinder, an expert learning curriculum designer. You create personalized, structured, and realistic learning roadmaps.
 
 PRIORITY 1 — TOPIC UNDERSTANDING (do this FIRST):
@@ -789,22 +755,35 @@ ${interactionBlock}
 
 PRIORITY 4 — TIME CONSTRAINTS:
 - Total available hours: ${totalHours}
+- Usable minutes (85% of total): ${usableMinutes}
 - NEVER assign more total hours than available. If the roadmap would exceed available time, CUT content from the bottom (advanced/optional) not the top (fundamentals).
-- Build in a 10-15% buffer. Plan for ~${Math.round(totalHours * 0.88)} hours of content.
 - Each module's estimated_hours must be realistic and proportional.
 - If not enough time for full topic coverage, be honest in the summary about what's covered and what would need more time.
 
+=== FLEXIBLE STRUCTURE RULES (MANDATORY) ===
+
+1. MODULE COUNT IS VARIABLE — adapt to total time and topic complexity:
+   - If total time ≤ 2 hours: default to 1 module, unless 2 coherent chunks naturally emerge.
+   - If total time is small, do NOT split into many modules just for structure.
+   - For longer timelines, modules can be "day chunks" aligned to daily study budget.
+
+2. RESOURCES PER MODULE IS VARIABLE (1-5):
+   - A module can have 1 resource if that single resource is excellent and fits the time budget.
+   - Do NOT add extra resources as filler. Each must add unique value.
+   - Resources will be fetched separately — leave resources as empty arrays.
+
+3. SHORT TIMELINE COMPRESSION: If total time < 5 hours, reduce module count, increase density, avoid over-fragmentation and repeated introductory content. Prefer fewer, stronger anchors.
+
 === GLOBAL ROADMAP CONSTRAINTS (MANDATORY) ===
 
-1. RESOURCE UNIQUENESS: No resource URL may appear in more than one module. Each module must have distinct resources.
-2. TIME BUDGET: total_minutes = weeks × 7 × hours_per_day × 60; usable = total_minutes × 0.85. Sum of all module estimated_hours must not exceed usable time. No module may exceed its budget by >5%.
+1. RESOURCE UNIQUENESS: No resource URL may appear in more than one module.
+2. TIME BUDGET: Sum of all module estimated_hours must not exceed ${usableMinutes} minutes. No module may exceed its budget by >5%.
 3. STACK CONSISTENCY: If user does not specify a language/framework/tool — for conceptual goals use tool-agnostic resources; for hands-on goals declare ONE stack and use it consistently across all modules.
-4. SHORT TIMELINE COMPRESSION: If total time < 5 hours, reduce module count, increase density, avoid over-fragmentation and repeated introductory content.
-5. COVERAGE BEFORE REDUNDANCY: Maximize coverage of learning objectives. Never have two modules teaching identical content.
-6. FINAL VALIDATION: Before outputting JSON, verify: no duplicate resources, all modules respect time budget, stack consistency, each module has 3-5 quiz questions.
+4. COVERAGE BEFORE REDUNDANCY: Maximize coverage of learning objectives. Never have two modules teaching identical content.
+5. FINAL VALIDATION: Before outputting JSON, verify: no duplicate resources, all modules respect time budget, stack consistency, each module has 3-5 quiz questions.
 
 RULES:
-- Break the topic into sequential modules. Module count depends on learning goal.
+- Break the topic into sequential modules. Module count is VARIABLE based on time and complexity.
 - Each module must logically build on the previous one.
 - DO NOT include any resources or URLs — leave resources as empty arrays. Resources will be fetched separately.
 - Generate 3-5 multiple-choice quiz questions per module that test understanding appropriate to the learning goal and level.
@@ -817,23 +796,23 @@ function getGoalPromptBlock(goal: string): string {
   switch (goal) {
     case "conceptual": return `CONCEPTUAL learning goal selected.
 - Focus on "why" and "how it works" — mental models, comparisons, theory
-- Module count: 5-7 modules, moderate depth
+- Module count: VARIABLE based on time budget. Fewer modules for short timelines.
 - Time split: 80% consuming content, 20% reflection/quizzes
 - Quiz style: Definition-based, concept checks, "explain why X works this way"`;
     case "hands_on": return `HANDS-ON learning goal selected.
 - Every module MUST have a "build something" or "try this" component
-- Module count: 5-8 modules, practice-heavy
+- Module count: VARIABLE based on time budget. Fewer modules for short timelines.
 - Time split: 30% learning, 70% doing
 - Quiz style: Code-oriented, "what would this output", practical scenarios`;
     case "quick_overview": return `QUICK OVERVIEW learning goal selected.
 - Hit key points fast, no deep dives, focus on "what you need to know"
-- Module count: 3-5 modules MAXIMUM. Each completable in 1-2 hours.
+- Module count: Keep MINIMAL — as few modules as possible to cover essentials.
 - Even if the user has weeks available, keep it concise. Use extra time for review, not more content.
 - Time split: 100% efficient consumption, no lengthy exercises
 - Quiz style: Quick recall, key terminology`;
     case "deep_mastery": return `DEEP MASTERY learning goal selected.
 - Thorough coverage including edge cases, best practices, architecture patterns, real-world scenarios
-- Module count: 7-10 modules, includes prerequisites and advanced topics
+- Module count: VARIABLE — use more modules for longer timelines, but never pad unnecessarily.
 - Time split: 40% learning, 40% practice, 20% review
 - Quiz style: Advanced nuance, tradeoffs, "when would you use X vs Y", design decisions`;
     default: return "";
@@ -1108,7 +1087,8 @@ Return ONLY valid JSON with this exact structure:
     for (const mod of (roadmap.modules || [])) {
       const candidates = allModuleCandidates.get(mod.id) || [];
       const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
-      const moduleBudgetCap = moduleMinutes * 1.05; // 5% tolerance
+      const dailyCapMinutes = effectiveHoursPerDay * 60 * 1.1; // 10% overflow allowed per day
+      const moduleBudgetCap = Math.min(moduleMinutes * 1.05, dailyCapMinutes); // respect both module and daily cap
       const ctx: ModuleContext = {
         topic,
         moduleTitle: mod.title,
