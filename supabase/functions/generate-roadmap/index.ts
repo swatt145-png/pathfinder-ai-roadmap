@@ -9,6 +9,24 @@ const corsHeaders = {
 
 interface SerperWebResult { title: string; link: string; snippet: string; }
 interface SerperVideoResult { title: string; link: string; duration?: string; }
+
+interface CandidateResource {
+  title: string;
+  url: string;
+  type: "video" | "article" | "documentation" | "tutorial" | "practice";
+  estimated_minutes: number;
+  description: string;
+  source?: string;
+  channel?: string;
+  view_count?: number;
+  like_count?: number;
+  quality_signal?: string;
+  appearances_count: number;
+  authority_score: number;
+  context_fit_score: number;
+  why_selected?: string;
+}
+
 interface Resource {
   title: string;
   url: string;
@@ -30,15 +48,23 @@ interface YouTubeMetadata {
   likeCount: number;
 }
 
-// ─── Tiered Resource Prioritization ──────────────────────────────────────────
+interface ModuleContext {
+  topic: string;
+  moduleTitle: string;
+  moduleDescription: string;
+  learningObjectives: string[];
+  goal: string;
+  level: string;
+  moduleMinutes: number;
+}
 
-// TIER 1: Always prioritize regardless of learning goal
+// ─── Tiered Source Authority ─────────────────────────────────────────────────
+
 const TIER1_DOMAINS = [
   "freecodecamp.org", "cs50.harvard.edu", "ocw.mit.edu",
   "khanacademy.org", "developer.mozilla.org",
 ];
 
-// Official documentation domains (always tier 1 for their technology)
 const OFFICIAL_DOC_PATTERNS = [
   "python.org/doc", "docs.python.org", "react.dev", "vuejs.org",
   "angular.io/docs", "docs.docker.com", "kubernetes.io/docs",
@@ -46,101 +72,66 @@ const OFFICIAL_DOC_PATTERNS = [
   "learn.microsoft.com", "developer.apple.com",
 ];
 
-// TIER 2: Prioritize based on learning goal
+const MAJOR_VENDOR_DOMAINS = [
+  "cloud.google.com", "aws.amazon.com", "azure.microsoft.com",
+  "ibm.com", "nvidia.com", "oracle.com", "redhat.com",
+];
+
+const UNIVERSITY_DOMAINS = [
+  "stanford.edu", "mit.edu", "harvard.edu", "berkeley.edu",
+  "coursera.org", "edx.org", "udacity.com",
+];
+
+const RECOGNIZED_TECH_BLOGS = [
+  "dev.to", "realpython.com", "digitalocean.com", "geeksforgeeks.org",
+  "baeldung.com", "medium.com", "hashnode.dev", "smashingmagazine.com",
+  "css-tricks.com", "web.dev",
+];
+
+const DEPRIORITIZE_DOMAINS = [
+  "tutorialspoint.com", "javatpoint.com",
+];
+
+// YouTube channel tiers (lowercase)
+const YOUTUBE_TIER1_CHANNELS = [
+  "freecodecamp.org", "freecodecamp", "3blue1brown", "cs50", "computerphile",
+  "mit opencourseware", "khan academy",
+];
+const YOUTUBE_TIER2_CHANNELS = [
+  "traversy media", "fireship", "web dev simplified", "tech with tim",
+  "programming with mosh", "the coding train", "sentdex", "corey schafer",
+  "techworld with nana", "networkchuck", "net ninja", "javascript mastery",
+  "cs dojo", "academind", "ben awad", "theo", "ibm technology",
+  "google cloud tech", "aws", "microsoft developer",
+];
 
 interface GoalResources {
   youtubeChannels: string[];
-  coursePlatforms: string[];
-  practicePlatforms: string[];
-  articleSites: string[];
-  siteFilters: string[]; // for Serper site: queries
+  siteFilters: string[];
 }
 
 const GOAL_RESOURCES: Record<string, GoalResources> = {
   quick_overview: {
     youtubeChannels: ["fireship", "networkchuck", "techworld with nana"],
-    coursePlatforms: ["codecademy.com"],
-    practicePlatforms: [],
-    articleSites: ["dev.to", "w3schools.com"],
-    siteFilters: [
-      "site:youtube.com fireship", "site:youtube.com networkchuck",
-      "site:youtube.com techworld with nana", "site:codecademy.com",
-      "site:dev.to", "site:w3schools.com", "site:freecodecamp.org",
-    ],
+    siteFilters: ["site:youtube.com fireship", "site:dev.to", "site:freecodecamp.org"],
   },
   hands_on: {
-    youtubeChannels: [
-      "traversy media", "web dev simplified", "tech with tim",
-      "net ninja", "programming with mosh", "javascript mastery",
-    ],
-    coursePlatforms: ["udemy.com", "codecademy.com", "theodinproject.com"],
-    practicePlatforms: ["leetcode.com", "hackerrank.com", "exercism.org", "sqlzoo.net"],
-    articleSites: ["digitalocean.com", "realpython.com", "geeksforgeeks.org", "w3schools.com"],
-    siteFilters: [
-      "site:youtube.com traversy media", "site:youtube.com web dev simplified",
-      "site:youtube.com programming with mosh", "site:udemy.com",
-      "site:codecademy.com", "site:theodinproject.com",
-      "site:realpython.com", "site:digitalocean.com/community/tutorials",
-      "site:freecodecamp.org",
-    ],
+    youtubeChannels: ["traversy media", "web dev simplified", "tech with tim", "programming with mosh"],
+    siteFilters: ["site:realpython.com", "site:digitalocean.com/community/tutorials", "site:freecodecamp.org"],
   },
   conceptual: {
-    youtubeChannels: [
-      "3blue1brown", "cs dojo", "computerphile", "corey schafer",
-    ],
-    coursePlatforms: ["coursera.org", "edx.org", "khanacademy.org"],
-    practicePlatforms: [],
-    articleSites: ["geeksforgeeks.org", "realpython.com"],
-    siteFilters: [
-      "site:youtube.com 3blue1brown", "site:youtube.com cs dojo",
-      "site:youtube.com computerphile", "site:youtube.com corey schafer",
-      "site:coursera.org", "site:edx.org", "site:khanacademy.org",
-      "site:freecodecamp.org", "site:ocw.mit.edu",
-    ],
+    youtubeChannels: ["3blue1brown", "cs dojo", "computerphile", "corey schafer", "ibm technology"],
+    siteFilters: ["site:coursera.org", "site:edx.org", "site:freecodecamp.org"],
   },
   deep_mastery: {
-    youtubeChannels: [
-      "freecodecamp", "sentdex", "the coding train",
-    ],
-    coursePlatforms: ["coursera.org", "edx.org", "ocw.mit.edu"],
-    practicePlatforms: ["leetcode.com", "hackerrank.com", "exercism.org", "sqlzoo.net"],
-    articleSites: ["realpython.com", "digitalocean.com", "geeksforgeeks.org"],
-    siteFilters: [
-      "site:youtube.com freecodecamp", "site:youtube.com sentdex",
-      "site:coursera.org", "site:edx.org", "site:ocw.mit.edu",
-      "site:realpython.com", "site:digitalocean.com/community/tutorials",
-      "site:freecodecamp.org",
-    ],
+    youtubeChannels: ["freecodecamp", "sentdex", "the coding train"],
+    siteFilters: ["site:realpython.com", "site:digitalocean.com/community/tutorials"],
   },
 };
 
-// Anti-pattern domains to deprioritize or skip
-const DEPRIORITIZE_DOMAINS = [
-  "tutorialspoint.com", "javatpoint.com",
-];
-
-// All known good domains (for general trust check)
-const ALL_TRUSTED_DOMAINS = [
-  ...TIER1_DOMAINS, ...OFFICIAL_DOC_PATTERNS,
-  "youtube.com", "youtu.be", "coursera.org", "udemy.com", "edx.org",
-  "codecademy.com", "theodinproject.com",
-  "leetcode.com", "hackerrank.com", "sqlzoo.net", "exercism.org",
-  "w3schools.com", "realpython.com", "digitalocean.com",
-  "geeksforgeeks.org", "stackoverflow.com", "reddit.com",
-  "dev.to",
-];
-
-// All known YouTube channels (for general channel trust check)
-const ALL_YOUTUBE_CHANNELS = [
-  "freecodecamp", "traversy media", "fireship", "networkchuck", "cs dojo",
-  "corey schafer", "web dev simplified", "tech with tim", "techworld with nana",
-  "3blue1brown", "sentdex", "programming with mosh", "the coding train",
-  "net ninja", "javascript mastery", "computerphile", "cs50",
-];
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function detectResourceType(url: string): Resource["type"] {
+function detectResourceType(url: string): CandidateResource["type"] {
   const lower = url.toLowerCase();
   const docDomains = ["docs.", "developer.", "devdocs.", "wiki.", "reference.", "documentation", "developer.mozilla.org", "learn.microsoft.com"];
   const practiceDomains = ["leetcode", "hackerrank", "codewars", "exercism", "codecademy.com/learn", "freecodecamp.org/learn", "sqlzoo"];
@@ -185,7 +176,6 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
   const metadataMap = new Map<string, YouTubeMetadata>();
   if (videoIds.length === 0) return metadataMap;
 
-  // Batch in groups of 50
   for (let i = 0; i < videoIds.length; i += 50) {
     const batch = videoIds.slice(i, i + 50);
     const idsParam = batch.join(",");
@@ -219,78 +209,6 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
   return metadataMap;
 }
 
-// Topic-relevance keywords for common tech/learning domains
-const TECH_RELEVANCE_KEYWORDS = [
-  "programming", "coding", "software", "developer", "engineer", "tutorial",
-  "course", "learn", "code", "tech", "computer", "science", "data",
-  "web", "app", "design", "system", "algorithm", "database", "server",
-  "cloud", "devops", "api", "framework", "library", "python", "javascript",
-  "java", "react", "node", "sql", "html", "css", "machine learning",
-  "ai", "artificial intelligence", "deep learning", "network", "security",
-  "linux", "docker", "kubernetes", "git", "frontend", "backend", "fullstack",
-  "interview", "dsa", "structure", "architecture", "scalab", "distribut",
-  "microservice", "load balanc", "cache", "proxy", "dns", "http",
-  "freecodecamp", "traversy", "fireship", "mosh", "academind", "sentdex",
-  "corey schafer", "tech with tim", "net ninja", "cs50", "mit", "khan academy",
-];
-
-function isVideoRelevantToTopic(meta: YouTubeMetadata, moduleTitle: string, topic: string): boolean {
-  const combined = `${meta.title} ${meta.channel}`.toLowerCase();
-  const searchContext = `${moduleTitle} ${topic}`.toLowerCase();
-
-  // Check if video title has ANY overlap with the module topic keywords
-  const topicWords = searchContext.split(/\s+/).filter(w => w.length > 3);
-  const titleMatchCount = topicWords.filter(w => combined.includes(w)).length;
-  if (titleMatchCount >= 2) return true;
-
-  // Check if the channel or title contains known tech/education keywords
-  const hasTechSignal = TECH_RELEVANCE_KEYWORDS.some(kw => combined.includes(kw));
-  if (hasTechSignal && titleMatchCount >= 1) return true;
-
-  // If zero topic words match AND no tech signal — irrelevant
-  if (titleMatchCount === 0 && !hasTechSignal) {
-    console.warn(`Excluding off-topic video: "${meta.title}" by ${meta.channel} — no relevance to "${moduleTitle}"`);
-    return false;
-  }
-
-  return true;
-}
-
-function enrichResourcesWithYouTube(resources: Resource[], ytMap: Map<string, YouTubeMetadata>, moduleTitle: string, topic: string): Resource[] {
-  return resources.filter(r => {
-    if (r.type !== "video") return true;
-    const videoId = extractYouTubeVideoId(r.url);
-    if (!videoId) return true;
-    const meta = ytMap.get(videoId);
-    if (!meta) return false;
-    if (!isVideoRelevantToTopic(meta, moduleTitle, topic)) return false;
-    r.title = meta.title || r.title;
-    r.estimated_minutes = meta.durationMinutes || r.estimated_minutes;
-    r.channel = meta.channel;
-    r.view_count = meta.viewCount;
-    r.like_count = meta.likeCount;
-    r.source = "YouTube";
-    r.quality_signal = `${formatViewCount(meta.viewCount)} views · ${meta.channel} · ${meta.durationMinutes} min`;
-    return true;
-  });
-}
-
-function isDisqualified(title: string, url: string): boolean {
-  const spamSignals = /\b(top \d+ best|best \d+|you won't believe|clickbait)\b/i;
-  if (spamSignals.test(title)) return true;
-  // Deprioritized/anti-pattern domains
-  if (DEPRIORITIZE_DOMAINS.some(d => url.toLowerCase().includes(d))) return true;
-  // AI content farm signals
-  if (/\b(ai generated|content farm)\b/i.test(title)) return true;
-  return false;
-}
-
-function estimateArticleMinutes(snippet: string): number {
-  const wordCount = snippet ? snippet.split(/\s+/).length : 0;
-  if (wordCount > 80) return 15;
-  return 10;
-}
-
 async function searchSerper(query: string, apiKey: string, type: "search" | "videos", num: number) {
   const url = type === "videos" ? "https://google.serper.dev/videos" : "https://google.serper.dev/search";
   try {
@@ -305,54 +223,200 @@ async function searchSerper(query: string, apiKey: string, type: "search" | "vid
   } catch (e) { console.error(`Serper ${type} fetch failed:`, e); return []; }
 }
 
-// ─── Goal-Aware Search Config ────────────────────────────────────────────────
+function estimateArticleMinutes(snippet: string): number {
+  const wordCount = snippet ? snippet.split(/\s+/).length : 0;
+  if (wordCount > 80) return 15;
+  return 10;
+}
+
+// ─── STAGE 4: Hard Filter ────────────────────────────────────────────────────
+
+function isDisqualified(title: string, url: string): boolean {
+  const spamSignals = /\b(top \d+ best|best \d+|you won't believe|clickbait|ai generated|content farm)\b/i;
+  if (spamSignals.test(title)) return true;
+  if (DEPRIORITIZE_DOMAINS.some(d => url.toLowerCase().includes(d))) return true;
+  return false;
+}
+
+function computeSemanticSimilarity(text1: string, text2: string): number {
+  const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  if (words1.size === 0 || words2.size === 0) return 0;
+  let overlap = 0;
+  for (const w of words1) {
+    if (words2.has(w)) overlap++;
+  }
+  // Jaccard-like but weighted toward the smaller set for recall
+  return overlap / Math.min(words1.size, words2.size);
+}
+
+// ─── STAGE 5: Authority Scoring ──────────────────────────────────────────────
+
+function computeAuthorityScore(candidate: CandidateResource, ytMeta?: YouTubeMetadata): number {
+  let score = 0;
+  const urlLower = candidate.url.toLowerCase();
+
+  // Domain authority
+  if (TIER1_DOMAINS.some(d => urlLower.includes(d))) score += 30;
+  if (OFFICIAL_DOC_PATTERNS.some(d => urlLower.includes(d))) score += 28;
+  if (MAJOR_VENDOR_DOMAINS.some(d => urlLower.includes(d))) score += 22;
+  if (UNIVERSITY_DOMAINS.some(d => urlLower.includes(d))) score += 20;
+  if (RECOGNIZED_TECH_BLOGS.some(d => urlLower.includes(d))) score += 12;
+
+  // YouTube-specific authority
+  if (candidate.type === "video" && ytMeta) {
+    // View count: log-normalized (log10(1M) ≈ 6, log10(100K) ≈ 5, log10(10K) ≈ 4)
+    const logViews = ytMeta.viewCount > 0 ? Math.log10(ytMeta.viewCount) : 0;
+    score += Math.min(logViews * 4, 28); // max 28 from views
+
+    // Channel tier
+    const channelLower = ytMeta.channel.toLowerCase();
+    if (YOUTUBE_TIER1_CHANNELS.some(ch => channelLower.includes(ch))) score += 20;
+    else if (YOUTUBE_TIER2_CHANNELS.some(ch => channelLower.includes(ch))) score += 15;
+  } else if (candidate.type === "video") {
+    // No YT metadata — slight penalty but don't kill it
+    score += 5;
+  }
+
+  // Appearances bonus (appeared in multiple queries = validated relevance)
+  score += Math.min(candidate.appearances_count * 5, 20);
+
+  return Math.min(score, 100);
+}
+
+// ─── STAGE 6: Context Fit Scoring ────────────────────────────────────────────
+
+function computeContextFitScore(candidate: CandidateResource, ctx: ModuleContext, ytMeta?: YouTubeMetadata): number {
+  let score = 0;
+
+  // Semantic similarity (dominant factor)
+  const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")} ${ctx.goal} ${ctx.level}`;
+  const resourceText = `${candidate.title} ${candidate.description} ${candidate.channel || ""}`;
+  const similarity = computeSemanticSimilarity(moduleText, resourceText);
+  score += Math.round(similarity * 50); // up to 50 points
+
+  // Learning goal alignment
+  if (ctx.goal === "conceptual" && (candidate.type === "video" || candidate.type === "documentation")) score += 10;
+  if (ctx.goal === "hands_on" && (candidate.type === "tutorial" || candidate.type === "practice")) score += 10;
+  if (ctx.goal === "quick_overview" && candidate.estimated_minutes <= 20) score += 8;
+  if (ctx.goal === "deep_mastery" && candidate.estimated_minutes >= 20) score += 8;
+
+  // Level alignment
+  const titleLower = candidate.title.toLowerCase();
+  if (ctx.level === "beginner" && /beginner|intro|basic|fundamental|getting started|what is/i.test(titleLower)) score += 8;
+  if (ctx.level === "intermediate" && /intermediate|practical|pattern|use case/i.test(titleLower)) score += 8;
+  if (ctx.level === "advanced" && /advanced|deep|expert|optimization|architecture/i.test(titleLower)) score += 8;
+
+  // Freshness (prefer newer content for fast-moving topics)
+  // Can't check date easily, so skip
+
+  // Format alignment per goal
+  const goalChannels = GOAL_RESOURCES[ctx.goal]?.youtubeChannels || [];
+  if (candidate.type === "video" && ytMeta) {
+    const channelLower = ytMeta.channel.toLowerCase();
+    if (goalChannels.some(ch => channelLower.includes(ch))) score += 10;
+  }
+
+  // Time feasibility (constraint, not boost)
+  if (candidate.estimated_minutes > ctx.moduleMinutes * 2) score -= 5;
+
+  return Math.max(0, Math.min(score, 100));
+}
+
+// ─── STAGE 7: Clustering & Diversity ─────────────────────────────────────────
+
+interface GoalDiversityConfig {
+  videos: number;
+  articles: number; // includes docs, tutorials
+  practice: number;
+  maxPerModule: number;
+  minPerModule: number;
+}
+
+function getGoalDiversity(goal: string): GoalDiversityConfig {
+  switch (goal) {
+    case "conceptual": return { videos: 2, articles: 2, practice: 0, maxPerModule: 5, minPerModule: 2 };
+    case "hands_on": return { videos: 1, articles: 2, practice: 1, maxPerModule: 5, minPerModule: 2 };
+    case "quick_overview": return { videos: 1, articles: 1, practice: 0, maxPerModule: 3, minPerModule: 1 };
+    case "deep_mastery": return { videos: 2, articles: 1, practice: 1, maxPerModule: 5, minPerModule: 2 };
+    default: return { videos: 1, articles: 2, practice: 0, maxPerModule: 5, minPerModule: 2 };
+  }
+}
+
+function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext): CandidateResource[] {
+  const diversity = getGoalDiversity(ctx.goal);
+  
+  // Sort by combined score (authority + context fit)
+  const sorted = [...candidates].sort((a, b) => 
+    (b.authority_score + b.context_fit_score) - (a.authority_score + a.context_fit_score)
+  );
+
+  // Simple clustering: remove near-duplicates (high title similarity)
+  const deduplicated: CandidateResource[] = [];
+  for (const c of sorted) {
+    const isDuplicate = deduplicated.some(existing => {
+      const sim = computeSemanticSimilarity(existing.title, c.title);
+      return sim > 0.7; // 70%+ title overlap = near duplicate
+    });
+    if (!isDuplicate) deduplicated.push(c);
+  }
+
+  // Select with diversity constraints
+  const selected: CandidateResource[] = [];
+  const typeCounts = { video: 0, article: 0, practice: 0 };
+  let totalMinutes = 0;
+
+  for (const c of deduplicated) {
+    if (selected.length >= diversity.maxPerModule) break;
+
+    const typeGroup = c.type === "video" ? "video" : 
+      c.type === "practice" ? "practice" : "article";
+    
+    const maxForType = typeGroup === "video" ? diversity.videos :
+      typeGroup === "practice" ? diversity.practice : diversity.articles;
+
+    if (typeCounts[typeGroup] >= maxForType + 1) continue;
+
+    // Time constraint: allow first resource even if exceeds, cap subsequent
+    if (selected.length > 0 && totalMinutes + c.estimated_minutes > ctx.moduleMinutes * 1.2) continue;
+
+    selected.push(c);
+    totalMinutes += c.estimated_minutes;
+    typeCounts[typeGroup]++;
+  }
+
+  // Fill to minimum
+  if (selected.length < diversity.minPerModule) {
+    for (const c of deduplicated) {
+      if (selected.includes(c)) continue;
+      if (selected.length >= diversity.minPerModule) break;
+      selected.push(c);
+    }
+  }
+
+  return selected;
+}
+
+// ─── STAGE 2: High-Recall Retrieval ──────────────────────────────────────────
 
 interface GoalSearchConfig {
   queryModifiers: string[];
   videoCount: number;
   webCount: number;
-  targetMix: { videos: number; articles: number; practice: number };
-  maxResourcesPerModule: number;
-  minResourcesPerModule: number;
 }
 
 function getGoalSearchConfig(goal: string): GoalSearchConfig {
   switch (goal) {
     case "conceptual":
-      return {
-        queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"],
-        videoCount: 8, webCount: 6,
-        targetMix: { videos: 2, articles: 2, practice: 0 },
-        maxResourcesPerModule: 5, minResourcesPerModule: 3,
-      };
+      return { queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"], videoCount: 8, webCount: 6 };
     case "hands_on":
-      return {
-        queryModifiers: ["tutorial", "build", "project", "practice", "exercise", "hands-on", "step by step", "code along"],
-        videoCount: 6, webCount: 8,
-        targetMix: { videos: 1, articles: 1, practice: 1 },
-        maxResourcesPerModule: 5, minResourcesPerModule: 3,
-      };
+      return { queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"], videoCount: 6, webCount: 8 };
     case "quick_overview":
-      return {
-        queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "cheat sheet", "essentials"],
-        videoCount: 6, webCount: 4,
-        targetMix: { videos: 1, articles: 1, practice: 0 },
-        maxResourcesPerModule: 3, minResourcesPerModule: 2,
-      };
+      return { queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "essentials"], videoCount: 6, webCount: 4 };
     case "deep_mastery":
-      return {
-        queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "best practices", "full course", "masterclass"],
-        videoCount: 6, webCount: 8,
-        targetMix: { videos: 2, articles: 1, practice: 1 },
-        maxResourcesPerModule: 5, minResourcesPerModule: 3,
-      };
+      return { queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "full course", "masterclass"], videoCount: 6, webCount: 8 };
     default:
-      return {
-        queryModifiers: ["tutorial", "guide"],
-        videoCount: 6, webCount: 6,
-        targetMix: { videos: 1, articles: 1, practice: 0 },
-        maxResourcesPerModule: 5, minResourcesPerModule: 3,
-      };
+      return { queryModifiers: ["tutorial", "guide"], videoCount: 6, webCount: 6 };
   }
 }
 
@@ -365,201 +429,322 @@ function getLevelSearchModifier(level: string): string {
   }
 }
 
-// ─── Resource Scoring & Selection ────────────────────────────────────────────
-
-function scoreResource(
-  res: Resource,
-  moduleTitle: string,
-  goal: string,
+// Stage 2A: Topic-Wide Anchor Retrieval
+async function fetchTopicAnchors(
+  topic: string,
   level: string,
-  config: GoalSearchConfig,
-  moduleMinutes: number
-): number {
-  let score = 0;
-  const urlLower = res.url.toLowerCase();
-  const titleLower = res.title.toLowerCase();
-  const goalRes = GOAL_RESOURCES[goal] || GOAL_RESOURCES["hands_on"];
-
-  // CRITERION 1: RELEVANCE — title/description must relate to module
-  const moduleLower = moduleTitle.toLowerCase();
-  const moduleWords = moduleLower.split(/\s+/).filter(w => w.length > 3);
-  const matchingWords = moduleWords.filter(w => titleLower.includes(w));
-  score += matchingWords.length * 15;
-
-  // Goal fit
-  if (goal === "conceptual" && (res.type === "video" || res.type === "documentation")) score += 10;
-  if (goal === "hands_on" && (res.type === "tutorial" || res.type === "practice")) score += 10;
-  if (goal === "quick_overview" && res.estimated_minutes <= 20) score += 10;
-  if (goal === "deep_mastery" && res.estimated_minutes >= 20) score += 10;
-
-  // Level fit
-  if (level === "beginner" && res.type === "video") score += 5;
-  if (level === "advanced" && (res.type === "documentation" || res.type === "article")) score += 5;
-
-  // CRITERION 2: SOURCE TRUST (tiered)
-  // Tier 1: universal priority (+25)
-  const isTier1 = TIER1_DOMAINS.some(d => urlLower.includes(d));
-  const isOfficialDoc = OFFICIAL_DOC_PATTERNS.some(d => urlLower.includes(d));
-  if (isTier1) score += 25;
-  if (isOfficialDoc) score += 25;
-
-  // Tier 2: goal-specific priority (+20)
-  const isGoalChannel = goalRes.youtubeChannels.some(ch => titleLower.includes(ch));
-  const isGoalPlatform = goalRes.coursePlatforms.some(p => urlLower.includes(p));
-  const isGoalPractice = goalRes.practicePlatforms.some(p => urlLower.includes(p));
-  const isGoalArticle = goalRes.articleSites.some(s => urlLower.includes(s));
-  if (isGoalChannel) score += 20;
-  if (isGoalPlatform) score += 18;
-  if (isGoalPractice) score += 18;
-  if (isGoalArticle) score += 15;
-
-  // Known good but not goal-specific (+10)
-  const isAnyTrusted = ALL_TRUSTED_DOMAINS.some(d => urlLower.includes(d));
-  const isAnyKnownChannel = ALL_YOUTUBE_CHANNELS.some(ch => titleLower.includes(ch));
-  if (!isTier1 && !isOfficialDoc && !isGoalPlatform && !isGoalArticle && isAnyTrusted) score += 10;
-  if (!isGoalChannel && isAnyKnownChannel) score += 10;
-
-  // Unknown source penalty
-  if (!isAnyTrusted && !isAnyKnownChannel) score -= 8;
-
-  // Reddit community resource (include max 1 per roadmap, handled in selection)
-  if (urlLower.includes("reddit.com")) score += 5;
-
-  // CRITERION 3: TIME FIT (reward proportional fit, no harsh penalty for long videos)
-  const ratio = res.estimated_minutes / moduleMinutes;
-  if (ratio >= 0.1 && ratio <= 0.5) score += 10;
-  else if (ratio > 0.5 && ratio <= 1.0) score += 5;
-  // Long videos that exceed module time get slight penalty but are NOT disqualified
-  else if (ratio > 1.0) score -= 2;
-
-  return score;
-}
-
-function selectResources(
-  candidates: Resource[],
-  moduleTitle: string,
   goal: string,
-  level: string,
-  config: GoalSearchConfig,
-  moduleMinutes: number
-): Resource[] {
-  const scored = candidates.map(r => ({
-    resource: r,
-    score: scoreResource(r, moduleTitle, goal, level, config, moduleMinutes),
-  }));
-  scored.sort((a, b) => b.score - a.score);
+  serperKey: string
+): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
+  const levelMod = getLevelSearchModifier(level);
+  const goalConfig = getGoalSearchConfig(goal);
+  const goalMod = goalConfig.queryModifiers[0] || "";
 
-  const selected: Resource[] = [];
-  let totalMinutes = 0;
-  const typeCounts: Record<string, number> = { video: 0, article: 0, documentation: 0, tutorial: 0, practice: 0 };
+  // 3 broad queries: explained, tutorial, full course
+  const queries = [
+    `${topic} ${goalMod} ${levelMod}`,
+    `${topic} tutorial complete guide`,
+    `${topic} full course best`,
+  ];
 
-  for (const { resource } of scored) {
-    if (selected.length >= config.maxResourcesPerModule) break;
-    // Allow first resource even if it exceeds module time (long but highly relevant)
-    // For subsequent resources, cap at module budget
-    if (selected.length > 0 && totalMinutes + resource.estimated_minutes > moduleMinutes * 1.15) continue;
-
-    const typeGroup = resource.type === "documentation" || resource.type === "tutorial" ? "articles" : resource.type === "practice" ? "practice" : "videos";
-    const targetForType = (config.targetMix as any)[typeGroup] || 2;
-    const currentOfType = typeGroup === "articles"
-      ? (typeCounts["article"] + typeCounts["documentation"] + typeCounts["tutorial"])
-      : typeGroup === "videos" ? typeCounts["video"] : typeCounts["practice"];
-    if (currentOfType >= targetForType + 1) continue;
-
-    selected.push(resource);
-    totalMinutes += resource.estimated_minutes;
-    typeCounts[resource.type] = (typeCounts[resource.type] || 0) + 1;
+  const promises: Promise<any>[] = [];
+  for (const q of queries) {
+    promises.push(searchSerper(q, serperKey, "videos", 15));
+    promises.push(searchSerper(q, serperKey, "search", 10));
   }
 
-  // Fill to minimum if needed (but allow 1 resource if it fills the time well)
-  const effectiveMin = (selected.length === 1 && totalMinutes >= moduleMinutes * 0.5)
-    ? 1 : config.minResourcesPerModule;
-  if (selected.length < effectiveMin) {
-    for (const { resource } of scored) {
-      if (selected.includes(resource)) continue;
-      if (selected.length >= config.minResourcesPerModule) break;
-      selected.push(resource);
+  const results = await Promise.all(promises);
+  const videos: SerperVideoResult[] = [];
+  const web: SerperWebResult[] = [];
+
+  for (let i = 0; i < results.length; i++) {
+    if (i % 2 === 0) videos.push(...(results[i] as SerperVideoResult[]));
+    else web.push(...(results[i] as SerperWebResult[]));
+  }
+
+  console.log(`Topic anchors: ${videos.length} videos, ${web.length} web results`);
+  return { videos, web };
+}
+
+// Stage 2B: Module-Specific Retrieval
+async function fetchModuleResults(
+  moduleTitle: string,
+  topic: string,
+  level: string,
+  goal: string,
+  serperKey: string
+): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
+  const config = getGoalSearchConfig(goal);
+  const levelMod = getLevelSearchModifier(level);
+  const goalRes = GOAL_RESOURCES[goal] || GOAL_RESOURCES["hands_on"];
+
+  // Generate 5 diversified queries
+  const queries = [
+    `${moduleTitle} ${topic} ${config.queryModifiers[0] || "explained"}`,
+    `${moduleTitle} ${topic} ${levelMod}`,
+    `${moduleTitle} ${topic} ${config.queryModifiers[1] || "tutorial"}`,
+    `${moduleTitle} ${topic} ${goalRes.siteFilters[0] || ""}`,
+    `${moduleTitle} ${config.queryModifiers[2] || "guide"} ${levelMod}`,
+  ];
+
+  // Run 5 video + 5 web searches in parallel
+  const promises: Promise<any>[] = [];
+  for (const q of queries) {
+    promises.push(searchSerper(q, serperKey, "videos", 6));
+    promises.push(searchSerper(q, serperKey, "search", 4));
+  }
+
+  const results = await Promise.all(promises);
+  const videos: SerperVideoResult[] = [];
+  const web: SerperWebResult[] = [];
+
+  for (let i = 0; i < results.length; i++) {
+    if (i % 2 === 0) videos.push(...(results[i] as SerperVideoResult[]));
+    else web.push(...(results[i] as SerperWebResult[]));
+  }
+
+  return { videos, web };
+}
+
+// ─── Merge & Deduplicate with Appearance Counting ────────────────────────────
+
+function mergeAndDeduplicate(
+  topicAnchors: { videos: SerperVideoResult[]; web: SerperWebResult[] },
+  moduleResults: { videos: SerperVideoResult[]; web: SerperWebResult[] },
+  moduleTitle: string,
+  totalAvailableMinutes: number
+): CandidateResource[] {
+  const urlMap = new Map<string, CandidateResource>();
+
+  function processVideo(v: SerperVideoResult) {
+    if (!v.link) return;
+    const normalizedUrl = v.link.split("&")[0]; // normalize YouTube URLs
+    const title = v.title || "Video Tutorial";
+    if (isDisqualified(title, normalizedUrl)) return;
+    const mins = parseDurationToMinutes(v.duration);
+    if (mins > totalAvailableMinutes) return;
+
+    if (urlMap.has(normalizedUrl)) {
+      urlMap.get(normalizedUrl)!.appearances_count++;
+    } else {
+      urlMap.set(normalizedUrl, {
+        title, url: normalizedUrl, type: "video",
+        estimated_minutes: mins,
+        description: `Video on ${moduleTitle}`,
+        appearances_count: 1,
+        authority_score: 0,
+        context_fit_score: 0,
+      });
     }
   }
 
-  return selected;
+  function processWeb(r: SerperWebResult) {
+    if (!r.link) return;
+    const title = r.title || "Learning Resource";
+    if (isDisqualified(title, r.link)) return;
+    // Skip YouTube links in web results (already handled as videos)
+    if (r.link.includes("youtube.com/watch") || r.link.includes("youtu.be/")) return;
+
+    if (urlMap.has(r.link)) {
+      urlMap.get(r.link)!.appearances_count++;
+    } else {
+      urlMap.set(r.link, {
+        title, url: r.link,
+        type: detectResourceType(r.link),
+        estimated_minutes: estimateArticleMinutes(r.snippet || ""),
+        description: r.snippet || `Resource for ${moduleTitle}`,
+        appearances_count: 1,
+        authority_score: 0,
+        context_fit_score: 0,
+      });
+    }
+  }
+
+  // Process topic anchors first
+  for (const v of topicAnchors.videos) processVideo(v);
+  for (const r of topicAnchors.web) processWeb(r);
+
+  // Process module results
+  for (const v of moduleResults.videos) processVideo(v);
+  for (const r of moduleResults.web) processWeb(r);
+
+  return Array.from(urlMap.values());
 }
 
-// ─── Fetch Resources for a Module ────────────────────────────────────────────
+// ─── Enrich with YouTube Metadata ────────────────────────────────────────────
 
-async function fetchResourcesForModule(
-  moduleTitle: string,
+function enrichCandidatesWithYouTube(
+  candidates: CandidateResource[],
+  ytMap: Map<string, YouTubeMetadata>,
+  ctx: ModuleContext
+): CandidateResource[] {
+  return candidates.filter(c => {
+    if (c.type !== "video") return true;
+    const videoId = extractYouTubeVideoId(c.url);
+    if (!videoId) return true;
+    const meta = ytMap.get(videoId);
+    if (!meta) return false; // Video not found (private/deleted)
+
+    // Stage 4: Semantic filter — reject only if very low similarity
+    const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
+    const resourceText = `${meta.title} ${meta.channel}`;
+    const similarity = computeSemanticSimilarity(moduleText, resourceText);
+    if (similarity < 0.05) {
+      console.warn(`Excluding very off-topic video: "${meta.title}" by ${meta.channel} (similarity: ${similarity.toFixed(2)})`);
+      return false;
+    }
+
+    // Enrich
+    c.title = meta.title || c.title;
+    c.estimated_minutes = meta.durationMinutes || c.estimated_minutes;
+    c.channel = meta.channel;
+    c.view_count = meta.viewCount;
+    c.like_count = meta.likeCount;
+    c.source = "YouTube";
+    c.quality_signal = `${formatViewCount(meta.viewCount)} views · ${meta.channel} · ${meta.durationMinutes} min`;
+
+    // Compute authority & context fit scores
+    c.authority_score = computeAuthorityScore(c, meta);
+    c.context_fit_score = computeContextFitScore(c, ctx, meta);
+
+    return true;
+  });
+}
+
+// ─── STAGE 8: Batch LLM Reranker ─────────────────────────────────────────────
+
+interface RerankerInput {
+  moduleTitle: string;
+  moduleDescription: string;
+  candidates: Array<{
+    index: number;
+    title: string;
+    url: string;
+    type: string;
+    channel_or_site: string;
+    duration_minutes: number;
+    view_count: number;
+    appearances_count: number;
+    authority_score: number;
+    context_fit_score: number;
+  }>;
+}
+
+async function batchRerank(
+  moduleCandidates: Map<string, CandidateResource[]>,
+  modules: any[],
   topic: string,
-  skillLevel: string,
-  apiKey: string,
-  moduleHours: number,
-  learningGoal: string,
-  totalAvailableHours?: number
-): Promise<Resource[]> {
-  const config = getGoalSearchConfig(learningGoal);
-  const moduleMinutes = Math.floor(moduleHours * 60);
-  const levelMod = getLevelSearchModifier(skillLevel);
-  const goalMod = config.queryModifiers.slice(0, 3).join(" ");
-  const goalRes = GOAL_RESOURCES[learningGoal] || GOAL_RESOURCES["hands_on"];
+  goal: string,
+  level: string,
+  apiKey: string
+): Promise<Map<string, string[]>> {
+  // Build reranker input for all modules
+  const rerankerModules: RerankerInput[] = [];
+  
+  for (const mod of modules) {
+    const candidates = moduleCandidates.get(mod.id) || [];
+    // Take top 12 by combined score
+    const top12 = [...candidates]
+      .sort((a, b) => (b.authority_score + b.context_fit_score) - (a.authority_score + a.context_fit_score))
+      .slice(0, 12);
 
-  // Build goal-specific site-scoped query from tier 2 mappings
-  const siteFilter = goalRes.siteFilters.slice(0, 5).join(" OR ");
-  const webQuery = `${moduleTitle} ${topic} ${levelMod} ${goalMod}`;
-  const webQueryTrusted = `${moduleTitle} ${topic} ${siteFilter}`;
-
-  // Build goal-specific YouTube query with preferred channels
-  const preferredChannels = goalRes.youtubeChannels.slice(0, 2).join(" OR ");
-  const videoQuery = `${moduleTitle} ${topic} ${goalMod} ${levelMod}`;
-  const videoQueryTargeted = preferredChannels
-    ? `${moduleTitle} ${topic} ${preferredChannels}`
-    : videoQuery;
-
-  // Run 4 parallel searches: general web, trusted-site web, general videos, targeted channel videos
-  const [webResults, trustedWebResults, videoResults, targetedVideoResults] = await Promise.all([
-    searchSerper(webQuery, apiKey, "search", config.webCount),
-    searchSerper(webQueryTrusted, apiKey, "search", 4),
-    searchSerper(videoQuery, apiKey, "videos", config.videoCount),
-    searchSerper(videoQueryTargeted, apiKey, "videos", 4),
-  ]);
-
-  const candidates: Resource[] = [];
-  const seenUrls = new Set<string>();
-
-  // Process videos: targeted first (higher chance of preferred channels), then general
-  const allVideoResults = [...(targetedVideoResults as SerperVideoResult[]), ...(videoResults as SerperVideoResult[])];
-  for (const v of allVideoResults) {
-    if (!v.link || seenUrls.has(v.link)) continue;
-    seenUrls.add(v.link);
-    const title = v.title || "Video Tutorial";
-    if (isDisqualified(title, v.link)) continue;
-    const mins = parseDurationToMinutes(v.duration);
-    // Only disqualify if video is longer than total available time
-    const totalAvailableMinutes = totalAvailableHours ? totalAvailableHours * 60 : moduleMinutes;
-    if (mins > totalAvailableMinutes) continue;
-    candidates.push({
-      title, url: v.link, type: "video",
-      estimated_minutes: mins,
-      description: `Video tutorial on ${moduleTitle}`,
+    rerankerModules.push({
+      moduleTitle: mod.title,
+      moduleDescription: mod.description || "",
+      candidates: top12.map((c, i) => ({
+        index: i,
+        title: c.title,
+        url: c.url,
+        type: c.type,
+        channel_or_site: c.channel || new URL(c.url).hostname.replace("www.", ""),
+        duration_minutes: c.estimated_minutes,
+        view_count: c.view_count || 0,
+        appearances_count: c.appearances_count,
+        authority_score: c.authority_score,
+        context_fit_score: c.context_fit_score,
+      })),
     });
   }
 
-  // Process web results: trusted first, then general, deduplicated
-  const allWebResults = [...(trustedWebResults as SerperWebResult[]), ...(webResults as SerperWebResult[])];
-  for (const r of allWebResults) {
-    if (!r.link || seenUrls.has(r.link)) continue;
-    seenUrls.add(r.link);
-    const title = r.title || "Learning Resource";
-    if (isDisqualified(title, r.link)) continue;
-    const mins = estimateArticleMinutes(r.snippet || "");
-    candidates.push({
-      title, url: r.link,
-      type: detectResourceType(r.link),
-      estimated_minutes: mins,
-      description: r.snippet || `Resource for learning ${moduleTitle}`,
-    });
-  }
+  const rerankerPrompt = `You are an Expert Curriculum Curator. Given a learner profile and module candidates, select the best 3-5 resources per module.
 
-  return selectResources(candidates, moduleTitle, learningGoal, skillLevel, config, moduleMinutes);
+Learner profile:
+- Topic: ${topic}
+- Goal: ${goal}
+- Level: ${level}
+
+Rules:
+- Prefer canonical, widely trusted sources (high authority_score)
+- Avoid low-view unknown creators unless uniquely valuable
+- Avoid redundancy — don't pick 3 similar videos
+- Time is a constraint (resources must fit module budget), NOT a ranking boost
+- Your selections override heuristic ordering
+
+For each module, return the URLs of your selected resources and a 1-sentence "why_selected" for each.
+
+Modules and candidates:
+${JSON.stringify(rerankerModules, null, 1)}
+
+Return ONLY valid JSON:
+{
+  "selections": [
+    {
+      "module_title": "...",
+      "selected": [
+        { "url": "...", "why_selected": "..." }
+      ]
+    }
+  ]
+}`;
+
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [
+          { role: "user", content: rerankerPrompt },
+        ],
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Reranker LLM error: ${response.status}`);
+      return new Map();
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return new Map();
+
+    const parsed = JSON.parse(content);
+    const result = new Map<string, string[]>();
+    
+    for (const sel of (parsed.selections || [])) {
+      const urls = (sel.selected || []).map((s: any) => s.url);
+      result.set(sel.module_title, urls);
+      
+      // Store why_selected back onto candidates
+      for (const s of (sel.selected || [])) {
+        for (const mod of modules) {
+          const candidates = moduleCandidates.get(mod.id) || [];
+          const match = candidates.find(c => c.url === s.url);
+          if (match) match.why_selected = s.why_selected;
+        }
+      }
+    }
+
+    console.log(`Reranker selected resources for ${result.size} modules`);
+    return result;
+  } catch (e) {
+    console.error("Reranker failed:", e);
+    return new Map();
+  }
 }
 
 // ─── System Prompt Builder ───────────────────────────────────────────────────
@@ -684,13 +869,11 @@ serve(async (req) => {
     const { topic, skill_level, learning_goal, timeline_weeks, timeline_days, hours_per_day, total_hours: providedTotalHours, hard_deadline, deadline_date, include_weekends, timeline_mode } = await req.json();
     const effectiveGoal = learning_goal || "hands_on";
     
-    // Handle "hours" mode: user just specified total hours, no multi-day schedule
     const isHoursOnly = timeline_mode === "hours";
     const daysInTimeline = isHoursOnly ? 1 : (timeline_days || (timeline_weeks * 7));
     const studyDays = isHoursOnly ? 1 : (include_weekends === false ? Math.round(daysInTimeline * 5 / 7) : daysInTimeline);
     const totalHours = providedTotalHours || (studyDays * hours_per_day);
     const effectiveHoursPerDay = isHoursOnly ? totalHours : hours_per_day;
-    // Derive accurate timeline_weeks for the AI prompt
     const effectiveTimelineWeeks = isHoursOnly ? Math.round((totalHours / (effectiveHoursPerDay || 1) / 7) * 100) / 100 : (timeline_days ? Math.round((timeline_days / 7) * 10) / 10 : timeline_weeks);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -700,7 +883,9 @@ serve(async (req) => {
     const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY");
     if (!YOUTUBE_API_KEY) throw new Error("YOUTUBE_API_KEY not found. Add it in Lovable environment settings.");
 
-    // Step 1: Generate roadmap structure via AI
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 1: Generate roadmap structure via AI (same as before)
+    // ════════════════════════════════════════════════════════════════════════
     const systemPrompt = buildSystemPrompt(totalHours, effectiveGoal, skill_level);
 
     const userPrompt = `Create a learning roadmap for: "${topic}"
@@ -776,60 +961,166 @@ Return ONLY valid JSON with this exact structure:
 
     const roadmap = JSON.parse(content);
 
-    // Step 2: Fetch real resources via Serper (parallelized per module)
-    console.log(`Fetching resources for ${roadmap.modules?.length || 0} modules (goal: ${effectiveGoal}, level: ${skill_level})...`);
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 2: STAGE 2A — Topic-Wide Anchor Retrieval
+    // ════════════════════════════════════════════════════════════════════════
+    console.log(`Stage 2A: Fetching topic-wide anchors for "${topic}"...`);
+    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, SERPER_API_KEY);
 
-    const resourcePromises = (roadmap.modules || []).map((mod: any) =>
-      fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day, effectiveGoal, totalHours)
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 3: STAGE 2B — Module-Specific Retrieval (parallelized)
+    // ════════════════════════════════════════════════════════════════════════
+    console.log(`Stage 2B: Fetching module-specific results for ${roadmap.modules?.length || 0} modules...`);
+    const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
+      fetchModuleResults(mod.title, topic, skill_level, effectiveGoal, SERPER_API_KEY)
     );
-    const allResources = await Promise.all(resourcePromises);
+    const allModuleResults = await Promise.all(moduleResultsPromises);
 
-    // Step 3: YouTube API enrichment
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 4: Merge, deduplicate, count appearances per module
+    // ════════════════════════════════════════════════════════════════════════
+    const totalAvailableMinutes = totalHours * 60;
+    const allModuleCandidates = new Map<string, CandidateResource[]>();
+
+    for (let i = 0; i < (roadmap.modules || []).length; i++) {
+      const mod = roadmap.modules[i];
+      const moduleResults = allModuleResults[i];
+      const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes);
+      allModuleCandidates.set(mod.id, candidates);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 5: STAGE 3 — YouTube API Enrichment (batch all video IDs)
+    // ════════════════════════════════════════════════════════════════════════
     const allVideoIds = new Set<string>();
-    for (const resources of allResources) {
-      for (const r of resources) {
-        if (r.type === "video") {
-          const id = extractYouTubeVideoId(r.url);
+    for (const candidates of allModuleCandidates.values()) {
+      for (const c of candidates) {
+        if (c.type === "video") {
+          const id = extractYouTubeVideoId(c.url);
           if (id) allVideoIds.add(id);
         }
       }
     }
 
     let ytMap = new Map<string, YouTubeMetadata>();
-    if (allVideoIds.size > 0 && YOUTUBE_API_KEY) {
-      console.log(`Enriching ${allVideoIds.size} YouTube videos with metadata...`);
+    if (allVideoIds.size > 0) {
+      console.log(`Stage 3: Enriching ${allVideoIds.size} YouTube videos with metadata...`);
       ytMap = await fetchYouTubeMetadata([...allVideoIds], YOUTUBE_API_KEY);
       console.log(`Got metadata for ${ytMap.size} videos.`);
     }
 
-    // Step 4: Inject enriched resources + ensure no module has 0 resources
-    for (let i = 0; i < (roadmap.modules || []).length; i++) {
-      const mod = roadmap.modules[i];
-      const enriched = enrichResourcesWithYouTube(allResources[i] || [], ytMap, mod.title, topic);
-      if (enriched.length === 0) {
-        console.warn(`Module "${mod.title}" has 0 resources after enrichment, running fallback search...`);
-        // Fallback: do a simple broad search for this module
-        const fallbackResults = await fetchResourcesForModule(mod.title, topic, skill_level, SERPER_API_KEY, mod.estimated_hours || hours_per_day, effectiveGoal);
-        // For fallback, skip YouTube enrichment to avoid filtering them all out again
-        const nonVideoFallback = fallbackResults.filter(r => r.type !== "video");
-        if (nonVideoFallback.length > 0) {
-          mod.resources = nonVideoFallback;
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 6: STAGES 4-6 — Hard filter, Authority, Context Fit scoring
+    // ════════════════════════════════════════════════════════════════════════
+    for (const mod of (roadmap.modules || [])) {
+      const candidates = allModuleCandidates.get(mod.id) || [];
+      const ctx: ModuleContext = {
+        topic,
+        moduleTitle: mod.title,
+        moduleDescription: mod.description || "",
+        learningObjectives: mod.learning_objectives || [],
+        goal: effectiveGoal,
+        level: skill_level,
+        moduleMinutes: Math.floor((mod.estimated_hours || 1) * 60),
+      };
+
+      // Enrich videos with YouTube data + compute authority & context scores
+      const enriched = enrichCandidatesWithYouTube(candidates, ytMap, ctx);
+      
+      // Score non-video candidates too
+      for (const c of enriched) {
+        if (c.type !== "video") {
+          c.authority_score = computeAuthorityScore(c);
+          c.context_fit_score = computeContextFitScore(c, ctx);
+        }
+      }
+
+      allModuleCandidates.set(mod.id, enriched);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 7: STAGE 7 — Clustering & Diversity (pre-reranker)
+    // ════════════════════════════════════════════════════════════════════════
+    // Applied after reranker as fallback
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 8: STAGE 8 — Batch LLM Reranker
+    // ════════════════════════════════════════════════════════════════════════
+    console.log(`Stage 8: Running batch LLM reranker...`);
+    const rerankerSelections = await batchRerank(
+      allModuleCandidates,
+      roadmap.modules || [],
+      topic,
+      effectiveGoal,
+      skill_level,
+      LOVABLE_API_KEY
+    );
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 9: STAGE 9 — Final Assembly
+    // ════════════════════════════════════════════════════════════════════════
+    for (const mod of (roadmap.modules || [])) {
+      const candidates = allModuleCandidates.get(mod.id) || [];
+      const ctx: ModuleContext = {
+        topic,
+        moduleTitle: mod.title,
+        moduleDescription: mod.description || "",
+        learningObjectives: mod.learning_objectives || [],
+        goal: effectiveGoal,
+        level: skill_level,
+        moduleMinutes: Math.floor((mod.estimated_hours || 1) * 60),
+      };
+
+      const rerankedUrls = rerankerSelections.get(mod.title);
+
+      let finalResources: CandidateResource[];
+
+      if (rerankedUrls && rerankedUrls.length > 0) {
+        // Use reranker ordering, but fall back to heuristic for any not found
+        const reranked: CandidateResource[] = [];
+        for (const url of rerankedUrls) {
+          const match = candidates.find(c => c.url === url);
+          if (match) reranked.push(match);
+        }
+        // If reranker returned fewer than minimum, fill from heuristic
+        if (reranked.length < 2) {
+          finalResources = clusterAndDiversify(candidates, ctx);
         } else {
-          // Last resort: keep whatever we got from fallback even if videos
-          mod.resources = fallbackResults.length > 0 ? fallbackResults : [{
-            title: `${mod.title} - Official Documentation`,
-            url: `https://www.google.com/search?q=${encodeURIComponent(mod.title + " " + topic + " documentation")}`,
-            type: "article" as const,
-            estimated_minutes: Math.round((mod.estimated_hours || 1) * 30),
-            description: `Search for official documentation on ${mod.title}`,
-          }];
+          finalResources = reranked;
         }
       } else {
-        mod.resources = enriched;
+        // Reranker failed for this module — use heuristic clustering
+        finalResources = clusterAndDiversify(candidates, ctx);
+      }
+
+      // Convert to output format
+      if (finalResources.length > 0) {
+        mod.resources = finalResources.map(c => ({
+          title: c.title,
+          url: c.url,
+          type: c.type,
+          estimated_minutes: c.estimated_minutes,
+          description: c.description,
+          source: c.source,
+          channel: c.channel,
+          view_count: c.view_count,
+          like_count: c.like_count,
+          quality_signal: c.quality_signal,
+        } as Resource));
+      } else {
+        // Last resort fallback
+        console.warn(`Module "${mod.title}" has 0 resources after full pipeline, using fallback`);
+        mod.resources = [{
+          title: `${mod.title} - Official Documentation`,
+          url: `https://www.google.com/search?q=${encodeURIComponent(mod.title + " " + topic + " documentation")}`,
+          type: "article" as const,
+          estimated_minutes: Math.round((mod.estimated_hours || 1) * 30),
+          description: `Search for official documentation on ${mod.title}`,
+        }];
       }
     }
 
-    console.log("Roadmap generation complete.");
+    console.log("Roadmap generation complete (9-stage pipeline).");
     return new Response(JSON.stringify(roadmap), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("generate-roadmap error:", e);
