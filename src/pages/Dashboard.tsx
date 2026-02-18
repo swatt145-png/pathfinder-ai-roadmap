@@ -752,7 +752,7 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle className="font-heading">Revise this roadmap?</DialogTitle>
             <DialogDescription>
-              This will delete the current roadmap and take you to create a new one with the same details pre-filled. You can tweak any inputs before generating. This action cannot be undone.
+              We'll pre-fill a new roadmap form with these details. Your current roadmap will only be replaced after the new one is successfully generated.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -772,12 +772,12 @@ export default function Dashboard() {
                   hard_deadline: roadmap.hard_deadline ?? false,
                   deadline_date: roadmap.deadline_date ?? "",
                 };
-                await supabase.from("roadmaps").delete().eq("id", roadmap.id);
+                setReviseConfirmOpen(false);
                 navigate("/new", { state: reviseState });
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete & Revise
+              Continue to Revise
             </Button>
           </DialogFooter>
         </DialogContent>

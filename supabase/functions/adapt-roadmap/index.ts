@@ -92,6 +92,10 @@ const TECH_RELEVANCE_KEYWORDS = [
 interface SerperWebResult { title: string; link: string; snippet: string; }
 interface SerperVideoResult { title: string; link: string; duration?: string; }
 
+const DISALLOWED_RESOURCE_DOMAINS = [
+  "coursera.org",
+];
+
 interface CandidateResource {
   title: string;
   url: string;
@@ -164,9 +168,25 @@ function parseDurationToMinutes(duration?: string): number {
   return 15;
 }
 
+function isAllowedResourceUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    if (DISALLOWED_RESOURCE_DOMAINS.some(d => host.includes(d))) return false;
+    if (host.includes("google.") && path.startsWith("/search")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function estimateArticleMinutes(snippet: string): number {
   const wordCount = snippet ? snippet.split(/\s+/).length : 0;
-  return wordCount > 80 ? 15 : 10;
+  if (wordCount > 80) return 40;
+  if (wordCount > 40) return 30;
+  return 20;
 }
 
 function computeSemanticSimilarity(text1: string, text2: string): number {
@@ -295,6 +315,7 @@ function mergeAndDeduplicate(topicAnchors: { videos: SerperVideoResult[]; web: S
   const pushVideo = (v: SerperVideoResult) => {
     if (!v.link) return;
     const normalizedUrl = v.link.split("&")[0];
+    if (!isAllowedResourceUrl(normalizedUrl)) return;
     if (map.has(normalizedUrl)) return;
     map.set(normalizedUrl, {
       title: v.title || "Video tutorial",
@@ -308,6 +329,7 @@ function mergeAndDeduplicate(topicAnchors: { videos: SerperVideoResult[]; web: S
 
   const pushWeb = (w: SerperWebResult) => {
     if (!w.link) return;
+    if (!isAllowedResourceUrl(w.link)) return;
     if (w.link.includes("youtube.com/watch") || w.link.includes("youtu.be/")) return;
     if (map.has(w.link)) return;
     const listingLike = looksLikeListingPage(w.link, w.title || "", w.snippet || "");
@@ -378,7 +400,7 @@ function scoreCandidate(
   if (c.estimated_minutes > moduleMinutes * 2) timeFit = 0;
 
   let qualityFit = looksLikeListingPage(c.url, c.title, c.description) ? 6 : 12;
-  if (/freecodecamp|coursera|edx|learn.microsoft.com|aws|cloud\.google/i.test(c.url)) qualityFit = 15;
+  if (/freecodecamp|edx|learn.microsoft.com|aws|cloud\.google/i.test(c.url)) qualityFit = 15;
 
   if (goal === "hands_on" && preferredStack) {
     const mentioned = detectMentionedStacks(`${c.title} ${c.description}`);
@@ -519,19 +541,16 @@ async function refreshResourcesForAdaptedRoadmap(
       }
     }
 
-    mod.resources = selected.length > 0 ? selected.map(c => ({
+    const cleaned = selected.filter(c =>
+      isAllowedResourceUrl(c.url) && !looksLikeListingPage(c.url, c.title, c.description)
+    );
+    mod.resources = cleaned.map(c => ({
       title: c.title,
       url: c.url,
       type: c.type,
       estimated_minutes: c.estimated_minutes,
       description: c.description,
-    })) : [{
-      title: `${mod.title} - Official Documentation`,
-      url: `https://www.google.com/search?q=${encodeURIComponent((mod.title || "") + " " + topic + " documentation")}`,
-      type: "article",
-      estimated_minutes: Math.round((mod.estimated_hours || 1) * 30),
-      description: `Search for official documentation on ${mod.title || topic}`,
-    }];
+    }));
 
     totalRoadmapMinutes += moduleTotal;
   }

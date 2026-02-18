@@ -88,6 +88,7 @@ export default function NewRoadmap() {
   const [error, setError] = useState<string | null>(null);
   const [activeCount, setActiveCount] = useState(0);
   const [checkingActive, setCheckingActive] = useState(true);
+  const isReviseMode = Boolean(reviseState?.replaceRoadmapId);
 
   const checkActive = async () => {
     if (!user) return;
@@ -165,6 +166,13 @@ export default function NewRoadmap() {
       });
 
       if (insertError) throw insertError;
+
+      if (reviseState?.replaceRoadmapId) {
+        const oldRoadmapId = reviseState.replaceRoadmapId;
+        await supabase.from("progress").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
+        await supabase.from("adaptations").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
+        await supabase.from("roadmaps").delete().eq("id", oldRoadmapId).eq("user_id", user.id);
+      }
 
       const { data: newRm } = await supabase
         .from("roadmaps")
@@ -351,6 +359,13 @@ export default function NewRoadmap() {
 
           {/* Main content - full width */}
           <div className="w-full">
+            {isReviseMode && (
+              <div className="glass-blue p-3 mb-4 border border-primary/30">
+                <p className="text-sm text-muted-foreground">
+                  Revise mode: generating this roadmap will replace your current roadmap after successful creation.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-6">
               <div>

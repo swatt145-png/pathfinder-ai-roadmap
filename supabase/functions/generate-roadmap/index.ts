@@ -129,6 +129,10 @@ const DEPRIORITIZE_DOMAINS = [
   "tutorialspoint.com", "javatpoint.com",
 ];
 
+const DISALLOWED_RESOURCE_DOMAINS = [
+  "coursera.org",
+];
+
 // YouTube channel tiers
 const YOUTUBE_TRUSTED_CHANNELS = [
   "freecodecamp.org", "freecodecamp", "3blue1brown", "cs50", "computerphile",
@@ -161,7 +165,7 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
   },
   conceptual: {
     youtubeChannels: ["3blue1brown", "cs dojo", "computerphile", "corey schafer", "ibm technology"],
-    siteFilters: ["site:coursera.org", "site:edx.org", "site:freecodecamp.org"],
+    siteFilters: ["site:edx.org", "site:ocw.mit.edu", "site:freecodecamp.org"],
   },
   deep_mastery: {
     youtubeChannels: ["freecodecamp", "sentdex", "the coding train"],
@@ -191,6 +195,20 @@ function parseDurationToMinutes(duration?: string): number {
   const min = duration.match(/(\d+)\s*min/i);
   if (min) return parseInt(min[1]);
   return 15;
+}
+
+function isAllowedResourceUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    if (DISALLOWED_RESOURCE_DOMAINS.some(d => host.includes(d))) return false;
+    if (host.includes("google.") && path.startsWith("/search")) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function parseISO8601Duration(iso8601: string): number {
@@ -265,8 +283,9 @@ async function searchSerper(query: string, apiKey: string, type: "search" | "vid
 
 function estimateArticleMinutes(snippet: string): number {
   const wordCount = snippet ? snippet.split(/\s+/).length : 0;
-  if (wordCount > 80) return 15;
-  return 10;
+  if (wordCount > 80) return 40;
+  if (wordCount > 40) return 30;
+  return 20;
 }
 
 function computeSemanticSimilarity(text1: string, text2: string): number {
@@ -1115,6 +1134,7 @@ function mergeAndDeduplicate(
   function processVideo(v: SerperVideoResult) {
     if (!v.link) return;
     const normalizedUrl = v.link.split("&")[0];
+    if (!isAllowedResourceUrl(normalizedUrl)) return;
     const title = v.title || "Video Tutorial";
     if (isDisqualified(title, normalizedUrl)) return;
     const mins = parseDurationToMinutes(v.duration);
@@ -1135,6 +1155,7 @@ function mergeAndDeduplicate(
 
   function processWeb(r: SerperWebResult) {
     if (!r.link) return;
+    if (!isAllowedResourceUrl(r.link)) return;
     const title = r.title || "Learning Resource";
     if (isDisqualified(title, r.link)) return;
     if (r.link.includes("youtube.com/watch") || r.link.includes("youtu.be/")) return;
@@ -1938,8 +1959,12 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
         }
       }
 
-      if (budgetedResources.length > 0) {
-        mod.resources = budgetedResources.map(c => ({
+      const cleanedResources = budgetedResources.filter(c =>
+        isAllowedResourceUrl(c.url) && !looksLikeListingPage(c.url, c.title, c.description)
+      );
+
+      if (cleanedResources.length > 0) {
+        mod.resources = cleanedResources.map(c => ({
           title: c.title,
           url: c.url,
           type: c.type,
