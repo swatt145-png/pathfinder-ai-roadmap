@@ -17,6 +17,8 @@ interface ResourceSegment {
   end_minute: number;
 }
 
+type AuthorityTier = "OFFICIAL_DOCS" | "VENDOR_DOCS" | "UNIVERSITY_DIRECT" | "EDUCATION_DOMAIN" | "BLOG" | "YOUTUBE_TRUSTED" | "YOUTUBE_UNKNOWN" | "COMMUNITY" | "UNKNOWN";
+
 interface CandidateResource {
   title: string;
   url: string;
@@ -29,7 +31,11 @@ interface CandidateResource {
   like_count?: number;
   quality_signal?: string;
   appearances_count: number;
-  authority_score: number;
+  authority_score: number; // Now 0-5 (light bump)
+  authority_tier?: AuthorityTier;
+  authority_score_norm?: number;
+  reason_flags?: string[];
+  scope_penalty?: number;
   context_fit_score: number;
   why_selected?: string;
   span_plan?: ResourceSegment[];
@@ -69,20 +75,29 @@ interface ModuleContext {
   goal: string;
   level: string;
   moduleMinutes: number;
+  anchorTerms?: string[];
 }
 
-// ─── Tiered Source Authority ─────────────────────────────────────────────────
+// ─── Authority Tier Configuration (Light Priors) ─────────────────────────────
 
-const TIER1_DOMAINS = [
-  "freecodecamp.org", "cs50.harvard.edu", "ocw.mit.edu",
-  "khanacademy.org", "developer.mozilla.org",
-];
+const TIER_CONFIG: Record<AuthorityTier, { norm: number; maxImpact: number }> = {
+  OFFICIAL_DOCS:    { norm: 1.00, maxImpact: 5 },
+  VENDOR_DOCS:      { norm: 0.90, maxImpact: 4 },
+  UNIVERSITY_DIRECT:{ norm: 0.85, maxImpact: 4 },
+  EDUCATION_DOMAIN: { norm: 0.75, maxImpact: 3 },
+  YOUTUBE_TRUSTED:  { norm: 0.80, maxImpact: 3 },
+  BLOG:             { norm: 0.60, maxImpact: 3 },
+  YOUTUBE_UNKNOWN:  { norm: 0.50, maxImpact: 2 },
+  COMMUNITY:        { norm: 0.42, maxImpact: 2 },
+  UNKNOWN:          { norm: 0.25, maxImpact: 1 },
+};
 
+// Domain classification lists
 const OFFICIAL_DOC_PATTERNS = [
   "python.org/doc", "docs.python.org", "react.dev", "vuejs.org",
   "angular.io/docs", "docs.docker.com", "kubernetes.io/docs",
   "go.dev/doc", "doc.rust-lang.org", "docs.oracle.com",
-  "learn.microsoft.com", "developer.apple.com",
+  "learn.microsoft.com", "developer.apple.com", "developer.mozilla.org",
 ];
 
 const MAJOR_VENDOR_DOMAINS = [
@@ -92,30 +107,42 @@ const MAJOR_VENDOR_DOMAINS = [
 
 const UNIVERSITY_DOMAINS = [
   "stanford.edu", "mit.edu", "harvard.edu", "berkeley.edu",
-  "coursera.org", "edx.org", "udacity.com",
+  "cs50.harvard.edu", "ocw.mit.edu",
 ];
 
-const RECOGNIZED_TECH_BLOGS = [
+const EDUCATION_DOMAINS = [
+  "coursera.org", "edx.org", "udacity.com", "khanacademy.org",
+  "freecodecamp.org",
+];
+
+const RECOGNIZED_BLOGS = [
   "dev.to", "realpython.com", "digitalocean.com", "geeksforgeeks.org",
   "baeldung.com", "medium.com", "hashnode.dev", "smashingmagazine.com",
   "css-tricks.com", "web.dev",
+];
+
+const COMMUNITY_DOMAINS = [
+  "stackoverflow.com", "reddit.com", "quora.com",
 ];
 
 const DEPRIORITIZE_DOMAINS = [
   "tutorialspoint.com", "javatpoint.com",
 ];
 
-// YouTube channel tiers (lowercase)
-const YOUTUBE_TIER1_CHANNELS = [
+// YouTube channel tiers
+const YOUTUBE_TRUSTED_CHANNELS = [
   "freecodecamp.org", "freecodecamp", "3blue1brown", "cs50", "computerphile",
-  "mit opencourseware", "khan academy",
+  "mit opencourseware", "khan academy", "ibm technology", "google cloud tech",
+  "aws", "microsoft developer", "traversy media", "fireship",
+  "web dev simplified", "tech with tim", "programming with mosh",
+  "the coding train", "sentdex", "corey schafer", "techworld with nana",
+  "networkchuck", "net ninja", "javascript mastery", "cs dojo",
+  "academind", "ben awad", "theo",
 ];
-const YOUTUBE_TIER2_CHANNELS = [
-  "traversy media", "fireship", "web dev simplified", "tech with tim",
-  "programming with mosh", "the coding train", "sentdex", "corey schafer",
-  "techworld with nana", "networkchuck", "net ninja", "javascript mastery",
-  "cs dojo", "academind", "ben awad", "theo", "ibm technology",
-  "google cloud tech", "aws", "microsoft developer",
+
+// Spam/garbage domain patterns for Stage 5 hard filter
+const GARBAGE_DOMAINS = [
+  "linkfarm", "spamsite", "click-bait", "content-farm",
 ];
 
 interface GoalResources {
@@ -242,15 +269,6 @@ function estimateArticleMinutes(snippet: string): number {
   return 10;
 }
 
-// ─── STAGE 4: Hard Filter ────────────────────────────────────────────────────
-
-function isDisqualified(title: string, url: string): boolean {
-  const spamSignals = /\b(top \d+ best|best \d+|you won't believe|clickbait|ai generated|content farm)\b/i;
-  if (spamSignals.test(title)) return true;
-  if (DEPRIORITIZE_DOMAINS.some(d => url.toLowerCase().includes(d))) return true;
-  return false;
-}
-
 function computeSemanticSimilarity(text1: string, text2: string): number {
   const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
   const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
@@ -259,42 +277,250 @@ function computeSemanticSimilarity(text1: string, text2: string): number {
   for (const w of words1) {
     if (words2.has(w)) overlap++;
   }
-  // Jaccard-like but weighted toward the smaller set for recall
   return overlap / Math.min(words1.size, words2.size);
 }
 
-// ─── STAGE 5: Authority Scoring ──────────────────────────────────────────────
+// ─── STAGE 4: Enhanced Hard Filter ───────────────────────────────────────────
 
-function computeAuthorityScore(candidate: CandidateResource, ytMeta?: YouTubeMetadata): number {
-  let score = 0;
-  const urlLower = candidate.url.toLowerCase();
+// 4.0: Basic disqualification (spam/garbage)
+function isDisqualified(title: string, url: string): boolean {
+  const spamSignals = /\b(top \d+ best|best \d+|you won't believe|clickbait|ai generated|content farm)\b/i;
+  if (spamSignals.test(title)) return true;
+  if (DEPRIORITIZE_DOMAINS.some(d => url.toLowerCase().includes(d))) return true;
+  return false;
+}
 
-  // Domain authority
-  if (TIER1_DOMAINS.some(d => urlLower.includes(d))) score += 30;
-  if (OFFICIAL_DOC_PATTERNS.some(d => urlLower.includes(d))) score += 28;
-  if (MAJOR_VENDOR_DOMAINS.some(d => urlLower.includes(d))) score += 22;
-  if (UNIVERSITY_DOMAINS.some(d => urlLower.includes(d))) score += 20;
-  if (RECOGNIZED_TECH_BLOGS.some(d => urlLower.includes(d))) score += 12;
-
-  // YouTube-specific authority
-  if (candidate.type === "video" && ytMeta) {
-    // View count: log-normalized (log10(1M) ≈ 6, log10(100K) ≈ 5, log10(10K) ≈ 4)
-    const logViews = ytMeta.viewCount > 0 ? Math.log10(ytMeta.viewCount) : 0;
-    score += Math.min(logViews * 4, 28); // max 28 from views
-
-    // Channel tier
-    const channelLower = ytMeta.channel.toLowerCase();
-    if (YOUTUBE_TIER1_CHANNELS.some(ch => channelLower.includes(ch))) score += 20;
-    else if (YOUTUBE_TIER2_CHANNELS.some(ch => channelLower.includes(ch))) score += 15;
-  } else if (candidate.type === "video") {
-    // No YT metadata — slight penalty but don't kill it
-    score += 5;
+// 4.1: Anchor Precision Gate — module-specific anchor enforcement
+function generateModuleAnchors(mod: any, topic: string): string[] {
+  // Use AI-generated anchors if available
+  if (mod.anchor_terms && Array.isArray(mod.anchor_terms) && mod.anchor_terms.length > 0) {
+    return mod.anchor_terms.map((t: string) => t.toLowerCase().trim());
   }
 
-  // Appearances bonus (appeared in multiple queries = validated relevance)
-  score += Math.min(candidate.appearances_count * 5, 20);
+  // Fallback: extract technical terms from module title, description, objectives
+  const stopWords = new Set([
+    "the", "and", "for", "with", "this", "that", "from", "into", "your", "will",
+    "how", "what", "why", "when", "learn", "understand", "explore", "using",
+    "introduction", "getting", "started", "basics", "overview", "module",
+    "concepts", "working", "building", "creating", "implementing", "advanced",
+    "intermediate", "beginner", "fundamental", "essential", "key", "core",
+    "deep", "dive", "part", "section", "chapter", "unit", "lesson",
+  ]);
 
-  return Math.min(score, 100);
+  const allText = `${mod.title} ${mod.description || ""} ${(mod.learning_objectives || []).join(" ")}`;
+  const words = allText.toLowerCase()
+    .replace(/[^a-z0-9\s\-_.\/]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.has(w));
+
+  // Also extract 2-word phrases from title
+  const titleWords = mod.title.toLowerCase().replace(/[^a-z0-9\s\-]/g, " ").split(/\s+/).filter((w: string) => w.length > 1);
+  const bigrams: string[] = [];
+  for (let i = 0; i < titleWords.length - 1; i++) {
+    if (!stopWords.has(titleWords[i]) || !stopWords.has(titleWords[i + 1])) {
+      bigrams.push(`${titleWords[i]} ${titleWords[i + 1]}`);
+    }
+  }
+
+  // Deduplicate and limit
+  const anchors = [...new Set([...bigrams, ...words])];
+  // Remove the main topic itself (too broad)
+  const topicLower = topic.toLowerCase();
+  const filtered = anchors.filter(a => a !== topicLower && a.length > 2);
+
+  return filtered.slice(0, 8);
+}
+
+function passesAnchorGate(candidate: CandidateResource, anchors: string[]): boolean {
+  if (anchors.length === 0) return true; // No anchors = skip gate
+
+  const text = `${candidate.title} ${candidate.description}`.toLowerCase();
+  for (const anchor of anchors) {
+    if (text.includes(anchor)) return true;
+  }
+  return false;
+}
+
+// 4.2: Scope Mismatch Penalty — penalize broad meta-content for narrow modules
+const BROAD_SCOPE_SIGNALS = [
+  "roadmap", "full course", "complete guide", "overview",
+  "beginner to advanced", "crash course", "ultimate guide",
+  "everything you need", "learn .+ in \\d+", "zero to hero",
+  "complete tutorial", "all you need to know",
+];
+
+function computeScopePenalty(candidate: CandidateResource, ctx: ModuleContext): number {
+  const text = `${candidate.title} ${candidate.description}`.toLowerCase();
+  const hasBroadSignal = BROAD_SCOPE_SIGNALS.some(pattern => {
+    try {
+      return new RegExp(pattern, "i").test(text);
+    } catch {
+      return text.includes(pattern);
+    }
+  });
+
+  if (!hasBroadSignal) return 0;
+
+  // Check if module is intro/overview → no penalty
+  const modTitleLower = ctx.moduleTitle.toLowerCase();
+  const isIntroModule = /introduction|overview|getting started|basics|fundamentals|what is/i.test(modTitleLower);
+  const isQuickGoal = ctx.goal === "quick_overview";
+
+  if (isIntroModule || isQuickGoal) return 0;
+
+  // Intermediate/Advanced/Deep mastery/Tool-specific → penalty
+  const isNarrow = ctx.level === "intermediate" || ctx.level === "advanced" || ctx.goal === "deep_mastery";
+  if (isNarrow) return 15; // Stronger penalty for narrow modules
+  return 10; // Default penalty for non-intro modules
+}
+
+// Full Stage 4 pipeline
+function applyStage4Filter(
+  candidates: CandidateResource[],
+  ctx: ModuleContext
+): CandidateResource[] {
+  const anchors = ctx.anchorTerms || [];
+  const filtered: CandidateResource[] = [];
+
+  for (const c of candidates) {
+    // 4.0: Basic spam check (already done in mergeAndDeduplicate, but double-check)
+    if (isDisqualified(c.title, c.url)) continue;
+
+    // 4.1: Embedding similarity threshold
+    const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
+    const resourceText = `${c.title} ${c.description} ${c.channel || ""}`;
+    const similarity = computeSemanticSimilarity(moduleText, resourceText);
+    if (similarity < 0.05) continue;
+
+    // 4.2: Anchor precision gate — hard reject if no anchors match
+    if (!passesAnchorGate(c, anchors)) {
+      continue;
+    }
+
+    // 4.3: Scope penalty (applied as negative score adjustment, not hard reject)
+    const penalty = computeScopePenalty(c, ctx);
+    c.scope_penalty = penalty;
+
+    filtered.push(c);
+  }
+
+  console.log(`Stage 4: ${candidates.length} → ${filtered.length} candidates for "${ctx.moduleTitle}" (${anchors.length} anchors)`);
+  return filtered;
+}
+
+// ─── STAGE 5: Light Authority Scoring ────────────────────────────────────────
+
+function classifyAuthorityTier(candidate: CandidateResource, ytMeta?: YouTubeMetadata): { tier: AuthorityTier; reasonFlags: string[] } {
+  const urlLower = candidate.url.toLowerCase();
+  const reasonFlags: string[] = [];
+
+  // Official docs
+  if (OFFICIAL_DOC_PATTERNS.some(d => urlLower.includes(d))) {
+    reasonFlags.push("official_docs");
+    return { tier: "OFFICIAL_DOCS", reasonFlags };
+  }
+
+  // Major vendor
+  if (MAJOR_VENDOR_DOMAINS.some(d => urlLower.includes(d))) {
+    reasonFlags.push("vendor_docs");
+    return { tier: "VENDOR_DOCS", reasonFlags };
+  }
+
+  // University direct
+  if (UNIVERSITY_DOMAINS.some(d => urlLower.includes(d))) {
+    reasonFlags.push("university");
+    return { tier: "UNIVERSITY_DIRECT", reasonFlags };
+  }
+
+  // Education platforms
+  if (EDUCATION_DOMAINS.some(d => urlLower.includes(d))) {
+    reasonFlags.push("education_platform");
+    return { tier: "EDUCATION_DOMAIN", reasonFlags };
+  }
+
+  // YouTube
+  if (candidate.type === "video") {
+    if (ytMeta) {
+      const channelLower = ytMeta.channel.toLowerCase();
+      if (YOUTUBE_TRUSTED_CHANNELS.some(ch => channelLower.includes(ch))) {
+        reasonFlags.push("youtube_channel_known");
+        return { tier: "YOUTUBE_TRUSTED", reasonFlags };
+      }
+    }
+    reasonFlags.push("youtube_unknown");
+    return { tier: "YOUTUBE_UNKNOWN", reasonFlags };
+  }
+
+  // Blogs
+  if (RECOGNIZED_BLOGS.some(d => urlLower.includes(d))) {
+    reasonFlags.push("recognized_blog");
+    return { tier: "BLOG", reasonFlags };
+  }
+
+  // .edu domains (not in specific university list)
+  if (urlLower.includes(".edu")) {
+    reasonFlags.push("edu_domain");
+    return { tier: "EDUCATION_DOMAIN", reasonFlags };
+  }
+
+  // Community
+  if (COMMUNITY_DOMAINS.some(d => urlLower.includes(d))) {
+    reasonFlags.push("community_site");
+    return { tier: "COMMUNITY", reasonFlags };
+  }
+
+  return { tier: "UNKNOWN", reasonFlags: ["unknown_source"] };
+}
+
+function computeLightAuthorityBump(candidate: CandidateResource, ytMeta?: YouTubeMetadata): void {
+  const { tier, reasonFlags } = classifyAuthorityTier(candidate, ytMeta);
+  const config = TIER_CONFIG[tier];
+  const bump = Math.min(config.maxImpact, Math.round(config.norm * config.maxImpact));
+
+  candidate.authority_tier = tier;
+  candidate.authority_score_norm = config.norm;
+  candidate.authority_score = bump; // 0-5 range
+  candidate.reason_flags = reasonFlags;
+}
+
+// Stage 5: Garbage filter — only hard-reject true junk
+function isGarbage(candidate: CandidateResource): boolean {
+  const urlLower = candidate.url.toLowerCase();
+  // Known spam/link farm domains
+  if (GARBAGE_DOMAINS.some(d => urlLower.includes(d))) return true;
+  // Suspicious URL patterns
+  if (/\.(xyz|tk|ml|ga|cf)\//.test(urlLower)) return true;
+  // Empty or suspiciously short descriptions that suggest thin content
+  if (candidate.description.length < 10 && !candidate.channel) return true;
+  return false;
+}
+
+// Stage 5: Diversity caps — ensure balanced mix going to Agent 2
+function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: number): CandidateResource[] {
+  if (candidates.length <= maxPerModule) return candidates;
+
+  const videos = candidates.filter(c => c.type === "video");
+  const docs = candidates.filter(c => c.type === "documentation");
+  const articles = candidates.filter(c => c.type === "article" || c.type === "tutorial" || c.type === "practice");
+
+  const maxVideos = Math.ceil(maxPerModule * 0.4);
+  const maxDocs = Math.ceil(maxPerModule * 0.4);
+  const maxArticles = maxPerModule - Math.min(videos.length, maxVideos) - Math.min(docs.length, maxDocs);
+
+  const result: CandidateResource[] = [];
+  result.push(...videos.slice(0, maxVideos));
+  result.push(...docs.slice(0, maxDocs));
+  result.push(...articles.slice(0, Math.max(maxArticles, maxPerModule - result.length)));
+
+  // Fill remaining slots if under cap
+  if (result.length < maxPerModule) {
+    for (const c of candidates) {
+      if (result.length >= maxPerModule) break;
+      if (!result.includes(c)) result.push(c);
+    }
+  }
+
+  return result.slice(0, maxPerModule);
 }
 
 // ─── STAGE 6: Context Fit Scoring (Heuristic Fallback) ──────────────────────
@@ -319,6 +545,10 @@ function computeContextFitScoreFallback(candidate: CandidateResource, ctx: Modul
     if (goalChannels.some(ch => channelLower.includes(ch))) score += 10;
   }
   if (candidate.estimated_minutes > ctx.moduleMinutes * 2) score -= 5;
+
+  // Apply scope penalty from Stage 4
+  score -= (candidate.scope_penalty || 0);
+
   return Math.max(0, Math.min(score, 100));
 }
 
@@ -337,6 +567,11 @@ interface AIFitScoringInput {
     channel: string;
     duration_minutes: number;
     description: string;
+    authority_tier: string;
+    authority_score_norm: number;
+    authority_bump: number;
+    content_type: string;
+    reason_flags: string[];
   }>;
 }
 
@@ -348,15 +583,14 @@ async function batchAIContextFitScoring(
   level: string,
   apiKey: string
 ): Promise<boolean> {
-  // Build compact input for the AI scorer
   const scoringModules: AIFitScoringInput[] = [];
   
   for (const mod of modules) {
     const candidates = allModuleCandidates.get(mod.id) || [];
-    // Only send top 20 by authority to keep payload manageable
-    const top = [...candidates]
-      .sort((a, b) => b.authority_score - a.authority_score)
-      .slice(0, 20);
+    // Sort by heuristic context_fit_score (not authority) to get most relevant top 20
+    const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
+    // Apply diversity caps before sending to Agent 2
+    const top = applyDiversityCaps(sorted, 20);
     
     if (top.length === 0) continue;
     
@@ -370,9 +604,14 @@ async function batchAIContextFitScoring(
         title: c.title,
         url: c.url,
         type: c.type,
-        channel: c.channel || new URL(c.url).hostname.replace("www.", ""),
+        channel: c.channel || (() => { try { return new URL(c.url).hostname.replace("www.", ""); } catch { return "unknown"; } })(),
         duration_minutes: c.estimated_minutes,
         description: c.description,
+        authority_tier: c.authority_tier || "UNKNOWN",
+        authority_score_norm: c.authority_score_norm || 0,
+        authority_bump: c.authority_score,
+        content_type: c.type,
+        reason_flags: c.reason_flags || [],
       })),
     });
   }
@@ -393,6 +632,8 @@ Your job: Score each candidate resource's FIT (0-100) for its module. Consider:
 3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? (${goal === "hands_on" ? "Prefer tutorials, code-alongs, project builds" : goal === "conceptual" ? "Prefer explanations, lectures, theory deep-dives" : goal === "quick_overview" ? "Prefer short crash courses, summaries" : "Prefer comprehensive, in-depth content"})
 4. PEDAGOGICAL QUALITY (0-10): Based on title/description, does this look like quality educational content vs clickbait/listicle?
 5. TOOL/FRAMEWORK FIT (0-10): If the module is about React, a Vue tutorial scores 0 here. If tool-agnostic topic, give 5-10.
+
+Each candidate includes authority_tier and authority_bump. These are informational only — do NOT let authority override your content fit assessment. A high-authority source with poor content fit should score low. A low-authority source with excellent content fit should score high.
 
 Score STRICTLY. A score of 80+ means "excellent fit". 50-79 means "acceptable". Below 50 means "poor fit".
 
@@ -436,20 +677,17 @@ Return ONLY valid JSON:
 
     const parsed = JSON.parse(content);
     
-    // Apply AI scores back to candidates
     for (const modScores of (parsed.scores || [])) {
       const candidates = allModuleCandidates.get(modScores.module_id);
       if (!candidates) continue;
       
-      // Build authority-sorted top 20 to map indices back
-      const top = [...candidates]
-        .sort((a, b) => b.authority_score - a.authority_score)
-        .slice(0, 20);
+      // Build context-fit-sorted top 20 to map indices back
+      const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
+      const top = applyDiversityCaps(sorted, 20);
       
       for (const cs of (modScores.candidate_scores || [])) {
         if (cs.index >= 0 && cs.index < top.length) {
           const candidate = top[cs.index];
-          // Find it in the original array and update
           const original = candidates.find(c => c.url === candidate.url);
           if (original) {
             original.context_fit_score = Math.max(0, Math.min(cs.score, 100));
@@ -469,12 +707,11 @@ Return ONLY valid JSON:
 // ─── STAGE 7: Clustering & Diversity (FLEXIBLE) ─────────────────────────────
 
 function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext): CandidateResource[] {
-  // Sort by combined score (authority + context fit)
+  // Sort by context_fit_score primarily, authority as tiebreaker
   const sorted = [...candidates].sort((a, b) => 
-    (b.authority_score + b.context_fit_score) - (a.authority_score + a.context_fit_score)
+    (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score)
   );
 
-  // Simple clustering: remove near-duplicates (high title similarity)
   const deduplicated: CandidateResource[] = [];
   for (const c of sorted) {
     const isDuplicate = deduplicated.some(existing => {
@@ -484,25 +721,31 @@ function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext
     if (!isDuplicate) deduplicated.push(c);
   }
 
-  // FLEXIBLE: 1-5 resources per module based on time budget
   const maxResources = 5;
   const selected: CandidateResource[] = [];
   let totalMinutes = 0;
-  const dailyCapMinutes = ctx.moduleMinutes * 1.1; // 10% overflow allowed
+  const dailyCapMinutes = ctx.moduleMinutes * 1.1;
 
   for (const c of deduplicated) {
     if (selected.length >= maxResources) break;
 
-    // A resource is feasible if it fits within the module's daily cap
-    if (selected.length > 0 && totalMinutes + c.estimated_minutes > dailyCapMinutes) continue;
+    // BUG FIX: Enforce budget even for the first resource
+    if (totalMinutes + c.estimated_minutes > dailyCapMinutes) continue;
 
     selected.push(c);
     totalMinutes += c.estimated_minutes;
   }
 
-  // Minimum 1 resource per module — always include at least the top candidate
+  // Minimum 1 resource — pick the single best that fits budget, or smallest if none fit
   if (selected.length === 0 && deduplicated.length > 0) {
-    selected.push(deduplicated[0]);
+    const fitting = deduplicated.filter(c => c.estimated_minutes <= dailyCapMinutes);
+    if (fitting.length > 0) {
+      selected.push(fitting[0]);
+    } else {
+      // All exceed budget — pick the shortest one
+      const shortest = [...deduplicated].sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
+      selected.push(shortest);
+    }
   }
 
   return selected;
@@ -528,18 +771,16 @@ function negotiateSpanningResources(
   const dailyCapMinutes = effectiveHoursPerDay * 60;
   const spanCandidates: SpanCandidate[] = [];
 
-  // Pass 1: Resource agent identifies high-quality oversized resources
   for (let i = 0; i < modules.length; i++) {
     const mod = modules[i];
     const candidates = allModuleCandidates.get(mod.id) || [];
     const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
 
     for (const c of candidates) {
-      // Resource exceeds this module's budget but is high quality
       if (c.estimated_minutes > moduleMinutes * 1.1 && c.estimated_minutes <= totalUsableMinutes) {
-        const qualityScore = c.authority_score + c.context_fit_score;
-        // Only consider truly high-quality resources for spanning (top quartile threshold)
-        if (qualityScore >= 40) {
+        // Use context_fit as primary quality signal (authority is now only 0-5)
+        const qualityScore = c.context_fit_score;
+        if (qualityScore >= 30) {
           spanCandidates.push({ resource: c, sourceModuleIndex: i, qualityScore });
         }
       }
@@ -548,10 +789,7 @@ function negotiateSpanningResources(
 
   if (spanCandidates.length === 0) return allModuleCandidates;
 
-  // Sort by quality — best resources first
   spanCandidates.sort((a, b) => b.qualityScore - a.qualityScore);
-  
-  // Limit to top 3 spanning candidates to avoid over-spanning
   const topSpanCandidates = spanCandidates.slice(0, 3);
   const usedSpanUrls = new Set<string>();
 
@@ -562,8 +800,6 @@ function negotiateSpanningResources(
     if (usedSpanUrls.has(resource.url)) continue;
 
     const resourceMinutes = resource.estimated_minutes;
-    
-    // Pass 2: Curriculum agent determines how many consecutive modules this resource can span
     const segments: ResourceSegment[] = [];
     let minutesRemaining = resourceMinutes;
     let currentMinute = 0;
@@ -571,7 +807,6 @@ function negotiateSpanningResources(
     for (let j = sourceModuleIndex; j < modules.length && minutesRemaining > 0; j++) {
       const mod = modules[j];
       const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
-      // Allocate up to the module's daily cap for this resource segment
       const segmentMinutes = Math.min(minutesRemaining, moduleMinutes);
       
       segments.push({
@@ -585,34 +820,29 @@ function negotiateSpanningResources(
       minutesRemaining -= segmentMinutes;
     }
 
-    // Only create span if resource can be completed within available modules
     if (minutesRemaining > 0) {
       console.log(`Negotiation: Skipping "${resource.title}" (${resourceMinutes}min) — doesn't fit even spanning ${segments.length} modules`);
       continue;
     }
 
-    if (segments.length < 2) continue; // No spanning needed
+    if (segments.length < 2) continue;
 
     console.log(`Negotiation: Spanning "${resource.title}" (${resourceMinutes}min) across ${segments.length} modules: ${segments.map(s => `${s.module_title}[${s.start_minute}-${s.end_minute}min]`).join(" → ")}`);
 
     usedSpanUrls.add(resource.url);
 
-    // Create the primary resource with full span_plan in the first module
     const primaryResource: CandidateResource = {
       ...resource,
       span_plan: segments,
-      estimated_minutes: segments[0].end_minute - segments[0].start_minute, // Only this segment's time counts for module 1
+      estimated_minutes: segments[0].end_minute - segments[0].start_minute,
     };
 
-    // Add primary to first module's candidates
     const firstModId = modules[sourceModuleIndex].id;
     const firstModCandidates = allModuleCandidates.get(firstModId) || [];
-    // Remove original oversized version, add spanning version
     const filteredFirst = firstModCandidates.filter(c => c.url !== resource.url);
-    filteredFirst.unshift(primaryResource); // Add at top since it's high quality
+    filteredFirst.unshift(primaryResource);
     allModuleCandidates.set(firstModId, filteredFirst);
 
-    // Add continuation resources to subsequent modules
     for (let k = 1; k < segments.length; k++) {
       const seg = segments[k];
       const continuationResource: CandidateResource = {
@@ -622,13 +852,11 @@ function negotiateSpanningResources(
         is_continuation: true,
         continuation_of: resource.url,
         span_plan: segments,
-        // Boost scores so reranker picks it up
-        authority_score: resource.authority_score + 10,
-        context_fit_score: resource.context_fit_score + 10,
+        authority_score: resource.authority_score,
+        context_fit_score: Math.min(resource.context_fit_score + 10, 100),
       };
 
       const modCandidates = allModuleCandidates.get(seg.module_id) || [];
-      // Remove any duplicate of this URL in the target module
       const filteredMod = modCandidates.filter(c => c.url !== resource.url);
       filteredMod.unshift(continuationResource);
       allModuleCandidates.set(seg.module_id, filteredMod);
@@ -670,7 +898,6 @@ function getLevelSearchModifier(level: string): string {
   }
 }
 
-// Stage 2A: Topic-Wide Anchor Retrieval
 async function fetchTopicAnchors(
   topic: string,
   level: string,
@@ -681,7 +908,6 @@ async function fetchTopicAnchors(
   const goalConfig = getGoalSearchConfig(goal);
   const goalMod = goalConfig.queryModifiers[0] || "";
 
-  // 3 broad queries: explained, tutorial, full course
   const queries = [
     `${topic} ${goalMod} ${levelMod}`,
     `${topic} tutorial complete guide`,
@@ -707,7 +933,6 @@ async function fetchTopicAnchors(
   return { videos, web };
 }
 
-// Stage 2B: Module-Specific Retrieval
 async function fetchModuleResults(
   moduleTitle: string,
   topic: string,
@@ -719,7 +944,6 @@ async function fetchModuleResults(
   const levelMod = getLevelSearchModifier(level);
   const goalRes = GOAL_RESOURCES[goal] || GOAL_RESOURCES["hands_on"];
 
-  // Generate 5 diversified queries
   const queries = [
     `${moduleTitle} ${topic} ${config.queryModifiers[0] || "explained"}`,
     `${moduleTitle} ${topic} ${levelMod}`,
@@ -728,7 +952,6 @@ async function fetchModuleResults(
     `${moduleTitle} ${config.queryModifiers[2] || "guide"} ${levelMod}`,
   ];
 
-  // Run 5 video + 5 web searches in parallel
   const promises: Promise<any>[] = [];
   for (const q of queries) {
     promises.push(searchSerper(q, serperKey, "videos", 6));
@@ -763,7 +986,6 @@ function mergeAndDeduplicate(
     const title = v.title || "Video Tutorial";
     if (isDisqualified(title, normalizedUrl)) return;
     const mins = parseDurationToMinutes(v.duration);
-    // Don't hard-reject long resources here — negotiation pass will handle spanning
 
     if (urlMap.has(normalizedUrl)) {
       urlMap.get(normalizedUrl)!.appearances_count++;
@@ -783,7 +1005,6 @@ function mergeAndDeduplicate(
     if (!r.link) return;
     const title = r.title || "Learning Resource";
     if (isDisqualified(title, r.link)) return;
-    // Skip YouTube links in web results (already handled as videos)
     if (r.link.includes("youtube.com/watch") || r.link.includes("youtu.be/")) return;
 
     if (urlMap.has(r.link)) {
@@ -801,11 +1022,8 @@ function mergeAndDeduplicate(
     }
   }
 
-  // Process topic anchors first
   for (const v of topicAnchors.videos) processVideo(v);
   for (const r of topicAnchors.web) processWeb(r);
-
-  // Process module results
   for (const v of moduleResults.videos) processVideo(v);
   for (const r of moduleResults.web) processWeb(r);
 
@@ -824,16 +1042,7 @@ function enrichCandidatesWithYouTube(
     const videoId = extractYouTubeVideoId(c.url);
     if (!videoId) return true;
     const meta = ytMap.get(videoId);
-    if (!meta) return false; // Video not found (private/deleted)
-
-    // Stage 4: Semantic filter — reject only if very low similarity
-    const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
-    const resourceText = `${meta.title} ${meta.channel}`;
-    const similarity = computeSemanticSimilarity(moduleText, resourceText);
-    if (similarity < 0.05) {
-      console.warn(`Excluding very off-topic video: "${meta.title}" by ${meta.channel} (similarity: ${similarity.toFixed(2)})`);
-      return false;
-    }
+    if (!meta) return false;
 
     // Enrich
     c.title = meta.title || c.title;
@@ -844,8 +1053,9 @@ function enrichCandidatesWithYouTube(
     c.source = "YouTube";
     c.quality_signal = `${formatViewCount(meta.viewCount)} views · ${meta.channel} · ${meta.durationMinutes} min`;
 
-    // Compute authority & context fit scores
-    c.authority_score = computeAuthorityScore(c, meta);
+    // Light authority bump (Stage 5)
+    computeLightAuthorityBump(c, meta);
+    // Heuristic context fit (Stage 6 fallback)
     c.context_fit_score = computeContextFitScoreFallback(c, ctx, meta);
 
     return true;
@@ -879,14 +1089,12 @@ async function batchRerank(
   level: string,
   apiKey: string
 ): Promise<Map<string, string[]>> {
-  // Build reranker input for all modules
   const rerankerModules: RerankerInput[] = [];
   
   for (const mod of modules) {
     const candidates = moduleCandidates.get(mod.id) || [];
-    // Take top 12 by combined score
     const top12 = [...candidates]
-      .sort((a, b) => (b.authority_score + b.context_fit_score) - (a.authority_score + a.context_fit_score))
+      .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score))
       .slice(0, 12);
 
     rerankerModules.push({
@@ -897,7 +1105,7 @@ async function batchRerank(
         title: c.title,
         url: c.url,
         type: c.type,
-        channel_or_site: c.channel || new URL(c.url).hostname.replace("www.", ""),
+        channel_or_site: c.channel || (() => { try { return new URL(c.url).hostname.replace("www.", ""); } catch { return "unknown"; } })(),
         duration_minutes: c.estimated_minutes,
         view_count: c.view_count || 0,
         appearances_count: c.appearances_count,
@@ -917,7 +1125,8 @@ Learner profile:
 Rules:
 - A module CAN have just 1 resource if it's excellent and fits the time budget perfectly.
 - Do NOT add filler resources just to reach a count. Each must add unique value.
-- Prefer canonical, widely trusted sources (high authority_score)
+- context_fit_score is the PRIMARY signal — it comes from an AI that evaluated content relevance
+- authority_score is a small tiebreaker (0-5 range) — do not over-weight it
 - Avoid low-view unknown creators unless uniquely valuable
 - Avoid redundancy — don't pick 3 similar videos
 - Time is a HARD FEASIBILITY CONSTRAINT, NOT a ranking bonus
@@ -957,9 +1166,7 @@ Return ONLY valid JSON:
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash-lite",
-        messages: [
-          { role: "user", content: rerankerPrompt },
-        ],
+        messages: [{ role: "user", content: rerankerPrompt }],
         response_format: { type: "json_object" },
       }),
     });
@@ -980,7 +1187,6 @@ Return ONLY valid JSON:
       const urls = (sel.selected || []).map((s: any) => s.url);
       result.set(sel.module_title, urls);
       
-      // Store why_selected back onto candidates
       for (const s of (sel.selected || [])) {
         for (const mod of modules) {
           const candidates = moduleCandidates.get(mod.id) || [];
@@ -1063,7 +1269,8 @@ RULES:
 - Generate 3-5 multiple-choice quiz questions per module that test understanding appropriate to the learning goal and level.
 - Each quiz question must have exactly 4 options with one correct answer and a clear explanation.
 - Assign each module to specific days within the timeline.
-- Generate a concise "topic" field summarizing the user's input as a proper title (capitalize, remove filler like "I want to learn").`;
+- Generate a concise "topic" field summarizing the user's input as a proper title (capitalize, remove filler like "I want to learn").
+- For each module, generate 3-8 "anchor_terms" — concrete technical terms/entities specific to that module (NOT generic words). These are used for resource filtering.`;
 }
 
 function getGoalPromptBlock(goal: string): string {
@@ -1160,7 +1367,7 @@ serve(async (req) => {
     if (!YOUTUBE_API_KEY) throw new Error("YOUTUBE_API_KEY not found. Add it in Lovable environment settings.");
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 1: Generate roadmap structure via AI (same as before)
+    // STEP 1: Generate roadmap structure via AI (Agent 1)
     // ════════════════════════════════════════════════════════════════════════
     const systemPrompt = buildSystemPrompt(totalHours, effectiveGoal, skill_level);
 
@@ -1175,12 +1382,12 @@ ${isHoursOnly ? `IMPORTANT: This is a single-session roadmap (${totalHours} hour
 
 Return ONLY valid JSON with this exact structure:
 {
-  "topic": "concise clean title (e.g. 'Docker Basics in 2 Days', 'Machine Learning Models', 'Python Libraries Intermediate')",
+  "topic": "concise clean title",
   "skill_level": "${skill_level}",
   "timeline_weeks": ${effectiveTimelineWeeks},
   "hours_per_day": ${effectiveHoursPerDay},
   "total_hours": ${totalHours},
-  "summary": "2-3 sentence overview. If the topic can't be fully covered in the available time, mention what's covered and what would need more time.",
+  "summary": "2-3 sentence overview.",
   "modules": [
     {
       "id": "mod_1",
@@ -1193,13 +1400,16 @@ Return ONLY valid JSON with this exact structure:
       "prerequisites": [],
       "learning_objectives": ["objective 1", "objective 2"],
       "resources": [],
+      "anchor_terms": ["term1", "term2", "term3"],
       "quiz": [
         { "id": "q1", "question": "question text", "options": ["A", "B", "C", "D"], "correct_answer": "exact text of correct option", "explanation": "why correct" }
       ]
     }
   ],
   "tips": "2-3 practical tips"
-}`;
+}
+
+IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical terms that are specific to that module's content. These should be specific entities (e.g., "lambda", "serverless", "faas") NOT generic words (e.g., "learn", "understand"). They will be used for precise resource filtering.`;
 
     console.log(`Generating roadmap: topic="${topic}", goal=${effectiveGoal}, level=${skill_level}, hours=${totalHours}`);
 
@@ -1302,10 +1512,11 @@ Return ONLY valid JSON with this exact structure:
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 6: STAGES 4-6 — Hard filter, Authority, Context Fit scoring
+    // STEP 6: STAGES 4-5 — Enhanced Hard Filter + Light Authority + Enrichment
     // ════════════════════════════════════════════════════════════════════════
     for (const mod of (roadmap.modules || [])) {
       const candidates = allModuleCandidates.get(mod.id) || [];
+      const anchorTerms = generateModuleAnchors(mod, topic);
       const ctx: ModuleContext = {
         topic,
         moduleTitle: mod.title,
@@ -1314,61 +1525,65 @@ Return ONLY valid JSON with this exact structure:
         goal: effectiveGoal,
         level: skill_level,
         moduleMinutes: Math.floor((mod.estimated_hours || 1) * 60),
+        anchorTerms,
       };
 
-      // Enrich videos with YouTube data + compute authority scores
+      // Enrich videos with YouTube data + compute light authority + heuristic context fit
       const enriched = enrichCandidatesWithYouTube(candidates, ytMap, ctx);
       
-      // Score non-video candidates (authority + heuristic fallback for context fit)
+      // Score non-video candidates
       for (const c of enriched) {
         if (c.type !== "video") {
-          c.authority_score = computeAuthorityScore(c);
+          computeLightAuthorityBump(c);
           c.context_fit_score = computeContextFitScoreFallback(c, ctx);
         }
       }
 
-      allModuleCandidates.set(mod.id, enriched);
+      // Apply enhanced Stage 4 filter (anchor gate + scope penalty)
+      const stage4Filtered = applyStage4Filter(enriched, ctx);
+
+      // Stage 5: Remove garbage
+      const stage5Filtered = stage4Filtered.filter(c => !isGarbage(c));
+
+      allModuleCandidates.set(mod.id, stage5Filtered);
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 6.1: STAGE 6 — AI-Powered Context Fit Scoring (Agent 2)
+    // STEP 6.1: PARALLEL — Agent 2 (AI Scoring) + Negotiation Pass
     // ════════════════════════════════════════════════════════════════════════
-    console.log(`Stage 6 (Agent 2): Running AI context fit scoring...`);
-    const aiScoringSuccess = await batchAIContextFitScoring(
-      allModuleCandidates,
-      roadmap.modules || [],
-      topic,
-      effectiveGoal,
-      skill_level,
-      LOVABLE_API_KEY
-    );
-    if (aiScoringSuccess) {
-      console.log(`Stage 6: AI scoring complete — heuristic scores overridden with AI scores.`);
-    } else {
-      console.warn(`Stage 6: AI scoring failed — falling back to heuristic context fit scores.`);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 6.5: NEGOTIATION PASS — Resource ↔ Curriculum Agent Communication
-    // ════════════════════════════════════════════════════════════════════════
+    console.log(`Running Agent 2 + Negotiation Pass in parallel...`);
     const usableMinutesForNegotiation = totalHours * 60 * 0.85;
-    console.log(`Negotiation: Checking for high-quality oversized resources that can span modules...`);
-    const negotiatedCandidates = negotiateSpanningResources(
-      allModuleCandidates,
-      roadmap.modules || [],
-      effectiveHoursPerDay,
-      usableMinutesForNegotiation,
-      topic
-    );
-    // Replace allModuleCandidates with negotiated version
-    for (const [key, val] of negotiatedCandidates) {
-      allModuleCandidates.set(key, val);
-    }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 7: STAGE 7 — Clustering & Diversity (pre-reranker)
-    // ════════════════════════════════════════════════════════════════════════
-    // Applied after reranker as fallback
+    const [aiScoringSuccess] = await Promise.all([
+      // Agent 2: AI Context Fit Scoring
+      batchAIContextFitScoring(
+        allModuleCandidates,
+        roadmap.modules || [],
+        topic,
+        effectiveGoal,
+        skill_level,
+        LOVABLE_API_KEY
+      ),
+      // Negotiation Pass: runs on heuristic scores (good enough for span detection)
+      (async () => {
+        const negotiatedCandidates = negotiateSpanningResources(
+          allModuleCandidates,
+          roadmap.modules || [],
+          effectiveHoursPerDay,
+          usableMinutesForNegotiation,
+          topic
+        );
+        for (const [key, val] of negotiatedCandidates) {
+          allModuleCandidates.set(key, val);
+        }
+      })(),
+    ]);
+
+    if (aiScoringSuccess) {
+      console.log(`Agent 2: AI scoring complete — heuristic scores overridden.`);
+    } else {
+      console.warn(`Agent 2: AI scoring failed — falling back to heuristic scores.`);
+    }
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 8: STAGE 8 — Batch LLM Reranker
@@ -1386,18 +1601,20 @@ Return ONLY valid JSON with this exact structure:
     // ════════════════════════════════════════════════════════════════════════
     // STEP 9: STAGE 9 — Final Assembly
     // ════════════════════════════════════════════════════════════════════════
-    // ── Global uniqueness set ──
     const usedResourceUrls = new Set<string>();
     const usedVideoIds = new Set<string>();
-    const usedChannelTitles = new Map<string, Set<string>>(); // channel -> set of titles
+    const usedChannelTitles = new Map<string, Set<string>>();
     const usableMinutes = totalHours * 60 * 0.85;
     let totalRoadmapMinutes = 0;
+
+    // Track which base URLs actually got selected (for continuation validation)
+    const selectedPrimaryUrls = new Set<string>();
 
     for (const mod of (roadmap.modules || [])) {
       const candidates = allModuleCandidates.get(mod.id) || [];
       const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
-      const dailyCapMinutes = effectiveHoursPerDay * 60 * 1.1; // 10% overflow allowed per day
-      const moduleBudgetCap = Math.min(moduleMinutes * 1.05, dailyCapMinutes); // respect both module and daily cap
+      const dailyCapMinutes = effectiveHoursPerDay * 60 * 1.1;
+      const moduleBudgetCap = Math.min(moduleMinutes * 1.05, dailyCapMinutes);
       const ctx: ModuleContext = {
         topic,
         moduleTitle: mod.title,
@@ -1424,23 +1641,24 @@ Return ONLY valid JSON with this exact structure:
       }
 
       // ── Constraint 1: Global uniqueness enforcement ──
-      // Continuation resources share the same base URL — allow them through
       const uniqueResources: CandidateResource[] = [];
       for (const c of finalResources) {
         const normalizedUrl = c.url.split("&")[0];
         const videoId = extractYouTubeVideoId(normalizedUrl);
 
-        // Continuation resources are allowed even if the base URL was used
-        if (c.is_continuation) {
+        // BUG FIX: Continuation resources — only allow if the primary was actually selected
+        if (c.is_continuation && c.continuation_of) {
+          const baseUrl = c.continuation_of.split("&")[0];
+          if (!selectedPrimaryUrls.has(baseUrl)) {
+            console.warn(`Skipping orphan continuation: "${c.title}" — primary not selected`);
+            continue;
+          }
           uniqueResources.push(c);
           continue;
         }
 
-        // Check exact URL duplicate
         if (usedResourceUrls.has(normalizedUrl)) continue;
-        // Check same video ID
         if (videoId && usedVideoIds.has(videoId)) continue;
-        // Check same channel + similar title (near-duplicate)
         if (c.channel) {
           const channelTitles = usedChannelTitles.get(c.channel.toLowerCase());
           if (channelTitles) {
@@ -1453,19 +1671,33 @@ Return ONLY valid JSON with this exact structure:
       }
 
       // ── Constraint 2: Hard time budget enforcement ──
+      // BUG FIX: Enforce budget even for the FIRST resource
       const budgetedResources: CandidateResource[] = [];
       let moduleTotal = 0;
       for (const c of uniqueResources) {
-        if (moduleTotal + c.estimated_minutes > moduleBudgetCap && budgetedResources.length > 0) continue;
-        if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes && budgetedResources.length > 0) continue;
+        if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes) continue;
+        if (moduleTotal + c.estimated_minutes > moduleBudgetCap) continue;
         budgetedResources.push(c);
         moduleTotal += c.estimated_minutes;
+      }
+
+      // If no resources fit budget, pick the shortest candidate
+      if (budgetedResources.length === 0 && uniqueResources.length > 0) {
+        const shortest = [...uniqueResources].sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
+        if (shortest) {
+          budgetedResources.push(shortest);
+          moduleTotal = shortest.estimated_minutes;
+        }
       }
 
       // Register used resources globally
       for (const c of budgetedResources) {
         const normalizedUrl = c.url.split("&")[0];
         usedResourceUrls.add(normalizedUrl);
+        // Track primary URLs for continuation validation in later modules
+        if (!c.is_continuation && c.span_plan && c.span_plan.length > 1) {
+          selectedPrimaryUrls.add(normalizedUrl);
+        }
         const videoId = extractYouTubeVideoId(normalizedUrl);
         if (videoId) usedVideoIds.add(videoId);
         if (c.channel) {
@@ -1476,7 +1708,7 @@ Return ONLY valid JSON with this exact structure:
       }
       totalRoadmapMinutes += moduleTotal;
 
-      // Convert to output format
+      // Convert to output format (strip anchor_terms from module output)
       if (budgetedResources.length > 0) {
         mod.resources = budgetedResources.map(c => ({
           title: c.title,
@@ -1503,6 +1735,9 @@ Return ONLY valid JSON with this exact structure:
           description: `Search for official documentation on ${mod.title}`,
         }];
       }
+
+      // Remove anchor_terms from final output (internal use only)
+      delete mod.anchor_terms;
     }
 
     // ── Final validation log ──
