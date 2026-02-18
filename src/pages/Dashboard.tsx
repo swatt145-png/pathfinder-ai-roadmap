@@ -288,6 +288,45 @@ export default function Dashboard() {
     setReviewOpen(true);
   };
 
+  const handleGenerateQuizForModule = async (moduleId: string) => {
+    if (!roadmapData || !roadmap) throw new Error("Roadmap data unavailable.");
+    const targetModule = roadmapData.modules.find((m) => m.id === moduleId);
+    if (!targetModule) throw new Error("Module not found.");
+
+    const { data, error } = await supabase.functions.invoke("generate-module-quiz", {
+      body: {
+        topic: roadmapData.topic,
+        skill_level: roadmapData.skill_level,
+        learning_goal: roadmap.learning_goal || "hands_on",
+        module: {
+          id: targetModule.id,
+          title: targetModule.title,
+          description: targetModule.description,
+          learning_objectives: targetModule.learning_objectives || [],
+        },
+      },
+    });
+
+    if (error) throw new Error(error.message || "Quiz generation failed.");
+    const generatedQuiz = Array.isArray(data?.quiz) ? data.quiz : [];
+    if (generatedQuiz.length === 0) throw new Error("No quiz was generated.");
+
+    const updatedRoadmap: RoadmapData = {
+      ...roadmapData,
+      modules: roadmapData.modules.map((m) => (
+        m.id === moduleId ? { ...m, quiz: generatedQuiz } : m
+      )),
+    };
+
+    const updatedModule = updatedRoadmap.modules.find((m) => m.id === moduleId) || null;
+    setRoadmapData(updatedRoadmap);
+    if (updatedModule) setSelectedModule(updatedModule);
+
+    await supabase.from("roadmaps").update({
+      roadmap_data: updatedRoadmap as any,
+    }).eq("id", roadmap.id);
+  };
+
   const handleArchiveAndNew = async () => {
     if (!roadmap) return;
     await supabase.from("roadmaps").update({ status: "archived" }).eq("id", roadmap.id);
@@ -608,6 +647,9 @@ export default function Dashboard() {
         <ModuleDetail
           module={selectedModule}
           progress={progressMap[selectedModule.id]}
+          roadmapId={roadmap?.id}
+          roadmapTopic={roadmapData?.topic}
+          onGenerateQuiz={handleGenerateQuizForModule}
           onClose={() => setSelectedModule(null)}
           onComplete={handleModuleComplete}
           onUpdateCompletedModule={async (moduleId, selfReport, updatedNotes) => {

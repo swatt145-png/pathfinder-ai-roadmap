@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -178,7 +179,7 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 const TIMEOUTS_MS = {
   serper: 9000,
   youtube: 12000,
-  agent1: 35000,
+  agent1: 24000,
   agent2: 22000,
   reranker: 18000,
 };
@@ -188,8 +189,21 @@ const RETRIEVAL_THRESHOLDS = {
   moduleMinUnique: 16,
 };
 
+const CACHE_TTL = {
+  serperHours: 48,
+  youtubeHours: 168,
+};
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeTopicKey(raw: string): string {
+  return (raw || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s+#./-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isAbortError(err: unknown): boolean {
@@ -235,6 +249,7 @@ function isAllowedResourceUrl(url: string): boolean {
     const host = parsed.hostname.toLowerCase();
     const path = parsed.pathname.toLowerCase();
     if (DISALLOWED_RESOURCE_DOMAINS.some(d => host.includes(d))) return false;
+    if (host === "www.google.com" || host === "google.com") return false;
     if (host.includes("google.") && path.startsWith("/search")) return false;
     return true;
   } catch {
@@ -261,12 +276,45 @@ function formatViewCount(count: number): string {
   return String(count);
 }
 
-async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise<Map<string, YouTubeMetadata>> {
+function hashKey(input: string): string {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+async function fetchYouTubeMetadata(videoIds: string[], apiKey: string, supabaseAdmin?: any): Promise<Map<string, YouTubeMetadata>> {
   const metadataMap = new Map<string, YouTubeMetadata>();
   if (videoIds.length === 0) return metadataMap;
+  const nowIso = new Date().toISOString();
 
-  for (let i = 0; i < videoIds.length; i += 50) {
-    const batch = videoIds.slice(i, i + 50);
+  if (supabaseAdmin) {
+    try {
+      const { data: cached } = await supabaseAdmin
+        .from("youtube_metadata_cache")
+        .select("video_id,title,channel,duration_minutes,view_count,like_count")
+        .in("video_id", videoIds)
+        .gt("expires_at", nowIso);
+      for (const row of (cached || [])) {
+        metadataMap.set(row.video_id, {
+          title: row.title,
+          channel: row.channel,
+          durationMinutes: Number(row.duration_minutes || 0),
+          viewCount: Number(row.view_count || 0),
+          likeCount: Number(row.like_count || 0),
+        });
+      }
+    } catch (e) {
+      console.warn("YouTube cache read failed:", e);
+    }
+  }
+
+  const missingIds = videoIds.filter((id) => !metadataMap.has(id));
+  if (missingIds.length === 0) return metadataMap;
+
+  for (let i = 0; i < missingIds.length; i += 50) {
+    const batch = missingIds.slice(i, i + 50);
     const idsParam = batch.join(",");
     try {
       const res = await fetchWithTimeout(
@@ -283,14 +331,32 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
         continue;
       }
       const data = await res.json();
+      const cacheRows: Array<Record<string, any>> = [];
       for (const item of (data.items || [])) {
-        metadataMap.set(item.id, {
+        const metadata: YouTubeMetadata = {
           title: item.snippet?.title || "",
           channel: item.snippet?.channelTitle || "",
           durationMinutes: parseISO8601Duration(item.contentDetails?.duration || "PT0S"),
           viewCount: parseInt(item.statistics?.viewCount || "0"),
           likeCount: parseInt(item.statistics?.likeCount || "0"),
+        };
+        metadataMap.set(item.id, metadata);
+        cacheRows.push({
+          video_id: item.id,
+          title: metadata.title,
+          channel: metadata.channel,
+          duration_minutes: metadata.durationMinutes,
+          view_count: metadata.viewCount,
+          like_count: metadata.likeCount,
+          expires_at: new Date(Date.now() + CACHE_TTL.youtubeHours * 60 * 60 * 1000).toISOString(),
         });
+      }
+      if (supabaseAdmin && cacheRows.length > 0) {
+        try {
+          await supabaseAdmin.from("youtube_metadata_cache").upsert(cacheRows, { onConflict: "video_id" });
+        } catch (e) {
+          console.warn("YouTube cache write failed:", e);
+        }
       }
     } catch (e) {
       console.error("YouTube API fetch failed:", e);
@@ -300,8 +366,35 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string): Promise
   return metadataMap;
 }
 
-async function searchSerper(query: string, apiKey: string, type: "search" | "videos", num: number) {
+async function searchSerper(
+  query: string,
+  apiKey: string,
+  type: "search" | "videos",
+  num: number,
+  supabaseAdmin?: any,
+  allowCacheWrite = true,
+) {
   const url = type === "videos" ? "https://google.serper.dev/videos" : "https://google.serper.dev/search";
+  const queryHash = hashKey(`${type}:${query.trim().toLowerCase()}`);
+  const nowIso = new Date().toISOString();
+
+  if (supabaseAdmin) {
+    try {
+      const { data: cached } = await supabaseAdmin
+        .from("resource_search_cache")
+        .select("response_json")
+        .eq("query_hash", queryHash)
+        .eq("search_type", type)
+        .gt("expires_at", nowIso)
+        .maybeSingle();
+      if (cached?.response_json) {
+        return cached.response_json;
+      }
+    } catch (e) {
+      console.warn("Serper cache read failed:", e);
+    }
+  }
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const res = await fetchWithTimeout(url, {
@@ -314,7 +407,21 @@ async function searchSerper(query: string, apiKey: string, type: "search" | "vid
         return [];
       }
       const data = await res.json();
-      return type === "videos" ? (data.videos || []) : (data.organic || []);
+      const results = type === "videos" ? (data.videos || []) : (data.organic || []);
+      if (supabaseAdmin && allowCacheWrite) {
+        try {
+          await supabaseAdmin.from("resource_search_cache").upsert({
+            query_hash: queryHash,
+            query_text: query,
+            search_type: type,
+            response_json: results,
+            expires_at: new Date(Date.now() + CACHE_TTL.serperHours * 60 * 60 * 1000).toISOString(),
+          }, { onConflict: "query_hash,search_type" });
+        } catch (e) {
+          console.warn("Serper cache write failed:", e);
+        }
+      }
+      return results;
     } catch (e) {
       const timeoutMsg = isAbortError(e) ? "timeout" : "fetch failed";
       if (attempt < 2) {
@@ -840,15 +947,16 @@ function isGarbage(candidate: CandidateResource): boolean {
 }
 
 // Stage 5: Diversity caps — ensure balanced mix going to Agent 2
-function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: number): CandidateResource[] {
+function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: number, goal: string, _topic: string): CandidateResource[] {
   if (candidates.length <= maxPerModule) return candidates;
 
   const videos = candidates.filter(c => c.type === "video");
   const docs = candidates.filter(c => c.type === "documentation");
   const articles = candidates.filter(c => c.type === "article" || c.type === "tutorial" || c.type === "practice");
 
-  const maxVideos = Math.ceil(maxPerModule * 0.4);
-  const maxDocs = Math.ceil(maxPerModule * 0.4);
+  const handsOn = goal === "hands_on";
+  const maxVideos = Math.ceil(maxPerModule * (handsOn ? 0.65 : 0.4));
+  const maxDocs = Math.ceil(maxPerModule * (handsOn ? 0.15 : 0.4));
   const maxArticles = maxPerModule - Math.min(videos.length, maxVideos) - Math.min(docs.length, maxDocs);
 
   const result: CandidateResource[] = [];
@@ -876,8 +984,8 @@ function computeContextFitScoreFallback(candidate: CandidateResource, ctx: Modul
   let goalFit = 0;
   if (ctx.goal === "conceptual" && (candidate.type === "video" || candidate.type === "documentation" || candidate.type === "article")) goalFit = 20;
   else if (ctx.goal === "hands_on" && (candidate.type === "tutorial" || candidate.type === "practice" || candidate.type === "video")) goalFit = 20;
-  else if (ctx.goal === "quick_overview" && candidate.estimated_minutes <= 25) goalFit = 20;
-  else if (ctx.goal === "deep_mastery" && candidate.estimated_minutes >= 20) goalFit = 20;
+  else if (ctx.goal === "quick_overview" && candidate.estimated_minutes <= 45 && (candidate.type === "video" || candidate.type === "article" || candidate.type === "tutorial" || candidate.type === "documentation")) goalFit = 20;
+  else if (ctx.goal === "deep_mastery" && candidate.estimated_minutes >= 25 && (candidate.type === "video" || candidate.type === "documentation" || candidate.type === "article")) goalFit = 20;
   else goalFit = 10;
 
   let levelFit = 8;
@@ -904,8 +1012,19 @@ function computeContextFitScoreFallback(candidate: CandidateResource, ctx: Modul
   const topicOrModuleCert = detectCertificationIntent(`${ctx.topic} ${ctx.moduleTitle}`);
   if (topicOrModuleCert && /certification|exam|associate|professional/i.test(titleLower)) qualityFit = Math.min(qualityFit + 2, 15);
 
+  let practicalityAdjust = 0;
+  const practicalSignals = /\b(build|project|walkthrough|code along|coding|implementation|lab|exercise|kata|case study|mock interview|whiteboard)\b/i;
+  const passiveSignals = /\b(reference|documentation|docs|overview|glossary|faq|catalog|search results)\b/i;
+  const resourceComposite = `${candidate.title} ${candidate.description} ${candidate.url}`;
+  if (ctx.goal === "hands_on") {
+    if (candidate.type === "practice" || candidate.type === "tutorial" || candidate.type === "video") practicalityAdjust += 8;
+    if (practicalSignals.test(resourceComposite)) practicalityAdjust += 6;
+    if (candidate.type === "documentation") practicalityAdjust -= 8;
+    if (passiveSignals.test(resourceComposite)) practicalityAdjust -= 4;
+  }
+
   // Apply scope penalty from Stage 4
-  let score = topicFit + goalFit + levelFit + timeFit + qualityFit;
+  let score = topicFit + goalFit + levelFit + timeFit + qualityFit + practicalityAdjust;
   score -= (candidate.scope_penalty || 0);
 
   return Math.max(0, Math.min(score, 100));
@@ -949,7 +1068,7 @@ async function batchAIContextFitScoring(
     // Sort by heuristic context_fit_score (not authority) to get most relevant top 20
     const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
     // Apply diversity caps before sending to Agent 2
-    const top = applyDiversityCaps(sorted, 20);
+    const top = applyDiversityCaps(sorted, 20, goal, topic);
     
     if (top.length === 0) continue;
     
@@ -988,7 +1107,7 @@ Your job: Score each candidate resource's FIT (0-100) for its module. Consider:
 
 1. SEMANTIC RELEVANCE (0-40): Does this resource actually teach what the module needs? Not just keyword overlap — does the *content* align with the module's learning objectives?
 2. LEVEL ALIGNMENT (0-20): Is this resource pitched at the right difficulty? A "Python basics" video is wrong for an advanced module even if the topic matches.
-3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? (${goal === "hands_on" ? "Prefer tutorials, code-alongs, project builds" : goal === "conceptual" ? "Prefer explanations, lectures, theory deep-dives" : goal === "quick_overview" ? "Prefer short crash courses, summaries" : "Prefer comprehensive, in-depth content"})
+3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? (${goal === "hands_on" ? "Prefer practical tutorials, code-alongs, project builds, labs, and implementation walkthroughs." : goal === "conceptual" ? "Prefer concept explainers: videos + study articles/docs focused on mental models and how/why." : goal === "quick_overview" ? "Prefer concise full-topic overviews: crash courses, start-to-finish guides, top takeaways." : "Prefer deep and comprehensive resources: advanced articles, official docs, long-form explainers, and research papers when relevant."})
 4. PEDAGOGICAL QUALITY (0-10): Based on title/description, does this look like quality educational content vs clickbait/listicle?
 5. TOOL/FRAMEWORK FIT (0-10): If the module is about React, a Vue tutorial scores 0 here. If tool-agnostic topic, give 5-10.
 
@@ -1042,7 +1161,7 @@ Return ONLY valid JSON:
       
       // Build context-fit-sorted top 20 to map indices back
       const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
-      const top = applyDiversityCaps(sorted, 20);
+      const top = applyDiversityCaps(sorted, 20, goal, topic);
       
       for (const cs of (modScores.candidate_scores || [])) {
         if (cs.index >= 0 && cs.index < top.length) {
@@ -1240,41 +1359,41 @@ interface GoalSearchConfig {
   outcomeTokens: string[];
 }
 
-function getGoalSearchConfig(goal: string): GoalSearchConfig {
+function getGoalSearchConfig(goal: string, _topic = ""): GoalSearchConfig {
   switch (goal) {
     case "conceptual":
       return {
-        queryModifiers: ["explained", "how does it work", "concepts", "theory", "lecture", "introduction"],
+        queryModifiers: ["explained", "concepts", "theory", "visual explanation", "lecture", "guide"],
         videoCount: 8,
-        webCount: 6,
-        semanticHint: "mental model explained with examples",
-        intentTokens: ["mental model", "tradeoffs", "architecture reasoning"],
+        webCount: 8,
+        semanticHint: "mental model and concept explanation with examples",
+        intentTokens: ["mental model", "concept explanation", "tradeoffs"],
         outcomeTokens: ["deep explanation", "why this works", "design intuition"],
       };
     case "hands_on":
       return {
         queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"],
-        videoCount: 6,
-        webCount: 8,
+        videoCount: 10,
+        webCount: 4,
         semanticHint: "project based practical walkthrough",
         intentTokens: ["implementation", "code walkthrough", "real project"],
         outcomeTokens: ["build from scratch", "hands-on lab", "practical exercise"],
       };
     case "quick_overview":
       return {
-        queryModifiers: ["crash course", "in 10 minutes", "quick guide", "overview", "essentials"],
-        videoCount: 6,
-        webCount: 4,
-        semanticHint: "high level summary key concepts",
+        queryModifiers: ["crash course", "full guide", "start to finish", "top 10", "overview", "essentials"],
+        videoCount: 7,
+        webCount: 5,
+        semanticHint: "high level summary and key takeaways",
         intentTokens: ["key ideas", "summary", "what matters most"],
         outcomeTokens: ["fast understanding", "cheat sheet", "essentials only"],
       };
     case "deep_mastery":
       return {
-        queryModifiers: ["complete guide", "comprehensive", "advanced", "in depth", "full course", "masterclass"],
+        queryModifiers: ["comprehensive", "advanced", "in depth", "research paper", "full course", "masterclass"],
         videoCount: 6,
-        webCount: 8,
-        semanticHint: "deep dive architecture and tradeoffs",
+        webCount: 10,
+        semanticHint: "deep dive with advanced tradeoffs and references",
         intentTokens: ["advanced patterns", "production scale", "optimization"],
         outcomeTokens: ["expert level", "edge cases", "system tradeoffs"],
       };
@@ -1340,7 +1459,7 @@ function buildQuery(parts: Array<string | undefined | null>): string {
 
 function buildTopicQueryPlan(topic: string, level: string, goal: string, certificationIntent: boolean): { precision: string[]; expansion: string[] } {
   const levelMod = getLevelSearchModifier(level);
-  const cfg = getGoalSearchConfig(goal);
+  const cfg = getGoalSearchConfig(goal, topic);
   const certMod = certificationIntent ? "certification objective interview prep" : "";
   const precision = [
     buildQuery([topic, cfg.intentTokens[0], cfg.queryModifiers[0], levelMod, cfg.semanticHint]),
@@ -1360,9 +1479,9 @@ function buildModuleQueryPlan(
   goal: string,
   certificationIntent: boolean,
 ): { precision: string[]; expansion: string[] } {
-  const cfg = getGoalSearchConfig(goal);
-  const levelMod = getLevelSearchModifier(level);
   const moduleTitle = module?.title || "";
+  const cfg = getGoalSearchConfig(goal, `${topic} ${moduleTitle}`);
+  const levelMod = getLevelSearchModifier(level);
   const objective = (module?.learning_objectives || [])
     .filter((o: string) => typeof o === "string" && o.trim().length > 0)
     .slice(0, 1)
@@ -1380,7 +1499,7 @@ function buildModuleQueryPlan(
 
   const expansion = [
     buildQuery([moduleTitle, topic, cfg.intentTokens[1], cfg.queryModifiers[2], levelMod]),
-    buildQuery([moduleTitle, topic, cfg.intentTokens[2], cfg.queryModifiers[3] || "guide", "direct learning resource"]),
+    buildQuery([moduleTitle, topic, cfg.intentTokens[2], cfg.queryModifiers[3] || (goal === "hands_on" ? "walkthrough" : "guide"), "direct learning resource"]),
   ].filter(Boolean);
 
   return { precision: [...new Set(precision)], expansion: [...new Set(expansion)] };
@@ -1391,15 +1510,17 @@ async function fetchTopicAnchors(
   level: string,
   goal: string,
   certificationIntent: boolean,
-  serperKey: string
+  serperKey: string,
+  supabaseAdmin?: any,
+  allowCacheWrite = true,
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
-  const goalConfig = getGoalSearchConfig(goal);
+  const goalConfig = getGoalSearchConfig(goal, topic);
   const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
     for (const q of queries) {
-      promises.push(searchSerper(q, serperKey, "videos", Math.max(goalConfig.videoCount, 8)));
-      promises.push(searchSerper(q, serperKey, "search", Math.max(goalConfig.webCount, 8)));
+      promises.push(searchSerper(q, serperKey, "videos", Math.max(goalConfig.videoCount, 8), supabaseAdmin, allowCacheWrite));
+      promises.push(searchSerper(q, serperKey, "search", Math.max(goalConfig.webCount, 8), supabaseAdmin, allowCacheWrite));
     }
     const results = await Promise.all(promises);
     const batch: { videos: SerperVideoResult[]; web: SerperWebResult[] } = { videos: [], web: [] };
@@ -1430,15 +1551,17 @@ async function fetchModuleResults(
   level: string,
   goal: string,
   certificationIntent: boolean,
-  serperKey: string
+  serperKey: string,
+  supabaseAdmin?: any,
+  allowCacheWrite = true,
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
-  const config = getGoalSearchConfig(goal);
+  const config = getGoalSearchConfig(goal, `${topic} ${module?.title || ""}`);
   const plan = buildModuleQueryPlan(module, topic, level, goal, certificationIntent);
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
     for (const q of queries) {
-      promises.push(searchSerper(q, serperKey, "videos", Math.max(config.videoCount - 1, 5)));
-      promises.push(searchSerper(q, serperKey, "search", Math.max(config.webCount - 1, 5)));
+      promises.push(searchSerper(q, serperKey, "videos", Math.max(config.videoCount - 1, 5), supabaseAdmin, allowCacheWrite));
+      promises.push(searchSerper(q, serperKey, "search", Math.max(config.webCount - 1, 5), supabaseAdmin, allowCacheWrite));
     }
     const results = await Promise.all(promises);
     const batch: { videos: SerperVideoResult[]; web: SerperWebResult[] } = { videos: [], web: [] };
@@ -1472,13 +1595,15 @@ function mergeAndDeduplicate(
   topicAnchors: { videos: SerperVideoResult[]; web: SerperWebResult[] },
   moduleResults: { videos: SerperVideoResult[]; web: SerperWebResult[] },
   moduleTitle: string,
-  totalAvailableMinutes: number
+  totalAvailableMinutes: number,
+  excludedUrls: Set<string>
 ): CandidateResource[] {
   const urlMap = new Map<string, CandidateResource>();
 
   function processVideo(v: SerperVideoResult) {
     if (!v.link) return;
     const normalizedUrl = v.link.split("&")[0];
+    if (excludedUrls.has(normalizedUrl)) return;
     if (!isAllowedResourceUrl(normalizedUrl)) return;
     const title = v.title || "Video Tutorial";
     if (isDiscussionOrMetaResource(normalizedUrl, title, "")) return;
@@ -1501,6 +1626,7 @@ function mergeAndDeduplicate(
 
   function processWeb(r: SerperWebResult) {
     if (!r.link) return;
+    if (excludedUrls.has(r.link)) return;
     if (!isAllowedResourceUrl(r.link)) return;
     const title = r.title || "Learning Resource";
     if (isDiscussionOrMetaResource(r.link, title, r.snippet || "")) return;
@@ -1621,6 +1747,15 @@ async function batchRerank(
     });
   }
 
+  const goalSpecificRerankerRule =
+    goal === "hands_on"
+      ? "- Goal preference: prioritize tutorials, labs, code-alongs, practical walkthroughs, and implementation exercises."
+      : goal === "conceptual"
+      ? "- Goal preference: use a balanced mix of explainer videos and concept-focused study articles/docs."
+      : goal === "quick_overview"
+      ? "- Goal preference: prioritize concise full-topic summaries such as crash courses, start-to-finish guides, and top takeaways."
+      : "- Goal preference: prioritize deep, advanced resources (long-form explainers, technical articles/docs, and research papers when relevant).";
+
   const rerankerPrompt = `You are an Expert Curriculum Curator. Given a learner profile and module candidates, select the best 1-5 resources per module. The number of resources per module is VARIABLE — use fewer if time is tight or if one excellent resource covers everything.
 
 Learner profile:
@@ -1638,6 +1773,8 @@ Rules:
 - Time is a HARD FEASIBILITY CONSTRAINT, NOT a ranking bonus
 - If a single long high-quality resource fits the module budget perfectly, prefer it over multiple short ones
 - Exclude discussion/recommendation threads (for example "best resources to learn X" posts)
+- Never select search-result/listing pages (Google/Bing/YouTube search results, catalogs, or "best resources" roundups).
+${goalSpecificRerankerRule}
 
 === GLOBAL CONSTRAINTS (MANDATORY) ===
 
@@ -1772,14 +1909,14 @@ PRIORITY 4 — TIME CONSTRAINTS:
 2. TIME BUDGET: Sum of all module estimated_hours must not exceed ${usableMinutes} minutes. No module may exceed its budget by >5%.
 3. STACK CONSISTENCY: If user does not specify a language/framework/tool — for conceptual goals use tool-agnostic resources; for hands-on goals declare ONE stack and use it consistently across all modules.
 4. COVERAGE BEFORE REDUNDANCY: Maximize coverage of learning objectives. Never have two modules teaching identical content.
-5. FINAL VALIDATION: Before outputting JSON, verify: no duplicate resources, all modules respect time budget, stack consistency, each module has 3-5 quiz questions.
+5. FINAL VALIDATION: Before outputting JSON, verify: no duplicate resources, all modules respect time budget, stack consistency.
 
 RULES:
 - Break the topic into sequential modules. Module count is VARIABLE based on time and complexity.
 - Each module must logically build on the previous one.
 - DO NOT include any resources or URLs — leave resources as empty arrays. Resources will be fetched separately.
-- Generate 3-5 multiple-choice quiz questions per module that test understanding appropriate to the learning goal and level.
-- Each quiz question must have exactly 4 options with one correct answer and a clear explanation.
+- Do NOT include placeholder actions like "search Google", "look up resources", or "find videos online" in module descriptions/objectives/tips.
+- Leave quiz as an empty array for each module. Quizzes are generated later on demand.
 - Assign each module to specific days within the timeline.
 - Generate a concise "topic" field summarizing the user's input as a proper title (capitalize, remove filler like "I want to learn").
 - For each module, generate 3-8 "anchor_terms" — concrete technical terms/entities specific to that module (NOT generic words). These are used for resource filtering.`;
@@ -1789,25 +1926,29 @@ function getGoalPromptBlock(goal: string): string {
   switch (goal) {
     case "conceptual": return `CONCEPTUAL learning goal selected.
 - Focus on "why" and "how it works" — mental models, comparisons, theory
+- Resource style target: mix explainer videos with concept-focused study articles/docs.
 - Module count: VARIABLE based on time budget. Fewer modules for short timelines.
 - Time split: 80% consuming content, 20% reflection/quizzes
-- Quiz style: Definition-based, concept checks, "explain why X works this way"`;
+- Assessment style (generated later): Definition-based, concept checks, "explain why X works this way"`;
     case "hands_on": return `HANDS-ON learning goal selected.
 - Every module MUST have a "build something" or "try this" component
+- Resource style target: mostly practical videos/tutorials/labs that show how to build or implement.
 - Module count: VARIABLE based on time budget. Fewer modules for short timelines.
 - Time split: 30% learning, 70% doing
-- Quiz style: Code-oriented, "what would this output", practical scenarios`;
+- Assessment style (generated later): Code-oriented, "what would this output", practical scenarios`;
     case "quick_overview": return `QUICK OVERVIEW learning goal selected.
 - Hit key points fast, no deep dives, focus on "what you need to know"
+- Resource style target: concise end-to-end material (crash course, full guide, start-to-finish, top takeaways).
 - Module count: Keep MINIMAL — as few modules as possible to cover essentials.
 - Even if the user has weeks available, keep it concise. Use extra time for review, not more content.
 - Time split: 100% efficient consumption, no lengthy exercises
-- Quiz style: Quick recall, key terminology`;
+- Assessment style (generated later): Quick recall, key terminology`;
     case "deep_mastery": return `DEEP MASTERY learning goal selected.
 - Thorough coverage including edge cases, best practices, architecture patterns, real-world scenarios
+- Resource style target: advanced deep-dive mix (research papers, technical articles/docs, long-form video explanations).
 - Module count: VARIABLE — use more modules for longer timelines, but never pad unnecessarily.
 - Time split: 40% learning, 40% practice, 20% review
-- Quiz style: Advanced nuance, tradeoffs, "when would you use X vs Y", design decisions`;
+- Assessment style (generated later): Advanced nuance, tradeoffs, "when would you use X vs Y", design decisions`;
     default: return "";
   }
 }
@@ -1855,13 +1996,39 @@ function getInteractionBlock(goal: string, level: string): string {
   return interactions[key] || "Balance the learning goal with the proficiency level appropriately.";
 }
 
+function sanitizeRoadmapText(value: string): string {
+  if (!value || typeof value !== "string") return value;
+  const cleaned = value
+    .replace(/\b(?:google|youtube)\s+(?:it|this|that)\b/gi, "")
+    .replace(/\b(?:search|google|look up|find)\s+(?:on\s+)?(?:google|youtube|online|the web)\b[^.]*[.]?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return cleaned || value;
+}
+
+function sanitizeRoadmapPlaceholders(roadmap: any): void {
+  if (!roadmap || typeof roadmap !== "object") return;
+  if (typeof roadmap.summary === "string") roadmap.summary = sanitizeRoadmapText(roadmap.summary);
+  if (typeof roadmap.tips === "string") roadmap.tips = sanitizeRoadmapText(roadmap.tips);
+  if (!Array.isArray(roadmap.modules)) return;
+  for (const mod of roadmap.modules) {
+    if (typeof mod?.description === "string") mod.description = sanitizeRoadmapText(mod.description);
+    if (Array.isArray(mod?.learning_objectives)) {
+      mod.learning_objectives = mod.learning_objectives
+        .filter((o: any) => typeof o === "string")
+        .map((o: string) => sanitizeRoadmapText(o))
+        .filter((o: string) => o.trim().length > 0);
+    }
+  }
+}
+
 // ─── Main Handler ────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { topic, skill_level, learning_goal, timeline_weeks, timeline_days, hours_per_day, total_hours: providedTotalHours, hard_deadline, deadline_date, include_weekends, timeline_mode } = await req.json();
+    const { user_id, topic, skill_level, learning_goal, timeline_weeks, timeline_days, hours_per_day, total_hours: providedTotalHours, hard_deadline, deadline_date, include_weekends, timeline_mode } = await req.json();
     const effectiveGoal = learning_goal || "hands_on";
     
     const isHoursOnly = timeline_mode === "hours";
@@ -1877,6 +2044,46 @@ serve(async (req) => {
     if (!SERPER_API_KEY) throw new Error("SERPER_API_KEY not configured");
     const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY");
     if (!YOUTUBE_API_KEY) throw new Error("YOUTUBE_API_KEY not found. Add it in Lovable environment settings.");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+      ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      : null;
+    let resolvedUserId: string | null = user_id || null;
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      const authHeader = req.headers.get("Authorization");
+      if (authHeader) {
+        try {
+          const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: authHeader } },
+          });
+          const { data: authData } = await supabaseAuth.auth.getUser();
+          if (authData?.user?.id) resolvedUserId = authData.user.id;
+        } catch (e) {
+          console.warn("Unable to resolve user from auth token:", e);
+        }
+      }
+    }
+
+    const excludedUrls = new Set<string>();
+    if (supabaseAdmin && resolvedUserId && topic) {
+      try {
+        const topicKey = normalizeTopicKey(topic);
+        const { data: feedbackRows } = await supabaseAdmin
+          .from("resource_feedback")
+          .select("resource_url")
+          .eq("user_id", resolvedUserId)
+          .eq("topic_key", topicKey)
+          .eq("relevant", false);
+        for (const row of (feedbackRows || [])) {
+          if (row.resource_url) excludedUrls.add(String(row.resource_url).split("&")[0]);
+        }
+      } catch (e) {
+        console.warn("Failed to load resource feedback exclusions:", e);
+      }
+    }
+    const allowCacheWrite = excludedUrls.size === 0;
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 1: Generate roadmap structure via AI (Agent 1)
@@ -1913,15 +2120,14 @@ Return ONLY valid JSON with this exact structure:
       "learning_objectives": ["objective 1", "objective 2"],
       "resources": [],
       "anchor_terms": ["term1", "term2", "term3"],
-      "quiz": [
-        { "id": "q1", "question": "question text", "options": ["A", "B", "C", "D"], "correct_answer": "exact text of correct option", "explanation": "why correct" }
-      ]
+      "quiz": []
     }
   ],
   "tips": "2-3 practical tips"
 }
 
-IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical terms that are specific to that module's content. These should be specific entities (e.g., "lambda", "serverless", "faas") NOT generic words (e.g., "learn", "understand"). They will be used for precise resource filtering.`;
+IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical terms that are specific to that module's content. These should be specific entities (e.g., "lambda", "serverless", "faas") NOT generic words (e.g., "learn", "understand"). They will be used for precise resource filtering.
+IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", or "find resources online" anywhere in modules or tips.`;
 
     console.log(`Generating roadmap: topic="${topic}", goal=${effectiveGoal}, level=${skill_level}, hours=${totalHours}`);
 
@@ -1935,7 +2141,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: "google/gemini-2.5-flash-lite",
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
@@ -1994,9 +2200,11 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
       throw new Error("AI returned malformed roadmap data. Please try again.");
     }
 
+    sanitizeRoadmapPlaceholders(roadmap);
     normalizeModulePlan(roadmap, totalHours, daysInTimeline);
     enforceModuleTimeWindowConsistency(roadmap.modules || [], effectiveHoursPerDay);
     if (Array.isArray(roadmap.modules)) {
+      for (const mod of roadmap.modules) mod.quiz = [];
       roadmap.total_hours = Math.round(
         roadmap.modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10
       ) / 10;
@@ -2007,14 +2215,14 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
     // STEP 2: STAGE 2A — Topic-Wide Anchor Retrieval
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2A: Fetching topic-wide anchors for "${topic}"...`);
-    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY);
+    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite);
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 3: STAGE 2B — Module-Specific Retrieval (parallelized)
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2B: Fetching module-specific results for ${roadmap.modules?.length || 0} modules...`);
     const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
-      fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY)
+      fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite)
     );
     const allModuleResults = await Promise.all(moduleResultsPromises);
 
@@ -2027,7 +2235,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
       const mod = roadmap.modules[i];
       const moduleResults = allModuleResults[i];
-      const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes);
+      const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls);
       allModuleCandidates.set(mod.id, candidates);
     }
 
@@ -2047,7 +2255,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
     let ytMap = new Map<string, YouTubeMetadata>();
     if (allVideoIds.size > 0) {
       console.log(`Stage 3: Enriching ${allVideoIds.size} YouTube videos with metadata...`);
-      ytMap = await fetchYouTubeMetadata([...allVideoIds], YOUTUBE_API_KEY);
+      ytMap = await fetchYouTubeMetadata([...allVideoIds], YOUTUBE_API_KEY, supabaseAdmin);
       console.log(`Got metadata for ${ytMap.size} videos.`);
     }
 
@@ -2338,6 +2546,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
       }
 
       const cleanedResources = budgetedResources.filter(c =>
+        !excludedUrls.has(c.url.split("&")[0]) &&
         isAllowedResourceUrl(c.url) &&
         !looksLikeListingPage(c.url, c.title, c.description) &&
         !isDiscussionOrMetaResource(c.url, c.title, c.description)

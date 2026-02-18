@@ -1,8 +1,10 @@
-import { useState } from "react";
-import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell, Undo2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell, Undo2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuizModal } from "@/components/QuizModal";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Module, ModuleProgress } from "@/lib/types";
 import confetti from "canvas-confetti";
 
@@ -14,6 +16,9 @@ interface ModuleDetailProps {
   onUpdateResourcesAndNotes?: (moduleId: string, completedResources: string[], notes: string) => void;
   onUpdateCompletedModule?: (moduleId: string, selfReport: string, notes: string) => void;
   onMarkNotComplete?: (moduleId: string) => void;
+  roadmapId?: string;
+  roadmapTopic?: string;
+  onGenerateQuiz?: (moduleId: string) => Promise<void>;
 }
 
 const RESOURCE_ICONS: Record<string, React.ElementType> = {
@@ -37,7 +42,19 @@ function formatViewCount(count: number): string {
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
   return String(count);
 }
-export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateResourcesAndNotes, onUpdateCompletedModule, onMarkNotComplete }: ModuleDetailProps) {
+export function ModuleDetail({
+  module,
+  progress,
+  onClose,
+  onComplete,
+  onUpdateResourcesAndNotes,
+  onUpdateCompletedModule,
+  onMarkNotComplete,
+  roadmapId,
+  roadmapTopic,
+  onGenerateQuiz,
+}: ModuleDetailProps) {
+  const { user } = useAuth();
   const [selfReport, setSelfReport] = useState<string | null>(progress?.self_report ?? null);
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizScore, setQuizScore] = useState<number | null>(progress?.quiz_score ?? null);
@@ -46,10 +63,41 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
   const [notes, setNotes] = useState<string>(progress?.notes ?? "");
   const isCompleted = progress?.status === "completed";
   const [saved, setSaved] = useState(false);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [quizGenerationError, setQuizGenerationError] = useState<string | null>(null);
+  const [feedbackByUrl, setFeedbackByUrl] = useState<Record<string, { liked: boolean | null; relevant: boolean | null }>>({});
 
   const resources = module.resources ?? [];
   const learningObjectives = module.learning_objectives ?? [];
   const quiz = module.quiz ?? [];
+
+  const normalizeTopicKey = (raw: string) =>
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9\s+#./-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  useEffect(() => {
+    const loadFeedback = async () => {
+      if (!user || !roadmapId || resources.length === 0) return;
+      const urls = resources.map((r) => r.url);
+      const { data, error } = await supabase
+        .from("resource_feedback")
+        .select("resource_url,relevant,liked")
+        .eq("user_id", user.id)
+        .eq("roadmap_id", roadmapId)
+        .eq("module_id", module.id)
+        .in("resource_url", urls);
+      if (error || !data) return;
+      const next: Record<string, { liked: boolean | null; relevant: boolean | null }> = {};
+      for (const row of data) {
+        next[row.resource_url] = { liked: row.liked, relevant: row.relevant };
+      }
+      setFeedbackByUrl(next);
+    };
+    void loadFeedback();
+  }, [user, roadmapId, module.id, resources]);
 
   const totalResourceMinutes = resources.reduce((sum, r) => sum + (r.estimated_minutes || 0), 0);
 
@@ -83,6 +131,50 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
     onUpdateResourcesAndNotes?.(module.id, completedResources, notes);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const upsertFeedback = async (resourceUrl: string, next: { liked: boolean | null; relevant: boolean | null }) => {
+    if (!user || !roadmapId) return;
+    setFeedbackByUrl((prev) => ({ ...prev, [resourceUrl]: next }));
+    await supabase.from("resource_feedback").upsert({
+      user_id: user.id,
+      roadmap_id: roadmapId,
+      module_id: module.id,
+      module_title: module.title,
+      topic_key: normalizeTopicKey(roadmapTopic || module.title),
+      resource_url: resourceUrl,
+      relevant: next.relevant,
+      liked: next.liked,
+    }, {
+      onConflict: "user_id,roadmap_id,module_id,resource_url",
+    });
+  };
+
+  const toggleLiked = async (resourceUrl: string) => {
+    const current = feedbackByUrl[resourceUrl] || { liked: null, relevant: null };
+    const liked = current.liked === true ? null : true;
+    const relevant = liked ? true : current.relevant;
+    await upsertFeedback(resourceUrl, { liked, relevant });
+  };
+
+  const toggleNotRelevant = async (resourceUrl: string) => {
+    const current = feedbackByUrl[resourceUrl] || { liked: null, relevant: null };
+    const relevant = current.relevant === false ? null : false;
+    const liked = relevant === false ? null : current.liked;
+    await upsertFeedback(resourceUrl, { liked, relevant });
+  };
+
+  const handleGenerateQuiz = async () => {
+    if (!onGenerateQuiz) return;
+    setGeneratingQuiz(true);
+    setQuizGenerationError(null);
+    try {
+      await onGenerateQuiz(module.id);
+    } catch (e: any) {
+      setQuizGenerationError(e?.message || "Failed to generate quiz.");
+    } finally {
+      setGeneratingQuiz(false);
+    }
   };
 
   return (
@@ -184,6 +276,20 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                       {(r as any).channel ? `${r.estimated_minutes} min · ` : `~${r.estimated_minutes} min · `}{r.description}
                     </p>
                   </a>
+                  <div className="shrink-0 flex flex-col gap-2">
+                    <button
+                      onClick={() => toggleLiked(r.url)}
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.liked ? "border-success/40 text-success bg-success/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Like
+                    </button>
+                    <button
+                      onClick={() => toggleNotRelevant(r.url)}
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.relevant === false ? "border-destructive/40 text-destructive bg-destructive/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Not relevant
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -290,6 +396,26 @@ export function ModuleDetail({ module, progress, onClose, onComplete, onUpdateRe
                 <p className="text-base text-muted-foreground mt-1 text-center">
                   Taking the quiz helps Pathfinder adapt better to your needs
                 </p>
+              </div>
+            )}
+            {quiz.length === 0 && (
+              <div>
+                <Button
+                  variant="outline"
+                  onClick={handleGenerateQuiz}
+                  disabled={generatingQuiz}
+                  className="w-full border-white/10 hover:bg-white/5 text-base"
+                >
+                  {generatingQuiz ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  {generatingQuiz ? "Generating Quiz..." : "Generate Quiz"}
+                </Button>
+                {quizGenerationError ? (
+                  <p className="text-sm text-destructive mt-1 text-center">{quizGenerationError}</p>
+                ) : (
+                  <p className="text-base text-muted-foreground mt-1 text-center">
+                    Quiz generation is optional and created on demand.
+                  </p>
+                )}
               </div>
             )}
 

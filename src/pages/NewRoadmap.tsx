@@ -36,7 +36,7 @@ const LOADING_STEPS = [
   "Understanding your learning goal...",
   "Designing your curriculum...",
   "Curating the best resources...",
-  "Building assessment quizzes...",
+  "Preparing optional quizzes...",
   "Finalizing your personalized roadmap...",
 ];
 
@@ -53,7 +53,7 @@ const LOADING_MESSAGES = [
   "Great choice! Let's build your roadmap 🚀",
   "Crafting a personalized curriculum just for you...",
   "Finding the best resources from top educators...",
-  "Building assessment quizzes to track your progress...",
+  "Setting up optional quizzes for later...",
   "Almost done — your learning journey is taking shape! ✨",
 ];
 
@@ -177,7 +177,7 @@ export default function NewRoadmap() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
-        body: { topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends, timeline_mode: timelineUnit },
+        body: { user_id: user.id, topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends, timeline_mode: timelineUnit },
       });
 
       clearInterval(stepInterval);
@@ -250,7 +250,7 @@ export default function NewRoadmap() {
     { icon: Target, label: "Analyzing goal" },
     { icon: LayoutDashboard, label: "Building curriculum" },
     { icon: Search, label: "Curating resources" },
-    { icon: ClipboardCheck, label: "Crafting quizzes" },
+    { icon: ClipboardCheck, label: "Quiz setup (optional)" },
     { icon: Sparkles, label: "Finalizing roadmap" },
   ];
 
