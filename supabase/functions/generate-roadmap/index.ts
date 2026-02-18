@@ -291,14 +291,32 @@ function looksLikeListingPage(url: string, title: string, snippet: string): bool
     "search",
     "results",
     "catalog",
+    "directory",
+    "collections",
+    "category",
     "paths",
+    "learning path",
     "certification path",
     "course list",
     "browse courses",
+    "all courses",
   ];
   let hits = 0;
   for (const signal of listingSignals) {
     if (text.includes(signal)) hits++;
+  }
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    const query = parsed.search.toLowerCase();
+
+    if (host.includes("google.") && path.startsWith("/search")) return true;
+    if (host.includes("youtube.com") && path.includes("/results")) return true;
+    if (path.includes("/search") || path.includes("/catalog")) return true;
+    if (query.includes("search") || query.includes("query=") || query.includes("q=")) return true;
+  } catch {
+    // No-op for malformed URLs
   }
   return hits >= 2;
 }
@@ -560,8 +578,13 @@ function computeLightAuthorityBump(candidate: CandidateResource, ytMeta?: YouTub
 // Stage 5: Garbage filter — only hard-reject true junk
 function isGarbage(candidate: CandidateResource): boolean {
   const urlLower = candidate.url.toLowerCase();
+  const titleLower = candidate.title.toLowerCase();
   // Known spam/link farm domains
   if (GARBAGE_DOMAINS.some(d => urlLower.includes(d))) return true;
+  // Search/listing pages are not direct learning resources.
+  if (looksLikeListingPage(candidate.url, candidate.title, candidate.description)) return true;
+  // Catalog/search style titles are almost always poor module resources.
+  if (/\b(search results|course catalog|browse courses|learning paths?)\b/i.test(titleLower)) return true;
   // Suspicious URL patterns
   if (/\.(xyz|tk|ml|ga|cf)\//.test(urlLower)) return true;
   // Empty or suspiciously short descriptions that suggest thin content
@@ -1120,6 +1143,7 @@ function mergeAndDeduplicate(
       urlMap.get(r.link)!.appearances_count++;
     } else {
       const listingLike = looksLikeListingPage(r.link, title, r.snippet || "");
+      if (listingLike) return;
       urlMap.set(r.link, {
         title, url: r.link,
         type: detectResourceType(r.link),
@@ -1128,7 +1152,7 @@ function mergeAndDeduplicate(
         appearances_count: 1,
         authority_score: 0,
         context_fit_score: 0,
-        scope_penalty: listingLike ? 20 : 0,
+        scope_penalty: 0,
       });
     }
   }
@@ -1631,6 +1655,7 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
     // ════════════════════════════════════════════════════════════════════════
     // STEP 6: STAGES 4-5 — Enhanced Hard Filter + Light Authority + Enrichment
     // ════════════════════════════════════════════════════════════════════════
+    const moduleRescuePools = new Map<string, CandidateResource[]>();
     for (const mod of (roadmap.modules || [])) {
       const candidates = allModuleCandidates.get(mod.id) || [];
       const anchorTerms = generateModuleAnchors(mod, topic);
@@ -1656,11 +1681,23 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
         }
       }
 
+      // Keep a relaxed but clean pool for later rescue (if strict filters/budgeting produce 0).
+      const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
+      const rescuePool = [...enriched]
+        .filter(c => !isGarbage(c))
+        .filter(c => computeSemanticSimilarity(moduleText, `${c.title} ${c.description} ${c.channel || ""}`) >= 0.02)
+        .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+      moduleRescuePools.set(mod.id, rescuePool);
+
       // Apply enhanced Stage 4 filter (anchor gate + scope penalty)
       const stage4Filtered = applyStage4Filter(enriched, ctx);
 
       // Stage 5: Remove garbage
-      const stage5Filtered = stage4Filtered.filter(c => !isGarbage(c));
+      let stage5Filtered = stage4Filtered.filter(c => !isGarbage(c));
+      if (stage5Filtered.length === 0 && rescuePool.length > 0) {
+        console.warn(`Stage 4/5 produced 0 candidates for "${mod.title}". Using relaxed rescue pool.`);
+        stage5Filtered = rescuePool.slice(0, 8);
+      }
 
       allModuleCandidates.set(mod.id, stage5Filtered);
     }
@@ -1885,6 +1922,22 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
       totalRoadmapMinutes += moduleTotal;
 
       // Convert to output format (strip anchor_terms from module output)
+      if (budgetedResources.length === 0) {
+        // Final safety net: use clean relaxed candidates (no search/catalog links) before giving up.
+        const rescuePool = moduleRescuePools.get(mod.id) || [];
+        for (const c of rescuePool) {
+          if (budgetedResources.length >= 2) break;
+          const normalizedUrl = c.url.split("&")[0];
+          const videoId = extractYouTubeVideoId(normalizedUrl);
+          if (usedResourceUrls.has(normalizedUrl)) continue;
+          if (videoId && usedVideoIds.has(videoId)) continue;
+          if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes) continue;
+          if (moduleTotal + c.estimated_minutes > moduleBudgetCap) continue;
+          budgetedResources.push(c);
+          moduleTotal += c.estimated_minutes;
+        }
+      }
+
       if (budgetedResources.length > 0) {
         mod.resources = budgetedResources.map(c => ({
           title: c.title,
@@ -1902,14 +1955,8 @@ IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical term
           continuation_of: c.continuation_of,
         } as Resource));
       } else {
-        console.warn(`Module "${mod.title}" has 0 resources after full pipeline, using fallback`);
-        mod.resources = [{
-          title: `${mod.title} - Official Documentation`,
-          url: `https://www.google.com/search?q=${encodeURIComponent(mod.title + " " + topic + " documentation")}`,
-          type: "article" as const,
-          estimated_minutes: Math.round((mod.estimated_hours || 1) * 30),
-          description: `Search for official documentation on ${mod.title}`,
-        }];
+        console.warn(`Module "${mod.title}" has 0 resources after full pipeline; returning empty resources.`);
+        mod.resources = [];
       }
 
       // Remove anchor_terms from final output (internal use only)
