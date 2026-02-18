@@ -10,6 +10,13 @@ const corsHeaders = {
 interface SerperWebResult { title: string; link: string; snippet: string; }
 interface SerperVideoResult { title: string; link: string; duration?: string; }
 
+interface ResourceSegment {
+  module_id: string;
+  module_title: string;
+  start_minute: number;
+  end_minute: number;
+}
+
 interface CandidateResource {
   title: string;
   url: string;
@@ -25,6 +32,9 @@ interface CandidateResource {
   authority_score: number;
   context_fit_score: number;
   why_selected?: string;
+  span_plan?: ResourceSegment[];
+  is_continuation?: boolean;
+  continuation_of?: string;
 }
 
 interface Resource {
@@ -38,6 +48,9 @@ interface Resource {
   view_count?: number;
   like_count?: number;
   quality_signal?: string;
+  span_plan?: ResourceSegment[];
+  is_continuation?: boolean;
+  continuation_of?: string;
 }
 
 interface YouTubeMetadata {
@@ -365,6 +378,136 @@ function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext
   return selected;
 }
 
+// ─── NEGOTIATION PASS: Resource-Curriculum Agent Communication ───────────────
+
+interface SpanCandidate {
+  resource: CandidateResource;
+  sourceModuleIndex: number;
+  qualityScore: number;
+}
+
+function negotiateSpanningResources(
+  allModuleCandidates: Map<string, CandidateResource[]>,
+  modules: any[],
+  effectiveHoursPerDay: number,
+  totalUsableMinutes: number,
+  topic: string
+): Map<string, CandidateResource[]> {
+  if (modules.length < 2) return allModuleCandidates;
+
+  const dailyCapMinutes = effectiveHoursPerDay * 60;
+  const spanCandidates: SpanCandidate[] = [];
+
+  // Pass 1: Resource agent identifies high-quality oversized resources
+  for (let i = 0; i < modules.length; i++) {
+    const mod = modules[i];
+    const candidates = allModuleCandidates.get(mod.id) || [];
+    const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
+
+    for (const c of candidates) {
+      // Resource exceeds this module's budget but is high quality
+      if (c.estimated_minutes > moduleMinutes * 1.1 && c.estimated_minutes <= totalUsableMinutes) {
+        const qualityScore = c.authority_score + c.context_fit_score;
+        // Only consider truly high-quality resources for spanning (top quartile threshold)
+        if (qualityScore >= 40) {
+          spanCandidates.push({ resource: c, sourceModuleIndex: i, qualityScore });
+        }
+      }
+    }
+  }
+
+  if (spanCandidates.length === 0) return allModuleCandidates;
+
+  // Sort by quality — best resources first
+  spanCandidates.sort((a, b) => b.qualityScore - a.qualityScore);
+  
+  // Limit to top 3 spanning candidates to avoid over-spanning
+  const topSpanCandidates = spanCandidates.slice(0, 3);
+  const usedSpanUrls = new Set<string>();
+
+  console.log(`Negotiation: Found ${spanCandidates.length} span candidates, evaluating top ${topSpanCandidates.length}`);
+
+  for (const span of topSpanCandidates) {
+    const { resource, sourceModuleIndex } = span;
+    if (usedSpanUrls.has(resource.url)) continue;
+
+    const resourceMinutes = resource.estimated_minutes;
+    
+    // Pass 2: Curriculum agent determines how many consecutive modules this resource can span
+    const segments: ResourceSegment[] = [];
+    let minutesRemaining = resourceMinutes;
+    let currentMinute = 0;
+
+    for (let j = sourceModuleIndex; j < modules.length && minutesRemaining > 0; j++) {
+      const mod = modules[j];
+      const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
+      // Allocate up to the module's daily cap for this resource segment
+      const segmentMinutes = Math.min(minutesRemaining, moduleMinutes);
+      
+      segments.push({
+        module_id: mod.id,
+        module_title: mod.title,
+        start_minute: currentMinute,
+        end_minute: currentMinute + segmentMinutes,
+      });
+
+      currentMinute += segmentMinutes;
+      minutesRemaining -= segmentMinutes;
+    }
+
+    // Only create span if resource can be completed within available modules
+    if (minutesRemaining > 0) {
+      console.log(`Negotiation: Skipping "${resource.title}" (${resourceMinutes}min) — doesn't fit even spanning ${segments.length} modules`);
+      continue;
+    }
+
+    if (segments.length < 2) continue; // No spanning needed
+
+    console.log(`Negotiation: Spanning "${resource.title}" (${resourceMinutes}min) across ${segments.length} modules: ${segments.map(s => `${s.module_title}[${s.start_minute}-${s.end_minute}min]`).join(" → ")}`);
+
+    usedSpanUrls.add(resource.url);
+
+    // Create the primary resource with full span_plan in the first module
+    const primaryResource: CandidateResource = {
+      ...resource,
+      span_plan: segments,
+      estimated_minutes: segments[0].end_minute - segments[0].start_minute, // Only this segment's time counts for module 1
+    };
+
+    // Add primary to first module's candidates
+    const firstModId = modules[sourceModuleIndex].id;
+    const firstModCandidates = allModuleCandidates.get(firstModId) || [];
+    // Remove original oversized version, add spanning version
+    const filteredFirst = firstModCandidates.filter(c => c.url !== resource.url);
+    filteredFirst.unshift(primaryResource); // Add at top since it's high quality
+    allModuleCandidates.set(firstModId, filteredFirst);
+
+    // Add continuation resources to subsequent modules
+    for (let k = 1; k < segments.length; k++) {
+      const seg = segments[k];
+      const continuationResource: CandidateResource = {
+        ...resource,
+        title: `${resource.title} (Continue: ${seg.start_minute}–${seg.end_minute} min)`,
+        estimated_minutes: seg.end_minute - seg.start_minute,
+        is_continuation: true,
+        continuation_of: resource.url,
+        span_plan: segments,
+        // Boost scores so reranker picks it up
+        authority_score: resource.authority_score + 10,
+        context_fit_score: resource.context_fit_score + 10,
+      };
+
+      const modCandidates = allModuleCandidates.get(seg.module_id) || [];
+      // Remove any duplicate of this URL in the target module
+      const filteredMod = modCandidates.filter(c => c.url !== resource.url);
+      filteredMod.unshift(continuationResource);
+      allModuleCandidates.set(seg.module_id, filteredMod);
+    }
+  }
+
+  return allModuleCandidates;
+}
+
 // ─── STAGE 2: High-Recall Retrieval ──────────────────────────────────────────
 
 interface GoalSearchConfig {
@@ -486,11 +629,11 @@ function mergeAndDeduplicate(
 
   function processVideo(v: SerperVideoResult) {
     if (!v.link) return;
-    const normalizedUrl = v.link.split("&")[0]; // normalize YouTube URLs
+    const normalizedUrl = v.link.split("&")[0];
     const title = v.title || "Video Tutorial";
     if (isDisqualified(title, normalizedUrl)) return;
     const mins = parseDurationToMinutes(v.duration);
-    if (mins > totalAvailableMinutes) return;
+    // Don't hard-reject long resources here — negotiation pass will handle spanning
 
     if (urlMap.has(normalizedUrl)) {
       urlMap.get(normalizedUrl)!.appearances_count++;
@@ -652,10 +795,11 @@ Rules:
 
 === GLOBAL CONSTRAINTS (MANDATORY) ===
 
-1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules.
+1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules — EXCEPT continuation resources (marked with "(Continue: X–Y min)" in the title). Always select continuation resources if present.
 2. HARD TIME BUDGET: Each module's total resource minutes must not exceed its budget. Remove lowest-value resource if over budget.
 3. STACK CONSISTENCY: If user did not specify a language/framework — for conceptual goals prefer tool-agnostic resources; for hands-on goals pick ONE consistent stack.
 4. COVERAGE BEFORE REDUNDANCY: Maximize coverage of module learning objectives. Never select multiple resources teaching identical content from the same channel.
+5. SPANNING RESOURCES: If a candidate title contains "(Continue: X–Y min)", it is a continuation of a long high-quality resource spanning multiple modules. ALWAYS select these — they represent negotiated splits from the curriculum planning phase.
 
 For each module, return the URLs of your selected resources (1-5) and a 1-sentence "why_selected" for each.
 
@@ -1057,6 +1201,23 @@ Return ONLY valid JSON with this exact structure:
     }
 
     // ════════════════════════════════════════════════════════════════════════
+    // STEP 6.5: NEGOTIATION PASS — Resource ↔ Curriculum Agent Communication
+    // ════════════════════════════════════════════════════════════════════════
+    const usableMinutesForNegotiation = totalHours * 60 * 0.85;
+    console.log(`Negotiation: Checking for high-quality oversized resources that can span modules...`);
+    const negotiatedCandidates = negotiateSpanningResources(
+      allModuleCandidates,
+      roadmap.modules || [],
+      effectiveHoursPerDay,
+      usableMinutesForNegotiation,
+      topic
+    );
+    // Replace allModuleCandidates with negotiated version
+    for (const [key, val] of negotiatedCandidates) {
+      allModuleCandidates.set(key, val);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
     // STEP 7: STAGE 7 — Clustering & Diversity (pre-reranker)
     // ════════════════════════════════════════════════════════════════════════
     // Applied after reranker as fallback
@@ -1115,10 +1276,17 @@ Return ONLY valid JSON with this exact structure:
       }
 
       // ── Constraint 1: Global uniqueness enforcement ──
+      // Continuation resources share the same base URL — allow them through
       const uniqueResources: CandidateResource[] = [];
       for (const c of finalResources) {
         const normalizedUrl = c.url.split("&")[0];
         const videoId = extractYouTubeVideoId(normalizedUrl);
+
+        // Continuation resources are allowed even if the base URL was used
+        if (c.is_continuation) {
+          uniqueResources.push(c);
+          continue;
+        }
 
         // Check exact URL duplicate
         if (usedResourceUrls.has(normalizedUrl)) continue;
@@ -1173,6 +1341,9 @@ Return ONLY valid JSON with this exact structure:
           view_count: c.view_count,
           like_count: c.like_count,
           quality_signal: c.quality_signal,
+          span_plan: c.span_plan,
+          is_continuation: c.is_continuation,
+          continuation_of: c.continuation_of,
         } as Resource));
       } else {
         console.warn(`Module "${mod.title}" has 0 resources after full pipeline, using fallback`);
