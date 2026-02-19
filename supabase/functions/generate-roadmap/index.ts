@@ -132,6 +132,7 @@ const DEPRIORITIZE_DOMAINS = [
 
 const DISALLOWED_RESOURCE_DOMAINS = [
   "coursera.org",
+  "coursera.com",
 ];
 
 // YouTube channel tiers
@@ -242,14 +243,67 @@ function parseDurationToMinutes(duration?: string): number {
   return 15;
 }
 
+function normalizeResourceUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol.toLowerCase();
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    let path = parsed.pathname || "/";
+    if (path.length > 1) path = path.replace(/\/+$/, "");
+
+    // Keep stable canonicalization for YouTube watch URLs.
+    if ((host === "youtube.com" || host === "m.youtube.com") && path === "/watch") {
+      const videoId = parsed.searchParams.get("v");
+      if (videoId) return `https://youtube.com/watch?v=${videoId}`;
+    }
+    if (host === "youtu.be") {
+      const videoId = path.replace("/", "");
+      if (videoId) return `https://youtube.com/watch?v=${videoId}`;
+    }
+
+    // Collapse Google search URLs to one canonical key.
+    if (host.includes("google.") && path.startsWith("/search")) {
+      return `https://${host}/search`;
+    }
+
+    return `${protocol}//${host}${path}`;
+  } catch {
+    return url.split("&")[0];
+  }
+}
+
+function extractResourceHost(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function isExcludedResource(url: string, excludedUrls: Set<string>, excludedDomains: Set<string>): boolean {
+  const normalized = normalizeResourceUrl(url);
+  if (excludedUrls.has(normalized)) return true;
+  const host = extractResourceHost(url);
+  if (!host) return false;
+  for (const blocked of excludedDomains) {
+    if (blocked.startsWith("*.")) {
+      const suffix = blocked.slice(2);
+      if (host === suffix || host.endsWith(`.${suffix}`)) return true;
+      continue;
+    }
+    if (host === blocked) return true;
+  }
+  return false;
+}
+
 function isAllowedResourceUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-    const host = parsed.hostname.toLowerCase();
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
     const path = parsed.pathname.toLowerCase();
     if (DISALLOWED_RESOURCE_DOMAINS.some(d => host.includes(d))) return false;
-    if (host === "www.google.com" || host === "google.com") return false;
+    if (host === "google.com") return false;
     if (host.includes("google.") && path.startsWith("/search")) return false;
     return true;
   } catch {
@@ -1607,14 +1661,15 @@ function mergeAndDeduplicate(
   moduleResults: { videos: SerperVideoResult[]; web: SerperWebResult[] },
   moduleTitle: string,
   totalAvailableMinutes: number,
-  excludedUrls: Set<string>
+  excludedUrls: Set<string>,
+  excludedDomains: Set<string>
 ): CandidateResource[] {
   const urlMap = new Map<string, CandidateResource>();
 
   function processVideo(v: SerperVideoResult) {
     if (!v.link) return;
-    const normalizedUrl = v.link.split("&")[0];
-    if (excludedUrls.has(normalizedUrl)) return;
+    const normalizedUrl = normalizeResourceUrl(v.link);
+    if (isExcludedResource(normalizedUrl, excludedUrls, excludedDomains)) return;
     if (!isAllowedResourceUrl(normalizedUrl)) return;
     const title = v.title || "Video Tutorial";
     if (isDiscussionOrMetaResource(normalizedUrl, title, "")) return;
@@ -1637,20 +1692,21 @@ function mergeAndDeduplicate(
 
   function processWeb(r: SerperWebResult) {
     if (!r.link) return;
-    if (excludedUrls.has(r.link)) return;
-    if (!isAllowedResourceUrl(r.link)) return;
+    const normalizedUrl = normalizeResourceUrl(r.link);
+    if (isExcludedResource(normalizedUrl, excludedUrls, excludedDomains)) return;
+    if (!isAllowedResourceUrl(normalizedUrl)) return;
     const title = r.title || "Learning Resource";
-    if (isDiscussionOrMetaResource(r.link, title, r.snippet || "")) return;
-    if (isDisqualified(title, r.link)) return;
-    if (r.link.includes("youtube.com/watch") || r.link.includes("youtu.be/")) return;
+    if (isDiscussionOrMetaResource(normalizedUrl, title, r.snippet || "")) return;
+    if (isDisqualified(title, normalizedUrl)) return;
+    if (normalizedUrl.includes("youtube.com/watch") || normalizedUrl.includes("youtu.be/")) return;
 
-    if (urlMap.has(r.link)) {
-      urlMap.get(r.link)!.appearances_count++;
+    if (urlMap.has(normalizedUrl)) {
+      urlMap.get(normalizedUrl)!.appearances_count++;
     } else {
-      const listingLike = looksLikeListingPage(r.link, title, r.snippet || "");
+      const listingLike = looksLikeListingPage(normalizedUrl, title, r.snippet || "");
       if (listingLike) return;
-      urlMap.set(r.link, {
-        title, url: r.link,
+      urlMap.set(normalizedUrl, {
+        title, url: normalizedUrl,
         type: detectResourceType(r.link),
         estimated_minutes: estimateArticleMinutes(r.snippet || ""),
         description: r.snippet || `Resource for ${moduleTitle}`,
@@ -2083,6 +2139,7 @@ serve(async (req) => {
     }
 
     const excludedUrls = new Set<string>();
+    const excludedDomains = new Set<string>();
     if (supabaseAdmin && resolvedUserId && topic) {
       try {
         const topicKey = normalizeTopicKey(topic);
@@ -2093,7 +2150,24 @@ serve(async (req) => {
           .eq("topic_key", topicKey)
           .eq("relevant", false);
         for (const row of (feedbackRows || [])) {
-          if (row.resource_url) excludedUrls.add(String(row.resource_url).split("&")[0]);
+          if (!row.resource_url) continue;
+          const raw = String(row.resource_url);
+          const normalized = normalizeResourceUrl(raw);
+          excludedUrls.add(normalized);
+          const host = extractResourceHost(raw);
+          if (host) {
+            const baseHost = host.replace(/^www\./, "");
+            // Block only search-engine hosts for Google, not product docs/sites.
+            if (/^google\./.test(baseHost)) {
+              excludedDomains.add(baseHost);
+            }
+            if (baseHost === "coursera.org" || baseHost.endsWith(".coursera.org")) {
+              excludedDomains.add("*.coursera.org");
+            }
+            if (baseHost === "coursera.com" || baseHost.endsWith(".coursera.com")) {
+              excludedDomains.add("*.coursera.com");
+            }
+          }
         }
       } catch (e) {
         console.warn("Failed to load resource feedback exclusions:", e);
@@ -2253,7 +2327,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
       const mod = roadmap.modules[i];
       const moduleResults = allModuleResults[i];
-      const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls);
+      const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls, excludedDomains);
       allModuleCandidates.set(mod.id, candidates);
     }
 
@@ -2519,7 +2593,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
           .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
 
         for (const c of recoveryPool) {
-          const normalized = c.url.split("&")[0];
+          const normalized = normalizeResourceUrl(c.url);
           const videoId = extractYouTubeVideoId(normalized);
           if (usedResourceUrls.has(normalized)) continue;
           if (videoId && usedVideoIds.has(videoId)) continue;
@@ -2536,7 +2610,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         const rescuePool = moduleRescuePools.get(mod.id) || [];
         for (const c of rescuePool) {
           if (budgetedResources.length >= 2) break;
-          const normalizedUrl = c.url.split("&")[0];
+          const normalizedUrl = normalizeResourceUrl(c.url);
           const videoId = extractYouTubeVideoId(normalizedUrl);
           if (usedResourceUrls.has(normalizedUrl)) continue;
           if (videoId && usedVideoIds.has(videoId)) continue;
@@ -2548,7 +2622,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       }
 
       const cleanedResources = budgetedResources.filter(c =>
-        !excludedUrls.has(c.url.split("&")[0]) &&
+        !isExcludedResource(c.url, excludedUrls, excludedDomains) &&
         isAllowedResourceUrl(c.url) &&
         !looksLikeListingPage(c.url, c.title, c.description) &&
         !isDiscussionOrMetaResource(c.url, c.title, c.description)
@@ -2565,11 +2639,11 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
           if (finalizedMinutes >= hardCoverageTarget) break;
           if (finalizedResources.some(r => r.url === c.url)) continue;
 
-          const normalized = c.url.split("&")[0];
+          const normalized = normalizeResourceUrl(c.url);
           const videoId = extractYouTubeVideoId(normalized);
           if (usedResourceUrls.has(normalized)) continue;
           if (videoId && usedVideoIds.has(videoId)) continue;
-          if (excludedUrls.has(normalized)) continue;
+          if (isExcludedResource(normalized, excludedUrls, excludedDomains)) continue;
           if (!isAllowedResourceUrl(c.url)) continue;
           if (looksLikeListingPage(c.url, c.title, c.description)) continue;
           if (isDiscussionOrMetaResource(c.url, c.title, c.description)) continue;
@@ -2583,7 +2657,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
 
       // Register used resources globally only after cleaning + top-up.
       for (const c of finalizedResources) {
-        const normalizedUrl = c.url.split("&")[0];
+        const normalizedUrl = normalizeResourceUrl(c.url);
         usedResourceUrls.add(normalizedUrl);
         if (!c.is_continuation && c.span_plan && c.span_plan.length > 1) {
           selectedPrimaryUrls.add(normalizedUrl);

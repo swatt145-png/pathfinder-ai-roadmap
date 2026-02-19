@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell, Undo2, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell, Undo2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuizModal } from "@/components/QuizModal";
@@ -16,6 +16,7 @@ interface ModuleDetailProps {
   onUpdateResourcesAndNotes?: (moduleId: string, completedResources: string[], notes: string) => void;
   onUpdateCompletedModule?: (moduleId: string, selfReport: string, notes: string) => void;
   onMarkNotComplete?: (moduleId: string) => void;
+  onGoToNextModule?: () => void;
   roadmapId?: string;
   roadmapTopic?: string;
   onGenerateQuiz?: (moduleId: string) => Promise<void>;
@@ -50,6 +51,7 @@ export function ModuleDetail({
   onUpdateResourcesAndNotes,
   onUpdateCompletedModule,
   onMarkNotComplete,
+  onGoToNextModule,
   roadmapId,
   roadmapTopic,
   onGenerateQuiz,
@@ -68,6 +70,8 @@ export function ModuleDetail({
   const [feedbackByUrl, setFeedbackByUrl] = useState<Record<string, { liked: boolean | null; relevant: boolean | null }>>({});
 
   const resources = module.resources ?? [];
+  const visibleResources = resources.filter((r) => feedbackByUrl[r.url]?.relevant !== false);
+  const completedVisibleCount = completedResources.filter((title) => visibleResources.some((r) => r.title === title)).length;
   const learningObjectives = module.learning_objectives ?? [];
   const quiz = module.quiz ?? [];
 
@@ -99,10 +103,10 @@ export function ModuleDetail({
     void loadFeedback();
   }, [user, roadmapId, module.id, resources]);
 
-  const totalResourceMinutes = resources.reduce((sum, r) => sum + (r.estimated_minutes || 0), 0);
+  const totalResourceMinutes = visibleResources.reduce((sum, r) => sum + (r.estimated_minutes || 0), 0);
 
-  const resourceProgress = resources.length > 0
-    ? Math.round((completedResources.length / resources.length) * 100)
+  const resourceProgress = visibleResources.length > 0
+    ? Math.round((completedVisibleCount / visibleResources.length) * 100)
     : 0;
 
   const toggleResource = (resourceTitle: string) => {
@@ -188,6 +192,16 @@ export function ModuleDetail({
           <h3 className="font-heading font-bold text-lg truncate">{module.title}</h3>
           <p className="text-base text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h study time</p>
         </div>
+        {onGoToNextModule && (
+          <button
+            onClick={onGoToNextModule}
+            aria-label="Go to next module"
+            title="Next module"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-white/10 hover:border-primary/40 hover:bg-white/5"
+          >
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-8">
@@ -226,15 +240,15 @@ export function ModuleDetail({
               <BookOpen className="w-5 h-5 text-accent" />
               <h4 className="font-heading font-bold text-lg gradient-text">Resources</h4>
             </div>
-            {resources.length > 0 && (
+            {visibleResources.length > 0 && (
               <span className="text-base text-muted-foreground font-heading">
-                {completedResources.length}/{resources.length} done
+                {completedVisibleCount}/{visibleResources.length} done
                 {resourceProgress > 0 && ` · ${resourceProgress}%`}
               </span>
             )}
           </div>
           <div className="space-y-3">
-            {resources.map((r, i) => {
+            {visibleResources.map((r, i) => {
               const isChecked = completedResources.includes(r.title);
               const IconComponent = RESOURCE_ICONS[r.type] ?? FileText;
               const iconColor = RESOURCE_COLORS[r.type] ?? "text-primary";

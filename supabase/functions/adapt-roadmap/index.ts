@@ -132,6 +132,7 @@ interface SerperVideoResult { title: string; link: string; duration?: string; }
 
 const DISALLOWED_RESOURCE_DOMAINS = [
   "coursera.org",
+  "coursera.com",
 ];
 
 interface CandidateResource {
@@ -210,9 +211,10 @@ function isAllowedResourceUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-    const host = parsed.hostname.toLowerCase();
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
     const path = parsed.pathname.toLowerCase();
     if (DISALLOWED_RESOURCE_DOMAINS.some(d => host.includes(d))) return false;
+    if (host === "google.com") return false;
     if (host.includes("google.") && path.startsWith("/search")) return false;
     return true;
   } catch {

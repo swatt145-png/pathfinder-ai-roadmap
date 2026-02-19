@@ -647,6 +647,13 @@ export default function Dashboard() {
         <ModuleDetail
           module={selectedModule}
           progress={progressMap[selectedModule.id]}
+          onGoToNextModule={(() => {
+            if (!roadmapData) return undefined;
+            const currentIndex = roadmapData.modules.findIndex((m) => m.id === selectedModule.id);
+            const nextModule = currentIndex >= 0 ? roadmapData.modules[currentIndex + 1] : null;
+            if (!nextModule) return undefined;
+            return () => setSelectedModule(nextModule);
+          })()}
           roadmapId={roadmap?.id}
           roadmapTopic={roadmapData?.topic}
           onGenerateQuiz={handleGenerateQuizForModule}
