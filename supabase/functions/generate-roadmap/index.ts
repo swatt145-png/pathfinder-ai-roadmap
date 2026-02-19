@@ -2461,7 +2461,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     }
 
     const moduleCandidateCounts = (roadmap.modules || []).map((mod: any) => (allModuleCandidates.get(mod.id) || []).length);
-    const weakModules = moduleCandidateCounts.filter((count) => count < PIPELINE_LIMITS.weakModuleCandidateThreshold).length;
+    const weakModules = moduleCandidateCounts.filter((count: number) => count < PIPELINE_LIMITS.weakModuleCandidateThreshold).length;
     console.log(`Stage 2: ${weakModules}/${moduleCandidateCounts.length} modules with thin coverage (threshold: ${PIPELINE_LIMITS.weakModuleCandidateThreshold}).`);
 
     // ════════════════════════════════════════════════════════════════════════
