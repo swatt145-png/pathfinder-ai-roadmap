@@ -185,10 +185,10 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 const TIMEOUTS_MS: Record<string, number> = {
   serper: 8000,
   youtube: 4000,
-  agent1Base: 15000,
-  agent1PerWeek: 4000,
+  agent1Base: 30000,
+  agent1PerWeek: 6000,
   agent2: 12000,
-  geminiDirect: 5000,
+  geminiDirect: 10000,
 };
 
 const RETRIEVAL_THRESHOLDS = {
@@ -206,7 +206,7 @@ const PIPELINE_LIMITS = {
 const FAST_MODE_MAX_HOURS = 40;
 const FAST_MODE_MAX_MODULES = 8;
 const ENABLE_EXPENSIVE_LLM_STAGES = true;
-const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-2.5-flash-lite";
+const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-3-pro-preview";
 const ROADMAP_MODEL_AGENT2 = Deno.env.get("ROADMAP_MODEL_AGENT2") || "google/gemini-2.5-flash";
 
 const CACHE_TTL = {
@@ -1237,7 +1237,7 @@ function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: numbe
   const articles = candidates.filter(c => c.type === "article" || c.type === "tutorial" || c.type === "practice");
 
   const handsOn = goal === "hands_on";
-  const maxVideos = Math.ceil(maxPerModule * (handsOn ? 0.55 : 0.40));
+  const maxVideos = Math.ceil(maxPerModule * (handsOn ? 0.45 : 0.35));
   const maxDocs = Math.ceil(maxPerModule * (handsOn ? 0.15 : 0.35));
   const maxArticles = maxPerModule - Math.min(videos.length, maxVideos) - Math.min(docs.length, maxDocs);
 
@@ -1291,6 +1291,9 @@ function computeContextFitScoreFallback(candidate: CandidateResource, ctx: Modul
     if (goalChannels.some(ch => channelLower.includes(ch))) qualityFit = Math.min(qualityFit + 3, 15);
     if (ytMeta.viewCount >= 1_000_000) qualityFit = Math.min(qualityFit + 2, 15);
     else if (ytMeta.viewCount >= 100_000) qualityFit = Math.min(qualityFit + 1, 15);
+    // Penalize low-view videos from unknown channels
+    if (ytMeta.viewCount < 1_000 && !goalChannels.some(ch => ytMeta.channel.toLowerCase().includes(ch))) qualityFit = Math.max(qualityFit - 4, 0);
+    else if (ytMeta.viewCount < 5_000 && !goalChannels.some(ch => ytMeta.channel.toLowerCase().includes(ch))) qualityFit = Math.max(qualityFit - 2, 0);
   }
 
   const topicOrModuleCert = detectCertificationIntent(`${ctx.topic} ${ctx.moduleTitle}`);
@@ -1430,6 +1433,7 @@ Select the best 1-5 resources. The number is VARIABLE.
 - Do NOT add filler. Each resource must add unique value.
 - Use your scores as the PRIMARY signal.
 - Avoid low-view unknown creators unless uniquely valuable.
+- LOW-VIEW PENALTY: If a YouTube video has fewer than 1,000 views from an unknown channel, only select it if no better alternative exists. Never select more than 1 low-view video per module.
 - Avoid redundancy — don't pick 3 similar videos.
 - DIVERSITY PREFERENCE: When quality is comparable, prefer a mix of resource types (videos, articles, docs, tutorials) over all-video selections. A single excellent video that fills the time budget is fine — but when choosing among similar-quality candidates, favor type variety.
 - Time budget is a HARD CONSTRAINT: total selected minutes must not exceed ${Math.round((mod.estimated_hours || 1) * 60)} minutes.
@@ -1565,12 +1569,20 @@ function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext
     if (!isDuplicate) deduplicated.push(c);
   }
 
+  // Consolidate low-view videos: if multiple videos have <1000 views, keep only the best 1
+  const lowViewVideos = deduplicated.filter(c => c.type === "video" && (c.view_count || 0) < 1000);
+  let selectionPool = deduplicated;
+  if (lowViewVideos.length > 1) {
+    const lowViewToRemove = new Set(lowViewVideos.slice(1).map(c => c.url));
+    selectionPool = deduplicated.filter(c => !lowViewToRemove.has(c.url));
+  }
+
   const maxResources = 5;
   const selected: CandidateResource[] = [];
   let totalMinutes = 0;
   const dailyCapMinutes = ctx.moduleMinutes * 1.1;
 
-  for (const c of deduplicated) {
+  for (const c of selectionPool) {
     if (selected.length >= maxResources) break;
 
     // BUG FIX: Enforce budget even for the first resource
@@ -1581,13 +1593,13 @@ function clusterAndDiversify(candidates: CandidateResource[], ctx: ModuleContext
   }
 
   // Minimum 1 resource — pick the single best that fits budget, or smallest if none fit
-  if (selected.length === 0 && deduplicated.length > 0) {
-    const fitting = deduplicated.filter(c => c.estimated_minutes <= dailyCapMinutes);
+  if (selected.length === 0 && selectionPool.length > 0) {
+    const fitting = selectionPool.filter(c => c.estimated_minutes <= dailyCapMinutes);
     if (fitting.length > 0) {
       selected.push(fitting[0]);
     } else {
       // All exceed budget — pick the shortest one
-      const shortest = [...deduplicated].sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
+      const shortest = [...selectionPool].sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
       selected.push(shortest);
     }
   }
@@ -2109,6 +2121,7 @@ PRIORITY 4 — TIME CONSTRAINTS:
    - A module can have 1 resource if that single resource is excellent and fits the time budget.
    - Do NOT add extra resources as filler. Each must add unique value.
    - Resources will be fetched separately — leave resources as empty arrays.
+   - If a module would require more than 4 hours, split it into focused sub-modules of 2-4 hours each.
 
 3. SHORT TIMELINE COMPRESSION: If total time < 5 hours, reduce module count, increase density, avoid over-fragmentation and repeated introductory content. Prefer fewer, stronger anchors.
 
@@ -2774,6 +2787,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
           .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
 
         for (const c of recoveryPool) {
+          if (budgetedResources.length >= 5) break;
           const normalized = normalizeResourceUrl(c.url);
           const videoId = extractYouTubeVideoId(normalized);
           if (usedResourceUrls.has(normalized)) continue;
@@ -2809,7 +2823,18 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         !isDiscussionOrMetaResource(c.url, c.title, c.description)
       );
 
+      // Per-module video ratio enforcement: max 60% videos
       let finalizedResources = [...cleanedResources];
+      if (finalizedResources.length >= 2) {
+        const maxModuleVideos = Math.ceil(finalizedResources.length * 0.60);
+        const modVideos = finalizedResources.filter(r => r.type === "video");
+        if (modVideos.length > maxModuleVideos) {
+          // Keep the highest-scored videos, remove excess
+          const sortedVideos = [...modVideos].sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+          const videosToRemove = new Set(sortedVideos.slice(maxModuleVideos).map(v => v.url));
+          finalizedResources = finalizedResources.filter(r => r.type !== "video" || !videosToRemove.has(r.url));
+        }
+      }
       let finalizedMinutes = finalizedResources.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
       const hardCoverageTarget = Math.min(moduleBudgetCap, Math.max(20, moduleMinutes * 0.45));
 
@@ -2817,6 +2842,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         const topUpPools = [...candidates, ...(moduleRescuePools.get(mod.id) || [])]
           .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
         for (const c of topUpPools) {
+          if (finalizedResources.length >= 5) break;
           if (finalizedMinutes >= hardCoverageTarget) break;
           if (finalizedResources.some(r => r.url === c.url)) continue;
 
@@ -2834,6 +2860,13 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
           finalizedResources.push(c);
           finalizedMinutes += c.estimated_minutes;
         }
+      }
+
+      // Hard cap: never exceed 5 resources per module
+      if (finalizedResources.length > 5) {
+        finalizedResources.sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+        finalizedResources = finalizedResources.slice(0, 5);
+        finalizedMinutes = finalizedResources.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
       }
 
       // Register used resources globally only after cleaning + top-up.
@@ -2898,6 +2931,40 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       delete mod.anchor_terms;
     }
 
+    // ── Module splitting: split oversized modules (5 resources AND >4 hours) ──
+    {
+      const newModules: any[] = [];
+      for (const mod of roadmap.modules || []) {
+        const resources = mod.resources || [];
+        if (resources.length >= 5 && (mod.estimated_hours || 0) > 4) {
+          const mid = Math.ceil(resources.length / 2);
+          const part1Resources = resources.slice(0, mid);
+          const part2Resources = resources.slice(mid);
+          const part1Minutes = part1Resources.reduce((s: number, r: any) => s + (r.estimated_minutes || 0), 0);
+          const part2Minutes = part2Resources.reduce((s: number, r: any) => s + (r.estimated_minutes || 0), 0);
+
+          newModules.push({
+            ...mod,
+            id: mod.id,
+            title: `${mod.title} (Part 1)`,
+            resources: part1Resources,
+            estimated_hours: Math.round((part1Minutes / 60) * 100) / 100,
+          });
+          newModules.push({
+            ...mod,
+            id: `${mod.id}_pt2`,
+            title: `${mod.title} (Part 2)`,
+            resources: part2Resources,
+            estimated_hours: Math.round((part2Minutes / 60) * 100) / 100,
+          });
+          console.log(`Split module "${mod.title}" (${resources.length} resources, ${mod.estimated_hours}h) into two parts.`);
+        } else {
+          newModules.push(mod);
+        }
+      }
+      roadmap.modules = newModules;
+    }
+
     // ── Roadmap-level diversity pass ──
     // If the entire roadmap is >75% video, swap weakest videos in multi-resource
     // modules for the best available non-video candidate from rescue pools.
@@ -2906,7 +2973,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       const videoCount = allResources.filter((r: Resource) => r.type === "video").length;
       const totalCount = allResources.length;
       const videoRatio = totalCount > 0 ? videoCount / totalCount : 0;
-      const targetMaxVideoRatio = 0.70;
+      const targetMaxVideoRatio = 0.62;
 
       if (videoRatio > targetMaxVideoRatio && totalCount >= 3) {
         const videosToReplace = Math.ceil(videoCount - totalCount * targetMaxVideoRatio);

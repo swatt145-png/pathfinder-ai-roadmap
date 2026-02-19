@@ -59,6 +59,64 @@ const LOADING_MESSAGES = [
 const isTransientRelayError = (message: string): boolean =>
   /Failed to send a request|FunctionsRelayError|NetworkError|fetch failed/i.test(message);
 
+async function generateAllQuizzesInBackground(
+  roadmapId: string,
+  roadmapData: RoadmapData,
+  learningGoal: string,
+  supabaseClient: typeof supabase,
+) {
+  const modules = roadmapData.modules || [];
+  const CONCURRENCY = 2;
+
+  for (let i = 0; i < modules.length; i += CONCURRENCY) {
+    const batch = modules.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map((mod) =>
+        supabaseClient.functions.invoke("generate-module-quiz", {
+          body: {
+            topic: roadmapData.topic,
+            skill_level: roadmapData.skill_level,
+            learning_goal: learningGoal,
+            module: {
+              title: mod.title,
+              description: mod.description,
+              learning_objectives: mod.learning_objectives,
+            },
+          },
+        })
+      )
+    );
+
+    // Read latest roadmap_data, merge quiz results, write back
+    const { data: current } = await supabaseClient
+      .from("roadmaps")
+      .select("roadmap_data")
+      .eq("id", roadmapId)
+      .single();
+
+    if (!current?.roadmap_data) continue;
+    const updatedData = current.roadmap_data as RoadmapData;
+
+    for (let j = 0; j < batch.length; j++) {
+      const result = results[j];
+      if (result.status !== "fulfilled") continue;
+      const { data, error } = result.value;
+      if (error || !data?.quiz) continue;
+
+      const moduleIndex = i + j;
+      if (updatedData.modules?.[moduleIndex]) {
+        updatedData.modules[moduleIndex].quiz = data.quiz;
+      }
+    }
+
+    await supabaseClient
+      .from("roadmaps")
+      .update({ roadmap_data: updatedData as any })
+      .eq("id", roadmapId);
+  }
+  console.log(`[Flashcards] Background quiz generation complete for roadmap ${roadmapId}`);
+}
+
 const extractFunctionErrorMessage = async (fnError: any): Promise<string> => {
   const fallback = typeof fnError?.message === "string" ? fnError.message : "";
   const context = fnError?.context;
@@ -233,6 +291,12 @@ export default function NewRoadmap() {
         }
 
         const newId = insertedRows?.[0]?.id;
+        // Fire-and-forget: generate quizzes (flashcards) in background
+        if (newId) {
+          generateAllQuizzesInBackground(newId, roadmapData, learningGoal, supabase).catch((err) =>
+            console.warn("[Flashcards] Background quiz generation failed:", err)
+          );
+        }
         navigate(newId ? `/dashboard/${newId}` : "/my-roadmaps");
         return;
       } catch (err: any) {
