@@ -187,6 +187,7 @@ const TIMEOUTS_MS = {
   youtube: 2000,   // reduced from 2500 — proceed without enrichment if YouTube is slow
   agent1: 8000,    // fail fast and fall back to heuristic roadmap
   agent2: 8000,    // reduced from 10000 — most responses arrive in 3-5s; 8s is generous
+  geminiDirect: 3000, // fast timeout for direct Gemini — fall back to gateway quickly if unreachable
 };
 
 const RETRIEVAL_THRESHOLDS = {
@@ -205,7 +206,7 @@ const FAST_MODE_MAX_HOURS = 40;
 const FAST_MODE_MAX_MODULES = 8;
 const ENABLE_EXPENSIVE_LLM_STAGES = true;
 const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-2.5-flash-lite";
-const ROADMAP_MODEL_AGENT2 = Deno.env.get("ROADMAP_MODEL_AGENT2") || "google/gemini-3-pro-preview";
+const ROADMAP_MODEL_AGENT2 = Deno.env.get("ROADMAP_MODEL_AGENT2") || "google/gemini-2.5-flash";
 
 const CACHE_TTL = {
   serperHours: 48,
@@ -324,8 +325,9 @@ async function callLLM(
   // Strip "google/" prefix for direct Gemini calls
   const geminiModel = model.replace(/^google\//, "");
 
-  // Try direct Gemini first
+  // Try direct Gemini first with a shorter timeout — fall back to gateway quickly
   if (geminiKey) {
+    const directTimeout = Math.min(timeoutMs, TIMEOUTS_MS.geminiDirect);
     try {
       const res = await fetchWithTimeout(
         "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
@@ -341,7 +343,7 @@ async function callLLM(
             ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
           }),
         },
-        timeoutMs,
+        directTimeout,
       );
       if (res.ok) return res;
       console.warn(`Direct Gemini returned ${res.status}, falling back to gateway...`);
@@ -559,54 +561,57 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string, supabase
   const missingIds = videoIds.filter((id) => !metadataMap.has(id));
   if (missingIds.length === 0) return metadataMap;
 
+  // Fire all YouTube API batches in parallel instead of sequentially
+  const batchPromises: Promise<void>[] = [];
   for (let i = 0; i < missingIds.length; i += 50) {
     const batch = missingIds.slice(i, i + 50);
     const idsParam = batch.join(",");
-    try {
-      const res = await fetchWithTimeout(
-        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${idsParam}&key=${apiKey}`,
-        { method: "GET" },
-        TIMEOUTS_MS.youtube
-      );
-      if (!res.ok) {
-        if (res.status === 403) {
-          console.warn("YouTube API quota exceeded, skipping enrichment");
-          return metadataMap;
+    batchPromises.push((async () => {
+      try {
+        const res = await fetchWithTimeout(
+          `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${idsParam}&key=${apiKey}`,
+          { method: "GET" },
+          TIMEOUTS_MS.youtube
+        );
+        if (!res.ok) {
+          if (res.status === 403) {
+            console.warn("YouTube API quota exceeded, skipping enrichment");
+            return;
+          }
+          console.error(`YouTube API error: ${res.status}`);
+          return;
         }
-        console.error(`YouTube API error: ${res.status}`);
-        continue;
+        const data = await res.json();
+        const cacheRows: Array<Record<string, any>> = [];
+        for (const item of (data.items || [])) {
+          const metadata: YouTubeMetadata = {
+            title: item.snippet?.title || "",
+            channel: item.snippet?.channelTitle || "",
+            durationMinutes: parseISO8601Duration(item.contentDetails?.duration || "PT0S"),
+            viewCount: parseInt(item.statistics?.viewCount || "0"),
+            likeCount: parseInt(item.statistics?.likeCount || "0"),
+          };
+          metadataMap.set(item.id, metadata);
+          cacheRows.push({
+            video_id: item.id,
+            title: metadata.title,
+            channel: metadata.channel,
+            duration_minutes: metadata.durationMinutes,
+            view_count: metadata.viewCount,
+            like_count: metadata.likeCount,
+            expires_at: new Date(Date.now() + CACHE_TTL.youtubeHours * 60 * 60 * 1000).toISOString(),
+          });
+        }
+        if (supabaseAdmin && cacheRows.length > 0) {
+          supabaseAdmin.from("youtube_metadata_cache").upsert(cacheRows, { onConflict: "video_id" })
+            .catch((e: any) => console.warn("YouTube cache write failed:", e));
+        }
+      } catch (e) {
+        console.error("YouTube API fetch failed:", e);
       }
-      const data = await res.json();
-      const cacheRows: Array<Record<string, any>> = [];
-      for (const item of (data.items || [])) {
-        const metadata: YouTubeMetadata = {
-          title: item.snippet?.title || "",
-          channel: item.snippet?.channelTitle || "",
-          durationMinutes: parseISO8601Duration(item.contentDetails?.duration || "PT0S"),
-          viewCount: parseInt(item.statistics?.viewCount || "0"),
-          likeCount: parseInt(item.statistics?.likeCount || "0"),
-        };
-        metadataMap.set(item.id, metadata);
-        cacheRows.push({
-          video_id: item.id,
-          title: metadata.title,
-          channel: metadata.channel,
-          duration_minutes: metadata.durationMinutes,
-          view_count: metadata.viewCount,
-          like_count: metadata.likeCount,
-          expires_at: new Date(Date.now() + CACHE_TTL.youtubeHours * 60 * 60 * 1000).toISOString(),
-        });
-      }
-      if (supabaseAdmin && cacheRows.length > 0) {
-        // Fire-and-forget cache write — don't block the return.
-        supabaseAdmin.from("youtube_metadata_cache").upsert(cacheRows, { onConflict: "video_id" })
-          .catch((e: any) => console.warn("YouTube cache write failed:", e));
-      }
-    } catch (e) {
-      console.error("YouTube API fetch failed:", e);
-      continue;
-    }
+    })());
   }
+  await Promise.all(batchPromises);
   return metadataMap;
 }
 
