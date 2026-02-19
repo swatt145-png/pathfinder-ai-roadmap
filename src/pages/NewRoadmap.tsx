@@ -156,7 +156,7 @@ export default function NewRoadmap() {
 
     const stepInterval = setInterval(() => {
       setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1));
-    }, 4500);
+    }, 3000);
 
     const MAX_RETRIES = 2;
     const requestBody = { user_id: user.id, topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: false, deadline_date: null, include_weekends: true, timeline_mode: timelineUnit };
@@ -167,7 +167,7 @@ export default function NewRoadmap() {
       try {
         if (attempt > 0) {
           console.log(`Retrying roadmap generation (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`);
-          await new Promise((r) => setTimeout(r, 2000 * attempt));
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
 
         const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
@@ -196,7 +196,7 @@ export default function NewRoadmap() {
 
         const roadmapData = data as RoadmapData;
 
-        const { error: insertError } = await supabase.from("roadmaps").insert({
+        const { data: insertedRows, error: insertError } = await supabase.from("roadmaps").insert({
           user_id: user.id,
           topic: roadmapData.topic,
           skill_level: roadmapData.skill_level,
@@ -209,25 +209,21 @@ export default function NewRoadmap() {
           original_roadmap_data: roadmapData as any,
           total_modules: roadmapData.modules.length,
           status: "active",
-        });
+        }).select("id");
 
         if (insertError) throw insertError;
 
         if (reviseState?.replaceRoadmapId) {
           const oldRoadmapId = reviseState.replaceRoadmapId;
-          await supabase.from("progress").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
-          await supabase.from("adaptations").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
-          await supabase.from("roadmaps").delete().eq("id", oldRoadmapId).eq("user_id", user.id);
+          // Fire cleanup in parallel — no need to await sequentially
+          await Promise.all([
+            supabase.from("progress").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id),
+            supabase.from("adaptations").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id),
+            supabase.from("roadmaps").delete().eq("id", oldRoadmapId).eq("user_id", user.id),
+          ]);
         }
 
-        const { data: newRm } = await supabase
-          .from("roadmaps")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(1);
-        const newId = newRm?.[0]?.id;
+        const newId = insertedRows?.[0]?.id;
         navigate(newId ? `/dashboard/${newId}` : "/my-roadmaps");
         return;
       } catch (err: any) {

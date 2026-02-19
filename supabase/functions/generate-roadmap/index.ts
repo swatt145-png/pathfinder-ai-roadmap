@@ -186,7 +186,7 @@ const TIMEOUTS_MS = {
   serper: 3000,    // reduced from 3500 — fail fast, no retry
   youtube: 2000,   // reduced from 2500 — proceed without enrichment if YouTube is slow
   agent1: 8000,    // fail fast and fall back to heuristic roadmap
-  agent2: 10000,   // reduced from 12000 — combined scoring + selection
+  agent2: 8000,    // reduced from 10000 — most responses arrive in 3-5s; 8s is generous
 };
 
 const RETRIEVAL_THRESHOLDS = {
@@ -311,6 +311,62 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function callLLM(
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  apiKey: string,
+  geminiKey: string | undefined,
+  timeoutMs: number,
+  jsonMode = true,
+): Promise<Response> {
+  // Strip "google/" prefix for direct Gemini calls
+  const geminiModel = model.replace(/^google\//, "");
+
+  // Try direct Gemini first
+  if (geminiKey) {
+    try {
+      const res = await fetchWithTimeout(
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${geminiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: geminiModel,
+            messages,
+            ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+          }),
+        },
+        timeoutMs,
+      );
+      if (res.ok) return res;
+      console.warn(`Direct Gemini returned ${res.status}, falling back to gateway...`);
+    } catch (e) {
+      console.warn(`Direct Gemini failed: ${isAbortError(e) ? "timeout" : e}, falling back to gateway...`);
+    }
+  }
+
+  // Fallback to Lovable gateway
+  return fetchWithTimeout(
+    "https://ai.gateway.lovable.dev/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    },
+    timeoutMs,
+  );
 }
 
 function detectResourceType(url: string): CandidateResource["type"] {
@@ -1365,18 +1421,13 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ROADMAP_MODEL_AGENT2,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-      }),
-    }, TIMEOUTS_MS.agent2);
+    const response = await callLLM(
+      ROADMAP_MODEL_AGENT2,
+      [{ role: "user", content: prompt }],
+      apiKey,
+      Deno.env.get("GEMINI_API_KEY"),
+      TIMEOUTS_MS.agent2,
+    );
 
     if (!response.ok) {
       console.error(`Agent 2 (module "${mod.title}") error: ${response.status}`);
@@ -1858,16 +1909,11 @@ async function fetchModuleResults(
     return batch;
   };
 
-  let combined = await runQueryBatch(precisionQueries);
-  const minUnique = RETRIEVAL_THRESHOLDS.moduleMinUnique;
-  const precisionUnique = countUniqueSerperResults(combined);
-  if (!fastMode && !shortModule && precisionUnique < Math.floor(minUnique * 0.6)) {
-    const expanded = await runQueryBatch(expansionQueries);
-    combined = mergeSerperResults(combined, expanded);
-    console.log(
-      `Module "${module?.title || "unknown"}" expanded: precision pool ${precisionUnique} < ${Math.floor(minUnique * 0.6)}, ran fallback query.`,
-    );
-  }
+  // Fire precision + expansion queries together instead of waiting for precision
+  // results to decide whether to expand.  Topic anchors now always provide backup
+  // coverage, so the conditional expansion round is no longer needed serially.
+  const allQueries = [...precisionQueries, ...expansionQueries];
+  const combined = await runQueryBatch(allQueries);
 
   return combined;
 }
@@ -2178,6 +2224,7 @@ serve(async (req) => {
     if (!SERPER_API_KEY) throw new Error("SERPER_API_KEY not configured");
     const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY");
     if (!YOUTUBE_API_KEY) throw new Error("YOUTUBE_API_KEY not found. Add it in Lovable environment settings.");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -2200,46 +2247,48 @@ serve(async (req) => {
       }
     }
 
-    const excludedUrls = new Set<string>();
-    const excludedDomains = new Set<string>();
-    if (supabaseAdmin && resolvedUserId && topic) {
-      try {
-        const topicKey = normalizeTopicKey(topic);
-        const { data: feedbackRows } = await supabaseAdmin
-          .from("resource_feedback")
-          .select("resource_url")
-          .eq("user_id", resolvedUserId)
-          .eq("topic_key", topicKey)
-          .eq("relevant", false);
-        for (const row of (feedbackRows || [])) {
-          if (!row.resource_url) continue;
-          const raw = String(row.resource_url);
-          const normalized = normalizeResourceUrl(raw);
-          excludedUrls.add(normalized);
-          const host = extractResourceHost(raw);
-          if (host) {
-            const baseHost = host.replace(/^www\./, "");
-            // Block only search-engine hosts for Google, not product docs/sites.
-            if (/^google\./.test(baseHost)) {
-              excludedDomains.add(baseHost);
-            }
-            if (baseHost === "coursera.org" || baseHost.endsWith(".coursera.org")) {
-              excludedDomains.add("*.coursera.org");
-            }
-            if (baseHost === "coursera.com" || baseHost.endsWith(".coursera.com")) {
-              excludedDomains.add("*.coursera.com");
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Failed to load resource feedback exclusions:", e);
-      }
-    }
-    const allowCacheWrite = excludedUrls.size === 0;
-
     // ════════════════════════════════════════════════════════════════════════
     // STEP 1: Generate roadmap structure via AI (Agent 1)
+    // Feedback exclusion query runs in parallel — both are independent.
     // ════════════════════════════════════════════════════════════════════════
+    const feedbackPromise = (async () => {
+      const urls = new Set<string>();
+      const domains = new Set<string>();
+      if (supabaseAdmin && resolvedUserId && topic) {
+        try {
+          const topicKey = normalizeTopicKey(topic);
+          const { data: feedbackRows } = await supabaseAdmin
+            .from("resource_feedback")
+            .select("resource_url")
+            .eq("user_id", resolvedUserId)
+            .eq("topic_key", topicKey)
+            .eq("relevant", false);
+          for (const row of (feedbackRows || [])) {
+            if (!row.resource_url) continue;
+            const raw = String(row.resource_url);
+            const normalized = normalizeResourceUrl(raw);
+            urls.add(normalized);
+            const host = extractResourceHost(raw);
+            if (host) {
+              const baseHost = host.replace(/^www\./, "");
+              if (/^google\./.test(baseHost)) {
+                domains.add(baseHost);
+              }
+              if (baseHost === "coursera.org" || baseHost.endsWith(".coursera.org")) {
+                domains.add("*.coursera.org");
+              }
+              if (baseHost === "coursera.com" || baseHost.endsWith(".coursera.com")) {
+                domains.add("*.coursera.com");
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to load resource feedback exclusions:", e);
+        }
+      }
+      return { urls, domains };
+    })();
+
     const systemPrompt = buildSystemPrompt(totalHours, effectiveGoal, skill_level);
 
     const userPrompt = `Create a learning roadmap for: "${topic}"
@@ -2288,21 +2337,13 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const agent1Attempts = 1; // always 1 attempt — retrying doubles worst-case latency; fallback roadmap handles failures
     for (let attempt = 1; attempt <= agent1Attempts; attempt++) {
       try {
-        response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: ROADMAP_MODEL_AGENT1,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            response_format: { type: "json_object" },
-          }),
-        }, TIMEOUTS_MS.agent1);
+        response = await callLLM(
+          ROADMAP_MODEL_AGENT1,
+          [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+          LOVABLE_API_KEY,
+          GEMINI_API_KEY,
+          TIMEOUTS_MS.agent1,
+        );
         break;
       } catch (e) {
         if (attempt < agent1Attempts) {
@@ -2368,6 +2409,10 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     }
     const certificationIntent = detectCertificationIntent(topic);
 
+    // Resolve feedback exclusions (started in parallel with Agent 1).
+    const { urls: excludedUrls, domains: excludedDomains } = await feedbackPromise;
+    const allowCacheWrite = excludedUrls.size === 0;
+
     // ════════════════════════════════════════════════════════════════════════
     // STEP 2: STAGE 2A+2B — Module results + topic anchors fully parallel.
     // Previously, topic anchors fired sequentially AFTER module results only
@@ -2377,7 +2422,6 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     // ════════════════════════════════════════════════════════════════════════
     const totalAvailableMinutes = totalHours * 60;
     const allModuleCandidates = new Map<string, CandidateResource[]>();
-    const emptyTopicAnchors = { videos: [] as SerperVideoResult[], web: [] as SerperWebResult[] };
 
     console.log(`Stage 2: Fetching module results + topic anchors in parallel (${roadmap.modules?.length || 0} modules, fastMode=${fastMode})...`);
     const t2Start = Date.now();
@@ -2385,11 +2429,10 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
       fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode)
     );
-    // In fast mode topic anchors are skipped (fewer queries already); in normal mode
-    // fire them now in parallel so the sequential round-trip is eliminated.
-    const topicAnchorPromise = !fastMode
-      ? fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode)
-      : Promise.resolve(emptyTopicAnchors);
+    // Always fetch topic anchors in parallel — even for short roadmaps the quality
+    // uplift is worth the ~3 s parallel wait.  Previously fast-mode skipped this
+    // entirely, resulting in thin candidate pools and low-quality rescue-pool resources.
+    const topicAnchorPromise = fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode);
 
     const [allModuleResults, topicAnchors] = await Promise.all([
       Promise.all(moduleResultsPromises),
@@ -2402,7 +2445,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
       const mod = roadmap.modules[i];
       const candidates = mergeAndDeduplicate(
-        !fastMode ? topicAnchors : emptyTopicAnchors,
+        topicAnchors,
         allModuleResults[i],
         mod.title,
         totalAvailableMinutes,
@@ -2468,9 +2511,15 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       }
 
       // Keep a relaxed but clean pool for later rescue (if strict filters/budgeting produce 0).
+      // Apply the same URL-level guards used elsewhere so search-engine links,
+      // listing pages, and disallowed domains never sneak through the rescue path.
       const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
       const rescuePool = [...enriched]
         .filter(c => !isGarbage(c))
+        .filter(c => isAllowedResourceUrl(c.url))
+        .filter(c => !isExcludedResource(c.url, excludedUrls, excludedDomains))
+        .filter(c => !looksLikeListingPage(c.url, c.title, c.description))
+        .filter(c => !isDiscussionOrMetaResource(c.url, c.title, c.description))
         .filter(c => computeHybridSimilarity(moduleText, `${c.title} ${c.description} ${c.channel || ""}`) >= 0.1)
         .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
       moduleRescuePools.set(mod.id, rescuePool);
