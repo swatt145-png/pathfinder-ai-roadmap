@@ -252,12 +252,13 @@ export function ModuleDetail({
                   <div className={`mt-0.5 shrink-0 ${iconColor}`}>
                     <IconComponent className="w-5 h-5" />
                   </div>
-                  <a
-                    href={r.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 min-w-0 hover:opacity-80 transition-opacity"
-                  >
+                  <div className="flex-1 min-w-0">
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:opacity-80 transition-opacity block"
+                    >
                     <p className={`text-base font-heading font-semibold flex items-center gap-2 ${isChecked ? "line-through" : ""}`}>
                       {(r as any).is_continuation && (
                         <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded font-normal shrink-0">Continue watching</span>
@@ -275,20 +276,21 @@ export function ModuleDetail({
                     <p className="text-base text-muted-foreground mt-1">
                       {(r as any).channel ? `${r.estimated_minutes} min · ` : `~${r.estimated_minutes} min · `}{r.description}
                     </p>
-                  </a>
-                  <div className="shrink-0 flex flex-col gap-2">
-                    <button
-                      onClick={() => toggleLiked(r.url)}
-                      className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.liked ? "border-success/40 text-success bg-success/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
-                    >
-                      Like
-                    </button>
-                    <button
-                      onClick={() => toggleNotRelevant(r.url)}
-                      className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.relevant === false ? "border-destructive/40 text-destructive bg-destructive/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
-                    >
-                      Not relevant
-                    </button>
+                    </a>
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        onClick={() => { void toggleLiked(r.url); }}
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.liked ? "border-success/40 text-success bg-success/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
+                      >
+                        Like
+                      </button>
+                      <button
+                        onClick={() => { void toggleNotRelevant(r.url); }}
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.relevant === false ? "border-destructive/40 text-destructive bg-destructive/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
+                      >
+                        Not relevant
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

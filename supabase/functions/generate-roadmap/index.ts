@@ -177,11 +177,11 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TIMEOUTS_MS = {
-  serper: 9000,
+  serper: 8000,
   youtube: 12000,
-  agent1: 24000,
-  agent2: 22000,
-  reranker: 18000,
+  agent1: 18000,
+  agent2: 14000,
+  reranker: 12000,
 };
 
 const RETRIEVAL_THRESHOLDS = {
@@ -633,21 +633,18 @@ function isDiscussionOrMetaResource(url: string, title: string, snippet: string)
   return false;
 }
 
-function getModuleBoundsFromTotalHours(totalHours: number): { min: number; max: number } {
+function getModuleBounds(totalHours: number, daysInTimeline: number): { min: number; max: number } {
+  const timelineWeeks = daysInTimeline / 7;
+  if (timelineWeeks > 3) return { min: 4, max: 8 };
+  if (timelineWeeks >= 2) return { min: 4, max: totalHours >= 30 ? 7 : 6 };
   if (totalHours <= 3) return { min: 1, max: 2 };
-  if (totalHours <= 8) return { min: 3, max: 4 };
-  if (totalHours <= 14) return { min: 4, max: 6 };
-  if (totalHours <= 24) return { min: 4, max: 5 };
-  return { min: 5, max: 8 };
+  return { min: 1, max: 4 };
 }
 
 function normalizeModulePlan(roadmap: any, totalHours: number, daysInTimeline: number): void {
   if (!roadmap || !Array.isArray(roadmap.modules) || roadmap.modules.length === 0) return;
   const modules = roadmap.modules as any[];
-  const bounds = getModuleBoundsFromTotalHours(totalHours);
-  if (modules.length < bounds.min) {
-    console.log(`Module planner: keeping ${modules.length} modules (min target ${bounds.min}) to avoid artificial splitting.`);
-  }
+  const bounds = getModuleBounds(totalHours, daysInTimeline);
 
   while (modules.length > bounds.max) {
     const idx = modules.length - 2;
@@ -665,6 +662,10 @@ function normalizeModulePlan(roadmap: any, totalHours: number, daysInTimeline: n
     left.anchor_terms = [...new Set([...(left.anchor_terms || []), ...(right.anchor_terms || [])])].slice(0, 8);
     left.id = `mod_${idx + 1}`;
     modules.splice(idx + 1, 1);
+  }
+
+  if (modules.length < bounds.min) {
+    console.log(`Module planner: keeping ${modules.length} modules (suggested minimum ${bounds.min}) to avoid artificial splitting.`);
   }
 
   const sum = modules.reduce((acc, m) => acc + Number(m.estimated_hours || 0), 0);
@@ -1513,14 +1514,19 @@ async function fetchTopicAnchors(
   serperKey: string,
   supabaseAdmin?: any,
   allowCacheWrite = true,
+  fastMode = false,
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const goalConfig = getGoalSearchConfig(goal, topic);
   const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
+  const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 6) : Math.max(goalConfig.videoCount, 8);
+  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 6) : Math.max(goalConfig.webCount, 8);
+  const precisionQueries = fastMode ? plan.precision.slice(0, 1) : plan.precision;
+  const expansionQueries = fastMode ? [] : plan.expansion;
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
     for (const q of queries) {
-      promises.push(searchSerper(q, serperKey, "videos", Math.max(goalConfig.videoCount, 8), supabaseAdmin, allowCacheWrite));
-      promises.push(searchSerper(q, serperKey, "search", Math.max(goalConfig.webCount, 8), supabaseAdmin, allowCacheWrite));
+      promises.push(searchSerper(q, serperKey, "videos", effectiveVideoCount, supabaseAdmin, allowCacheWrite));
+      promises.push(searchSerper(q, serperKey, "search", effectiveWebCount, supabaseAdmin, allowCacheWrite));
     }
     const results = await Promise.all(promises);
     const batch: { videos: SerperVideoResult[]; web: SerperWebResult[] } = { videos: [], web: [] };
@@ -1531,10 +1537,10 @@ async function fetchTopicAnchors(
     return batch;
   };
 
-  let combined = await runQueryBatch(plan.precision);
+  let combined = await runQueryBatch(precisionQueries);
   const precisionUnique = countUniqueSerperResults(combined);
-  if (precisionUnique < RETRIEVAL_THRESHOLDS.topicMinUnique) {
-    const expanded = await runQueryBatch(plan.expansion);
+  if (!fastMode && precisionUnique < RETRIEVAL_THRESHOLDS.topicMinUnique) {
+    const expanded = await runQueryBatch(expansionQueries);
     combined = mergeSerperResults(combined, expanded);
     console.log(
       `Topic anchors expanded: precision pool ${precisionUnique} < ${RETRIEVAL_THRESHOLDS.topicMinUnique}, ran fallback queries.`,
@@ -1554,14 +1560,19 @@ async function fetchModuleResults(
   serperKey: string,
   supabaseAdmin?: any,
   allowCacheWrite = true,
+  fastMode = false,
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const config = getGoalSearchConfig(goal, `${topic} ${module?.title || ""}`);
   const plan = buildModuleQueryPlan(module, topic, level, goal, certificationIntent);
+  const effectiveVideoCount = fastMode ? 5 : Math.max(config.videoCount - 1, 5);
+  const effectiveWebCount = fastMode ? 4 : Math.max(config.webCount - 1, 5);
+  const precisionQueries = fastMode ? plan.precision.slice(0, 1) : plan.precision;
+  const expansionQueries = fastMode ? [] : plan.expansion;
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
     for (const q of queries) {
-      promises.push(searchSerper(q, serperKey, "videos", Math.max(config.videoCount - 1, 5), supabaseAdmin, allowCacheWrite));
-      promises.push(searchSerper(q, serperKey, "search", Math.max(config.webCount - 1, 5), supabaseAdmin, allowCacheWrite));
+      promises.push(searchSerper(q, serperKey, "videos", effectiveVideoCount, supabaseAdmin, allowCacheWrite));
+      promises.push(searchSerper(q, serperKey, "search", effectiveWebCount, supabaseAdmin, allowCacheWrite));
     }
     const results = await Promise.all(promises);
     const batch: { videos: SerperVideoResult[]; web: SerperWebResult[] } = { videos: [], web: [] };
@@ -1572,14 +1583,14 @@ async function fetchModuleResults(
     return batch;
   };
 
-  let combined = await runQueryBatch(plan.precision);
+  let combined = await runQueryBatch(precisionQueries);
   const minUnique = Math.max(
     12,
     Math.min(22, RETRIEVAL_THRESHOLDS.moduleMinUnique + Math.round(Number(module?.estimated_hours || 1))),
   );
   const precisionUnique = countUniqueSerperResults(combined);
-  if (precisionUnique < minUnique) {
-    const expanded = await runQueryBatch(plan.expansion);
+  if (!fastMode && precisionUnique < minUnique) {
+    const expanded = await runQueryBatch(expansionQueries);
     combined = mergeSerperResults(combined, expanded);
     console.log(
       `Module "${module?.title || "unknown"}" expanded: precision pool ${precisionUnique} < ${minUnique}, ran fallback queries.`,
@@ -1999,6 +2010,11 @@ function getInteractionBlock(goal: string, level: string): string {
 function sanitizeRoadmapText(value: string): string {
   if (!value || typeof value !== "string") return value;
   const cleaned = value
+    .replace(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?google\.[^)]+)\)/gi, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?youtube\.com\/results[^)]*)\)/gi, "$1")
+    .replace(/https?:\/\/(?:www\.)?google\.[^\s)]+/gi, "")
+    .replace(/https?:\/\/(?:www\.)?youtube\.com\/results[^\s)]+/gi, "")
+    .replace(/\b(?:google|youtube)\s+(?:search\s+)?link\b/gi, "")
     .replace(/\b(?:google|youtube)\s+(?:it|this|that)\b/gi, "")
     .replace(/\b(?:search|google|look up|find)\s+(?:on\s+)?(?:google|youtube|online|the web)\b[^.]*[.]?/gi, "")
     .replace(/\s{2,}/g, " ")
@@ -2203,6 +2219,8 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     sanitizeRoadmapPlaceholders(roadmap);
     normalizeModulePlan(roadmap, totalHours, daysInTimeline);
     enforceModuleTimeWindowConsistency(roadmap.modules || [], effectiveHoursPerDay);
+    const moduleCount = Array.isArray(roadmap.modules) ? roadmap.modules.length : 0;
+    const fastMode = totalHours <= 8 || moduleCount <= 4;
     if (Array.isArray(roadmap.modules)) {
       for (const mod of roadmap.modules) mod.quiz = [];
       roadmap.total_hours = Math.round(
@@ -2215,14 +2233,14 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     // STEP 2: STAGE 2A — Topic-Wide Anchor Retrieval
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2A: Fetching topic-wide anchors for "${topic}"...`);
-    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite);
+    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode);
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 3: STAGE 2B — Module-Specific Retrieval (parallelized)
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2B: Fetching module-specific results for ${roadmap.modules?.length || 0} modules...`);
     const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
-      fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite)
+      fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode)
     );
     const allModuleResults = await Promise.all(moduleResultsPromises);
 
@@ -2320,15 +2338,16 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     }
 
     const [aiScoringSuccess, negotiatedCandidates] = await Promise.all([
-      // Agent 2: AI Context Fit Scoring
-      batchAIContextFitScoring(
-        allModuleCandidates,
-        roadmap.modules || [],
-        topic,
-        effectiveGoal,
-        skill_level,
-        LOVABLE_API_KEY
-      ),
+      fastMode
+        ? Promise.resolve(false)
+        : batchAIContextFitScoring(
+            allModuleCandidates,
+            roadmap.modules || [],
+            topic,
+            effectiveGoal,
+            skill_level,
+            LOVABLE_API_KEY
+          ),
       // Negotiation Pass: runs on heuristic scores (good enough for span detection)
       Promise.resolve(
         negotiateSpanningResources(
@@ -2368,14 +2387,16 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     // STEP 8: STAGE 8 — Batch LLM Reranker
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 8: Running batch LLM reranker...`);
-    const rerankerSelections = await batchRerank(
-      allModuleCandidates,
-      roadmap.modules || [],
-      topic,
-      effectiveGoal,
-      skill_level,
-      LOVABLE_API_KEY
-    );
+    const rerankerSelections = fastMode
+      ? new Map<string, string[]>()
+      : await batchRerank(
+          allModuleCandidates,
+          roadmap.modules || [],
+          topic,
+          effectiveGoal,
+          skill_level,
+          LOVABLE_API_KEY
+        );
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 9: STAGE 9 — Final Assembly
@@ -2510,25 +2531,6 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         }
       }
 
-      // Register used resources globally
-      for (const c of budgetedResources) {
-        const normalizedUrl = c.url.split("&")[0];
-        usedResourceUrls.add(normalizedUrl);
-        // Track primary URLs for continuation validation in later modules
-        if (!c.is_continuation && c.span_plan && c.span_plan.length > 1) {
-          selectedPrimaryUrls.add(normalizedUrl);
-        }
-        const videoId = extractYouTubeVideoId(normalizedUrl);
-        if (videoId) usedVideoIds.add(videoId);
-        if (c.channel) {
-          const key = c.channel.toLowerCase();
-          if (!usedChannelTitles.has(key)) usedChannelTitles.set(key, new Set());
-          usedChannelTitles.get(key)!.add(c.title);
-        }
-      }
-      totalRoadmapMinutes += moduleTotal;
-
-      // Convert to output format (strip anchor_terms from module output)
       if (budgetedResources.length === 0) {
         // Final safety net: use clean relaxed candidates (no search/catalog links) before giving up.
         const rescuePool = moduleRescuePools.get(mod.id) || [];
@@ -2552,8 +2554,52 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         !isDiscussionOrMetaResource(c.url, c.title, c.description)
       );
 
-      if (cleanedResources.length > 0) {
-        mod.resources = cleanedResources.map(c => ({
+      let finalizedResources = [...cleanedResources];
+      let finalizedMinutes = finalizedResources.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
+      const hardCoverageTarget = Math.min(moduleBudgetCap, Math.max(20, moduleMinutes * 0.45));
+
+      if (finalizedMinutes < hardCoverageTarget) {
+        const topUpPools = [...candidates, ...(moduleRescuePools.get(mod.id) || [])]
+          .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+        for (const c of topUpPools) {
+          if (finalizedMinutes >= hardCoverageTarget) break;
+          if (finalizedResources.some(r => r.url === c.url)) continue;
+
+          const normalized = c.url.split("&")[0];
+          const videoId = extractYouTubeVideoId(normalized);
+          if (usedResourceUrls.has(normalized)) continue;
+          if (videoId && usedVideoIds.has(videoId)) continue;
+          if (excludedUrls.has(normalized)) continue;
+          if (!isAllowedResourceUrl(c.url)) continue;
+          if (looksLikeListingPage(c.url, c.title, c.description)) continue;
+          if (isDiscussionOrMetaResource(c.url, c.title, c.description)) continue;
+          if (finalizedMinutes + c.estimated_minutes > moduleBudgetCap) continue;
+          if (totalRoadmapMinutes + finalizedMinutes + c.estimated_minutes > usableMinutes) continue;
+
+          finalizedResources.push(c);
+          finalizedMinutes += c.estimated_minutes;
+        }
+      }
+
+      // Register used resources globally only after cleaning + top-up.
+      for (const c of finalizedResources) {
+        const normalizedUrl = c.url.split("&")[0];
+        usedResourceUrls.add(normalizedUrl);
+        if (!c.is_continuation && c.span_plan && c.span_plan.length > 1) {
+          selectedPrimaryUrls.add(normalizedUrl);
+        }
+        const videoId = extractYouTubeVideoId(normalizedUrl);
+        if (videoId) usedVideoIds.add(videoId);
+        if (c.channel) {
+          const key = c.channel.toLowerCase();
+          if (!usedChannelTitles.has(key)) usedChannelTitles.set(key, new Set());
+          usedChannelTitles.get(key)!.add(c.title);
+        }
+      }
+      totalRoadmapMinutes += finalizedMinutes;
+
+      if (finalizedResources.length > 0) {
+        mod.resources = finalizedResources.map(c => ({
           title: c.title,
           url: c.url,
           type: c.type,

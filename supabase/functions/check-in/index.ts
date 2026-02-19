@@ -97,6 +97,13 @@ function parseAiJson(content: unknown): any {
   throw new Error(`Unable to parse AI JSON response: ${lastErr instanceof Error ? lastErr.message : "Unknown parse error"}`);
 }
 
+function stripModuleQuizzes(roadmap: any): void {
+  if (!roadmap || !Array.isArray(roadmap.modules)) return;
+  for (const mod of roadmap.modules) {
+    mod.quiz = [];
+  }
+}
+
 // ─── YouTube API Enrichment ──────────────────────────────────────────────────
 
 function parseISO8601Duration(iso8601: string): number {
@@ -255,7 +262,7 @@ OTHER RULES:
 - Never modify completed modules
 - Keep total hours realistic
 - Maintain the same JSON structure as the original roadmap
-- New modules should have resources and quiz questions too`;
+- Do NOT pre-generate quizzes. Set every module's quiz to an empty array []`;
 
     const userPrompt = `Student just completed module "${module_title}" (${module_id}).
 Self-report: ${self_report}
@@ -295,6 +302,7 @@ Return ONLY valid JSON:
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
     const result = parseAiJson(content);
+    if (result?.updated_roadmap) stripModuleQuizzes(result.updated_roadmap);
 
     // Enrich any YouTube URLs in adapted roadmap
     if (result.updated_roadmap && YOUTUBE_API_KEY) {

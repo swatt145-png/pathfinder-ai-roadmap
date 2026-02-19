@@ -59,6 +59,44 @@ function parseAiJson(content: unknown): any {
   throw new Error(`Unable to parse AI JSON response: ${lastErr instanceof Error ? lastErr.message : "Unknown parse error"}`);
 }
 
+function sanitizeRoadmapText(value: string): string {
+  if (!value || typeof value !== "string") return value;
+  const cleaned = value
+    .replace(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?google\.[^)]+)\)/gi, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?youtube\.com\/results[^)]*)\)/gi, "$1")
+    .replace(/https?:\/\/(?:www\.)?google\.[^\s)]+/gi, "")
+    .replace(/https?:\/\/(?:www\.)?youtube\.com\/results[^\s)]+/gi, "")
+    .replace(/\b(?:google|youtube)\s+(?:search\s+)?link\b/gi, "")
+    .replace(/\b(?:google|youtube)\s+(?:it|this|that)\b/gi, "")
+    .replace(/\b(?:search|google|look up|find)\s+(?:on\s+)?(?:google|youtube|online|the web)\b[^.]*[.]?/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return cleaned || value;
+}
+
+function sanitizeRoadmapPlaceholders(roadmap: any): void {
+  if (!roadmap || typeof roadmap !== "object") return;
+  if (typeof roadmap.summary === "string") roadmap.summary = sanitizeRoadmapText(roadmap.summary);
+  if (typeof roadmap.tips === "string") roadmap.tips = sanitizeRoadmapText(roadmap.tips);
+  if (!Array.isArray(roadmap.modules)) return;
+  for (const mod of roadmap.modules) {
+    if (typeof mod?.description === "string") mod.description = sanitizeRoadmapText(mod.description);
+    if (Array.isArray(mod?.learning_objectives)) {
+      mod.learning_objectives = mod.learning_objectives
+        .filter((o: any) => typeof o === "string")
+        .map((o: string) => sanitizeRoadmapText(o))
+        .filter((o: string) => o.trim().length > 0);
+    }
+  }
+}
+
+function stripModuleQuizzes(roadmap: any): void {
+  if (!roadmap || !Array.isArray(roadmap.modules)) return;
+  for (const mod of roadmap.modules) {
+    mod.quiz = [];
+  }
+}
+
 // ─── YouTube API Enrichment ──────────────────────────────────────────────────
 
 function parseISO8601Duration(iso8601: string): number {
@@ -558,8 +596,6 @@ async function refreshResourcesForAdaptedRoadmap(
       if (totalRoadmapMinutes + c.estimated_minutes > usableMinutes) continue;
       selected.push(c);
       moduleTotal += c.estimated_minutes;
-      usedUrls.add(normalized);
-      if (videoId) usedVideoIds.add(videoId);
     }
 
     if (selected.length === 0 && scored.length > 0) {
@@ -587,10 +623,6 @@ async function refreshResourcesForAdaptedRoadmap(
       if (videoCandidate) {
         selected.push(videoCandidate);
         moduleTotal += videoCandidate.estimated_minutes;
-        const normalized = videoCandidate.url.split("&")[0];
-        usedUrls.add(normalized);
-        const videoId = extractYouTubeVideoId(normalized);
-        if (videoId) usedVideoIds.add(videoId);
       }
     }
 
@@ -607,8 +639,6 @@ async function refreshResourcesForAdaptedRoadmap(
         if (totalRoadmapMinutes + moduleTotal + c.estimated_minutes > usableMinutes) continue;
         selected.push(c);
         moduleTotal += c.estimated_minutes;
-        usedUrls.add(normalized);
-        if (videoId) usedVideoIds.add(videoId);
         if (moduleTotal >= coverageTarget) break;
       }
     }
@@ -618,7 +648,36 @@ async function refreshResourcesForAdaptedRoadmap(
       !looksLikeListingPage(c.url, c.title, c.description) &&
       !isDiscussionOrMetaResource(c.url, c.title, c.description)
     );
-    mod.resources = cleaned.map(c => ({
+    let finalized = [...cleaned];
+    let finalizedMinutes = finalized.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
+    const hardCoverageTarget = Math.min(moduleBudgetCap, Math.max(20, moduleMinutes * 0.45));
+
+    if (finalizedMinutes < hardCoverageTarget) {
+      for (const c of scored) {
+        if (finalized.some(r => r.url === c.url)) continue;
+        const normalized = c.url.split("&")[0];
+        const videoId = extractYouTubeVideoId(normalized);
+        if (usedUrls.has(normalized)) continue;
+        if (videoId && usedVideoIds.has(videoId)) continue;
+        if (!isAllowedResourceUrl(c.url)) continue;
+        if (looksLikeListingPage(c.url, c.title, c.description)) continue;
+        if (isDiscussionOrMetaResource(c.url, c.title, c.description)) continue;
+        if (finalizedMinutes + c.estimated_minutes > moduleBudgetCap) continue;
+        if (totalRoadmapMinutes + finalizedMinutes + c.estimated_minutes > usableMinutes) continue;
+        finalized.push(c);
+        finalizedMinutes += c.estimated_minutes;
+        if (finalizedMinutes >= hardCoverageTarget) break;
+      }
+    }
+
+    for (const c of finalized) {
+      const normalized = c.url.split("&")[0];
+      usedUrls.add(normalized);
+      const videoId = extractYouTubeVideoId(normalized);
+      if (videoId) usedVideoIds.add(videoId);
+    }
+
+    mod.resources = finalized.map(c => ({
       title: c.title,
       url: c.url,
       type: c.type,
@@ -626,7 +685,7 @@ async function refreshResourcesForAdaptedRoadmap(
       description: c.description,
     }));
 
-    totalRoadmapMinutes += moduleTotal;
+    totalRoadmapMinutes += finalizedMinutes;
   }
 }
 
@@ -853,6 +912,8 @@ Return ONLY valid JSON:
     if (result.options) {
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
+          stripModuleQuizzes(opt.updated_roadmap);
+          sanitizeRoadmapPlaceholders(opt.updated_roadmap);
           enforceModuleTimeWindowConsistency(
             opt.updated_roadmap.modules || [],
             hrsPerDay,
