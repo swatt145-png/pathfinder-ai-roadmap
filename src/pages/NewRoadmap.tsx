@@ -7,7 +7,6 @@ import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Loader2, BookOpen, Layers, BookOpenCheck, Code2, Zap, GraduationCap, Target, LayoutDashboard, Search, ClipboardCheck, Sparkles } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
@@ -106,8 +105,6 @@ export default function NewRoadmap() {
     learning_goal?: string;
     timeline_weeks?: number;
     hours_per_day?: number;
-    hard_deadline?: boolean;
-    deadline_date?: string;
   } | null;
 
   const [topic, setTopic] = useState(reviseState?.topic ?? "");
@@ -117,9 +114,6 @@ export default function NewRoadmap() {
   const [timelineValue, setTimelineValue] = useState(reviseState?.timeline_weeks ?? 4);
   const [hoursPerDay, setHoursPerDay] = useState(reviseState?.hours_per_day ?? 1);
   const [totalHoursOnly, setTotalHoursOnly] = useState(3);
-  const [hardDeadline, setHardDeadline] = useState(reviseState?.hard_deadline ?? false);
-  const [deadlineDate, setDeadlineDate] = useState(reviseState?.deadline_date ?? "");
-  const [includeWeekends, setIncludeWeekends] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -156,17 +150,6 @@ export default function NewRoadmap() {
 
   const handleGenerate = async () => {
     if (!topic.trim() || !user || activeCount >= 10) return;
-    if (hardDeadline && deadlineDate) {
-      const selected = new Date(deadlineDate);
-      const minDate = new Date();
-      minDate.setDate(minDate.getDate() + computedTimelineDays - 1);
-      minDate.setHours(0, 0, 0, 0);
-      selected.setHours(0, 0, 0, 0);
-      if (selected < minDate) {
-        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${computedTimelineDays} days from today, inclusive), or reduce your target timeline.`);
-        return;
-      }
-    }
     setLoading(true);
     setError(null);
     setLoadingStep(0);
@@ -177,7 +160,7 @@ export default function NewRoadmap() {
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
-        body: { user_id: user.id, topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: hardDeadline, deadline_date: deadlineDate || null, include_weekends: includeWeekends, timeline_mode: timelineUnit },
+        body: { user_id: user.id, topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: false, deadline_date: null, include_weekends: true, timeline_mode: timelineUnit },
       });
 
       clearInterval(stepInterval);
@@ -197,8 +180,8 @@ export default function NewRoadmap() {
         learning_goal: learningGoal,
         timeline_weeks: roadmapData.timeline_weeks,
         hours_per_day: roadmapData.hours_per_day,
-        hard_deadline: hardDeadline,
-        deadline_date: deadlineDate || null,
+        hard_deadline: false,
+        deadline_date: null,
         roadmap_data: roadmapData as any,
         original_roadmap_data: roadmapData as any,
         total_modules: roadmapData.modules.length,
@@ -530,48 +513,6 @@ export default function NewRoadmap() {
                   )}
                 </p>
               </div>
-
-              <div className="flex items-center justify-between glass-blue p-4">
-                <Label className="text-base">Is this a hard deadline?</Label>
-                <Switch checked={hardDeadline} onCheckedChange={(v) => { setHardDeadline(v); if (!v) setError(null); }} />
-              </div>
-
-              {hardDeadline && (
-                <div>
-                  <Input
-                    type="date"
-                    value={deadlineDate}
-                    onChange={(e) => {
-                      const selected = new Date(e.target.value);
-                      const minDate = new Date();
-                      minDate.setDate(minDate.getDate() + computedTimelineDays - 1);
-                      minDate.setHours(0, 0, 0, 0);
-                      selected.setHours(0, 0, 0, 0);
-                      if (selected < minDate) {
-                        setError(`Please choose a date on or after ${minDate.toLocaleDateString()} (${computedTimelineDays} days from today, inclusive), or reduce your target timeline.`);
-                        setDeadlineDate(e.target.value);
-                      } else {
-                        setError(null);
-                        setDeadlineDate(e.target.value);
-                      }
-                    }}
-                    className="bg-white/5 border-white/10"
-                  />
-                  {error && error.includes("choose a date") && (
-                    <p className="text-destructive text-sm mt-1">{error}</p>
-                  )}
-                </div>
-              )}
-
-              {timelineUnit === "weeks" && (
-                <div className="flex items-center justify-between glass-blue p-4">
-                  <div>
-                    <Label className="text-base">Include weekends?</Label>
-                    <p className="text-sm text-muted-foreground mt-0.5">Study on Saturday & Sunday too</p>
-                  </div>
-                  <Switch checked={includeWeekends} onCheckedChange={setIncludeWeekends} />
-                </div>
-              )}
 
               {error && <p className="text-destructive text-base">{error}</p>}
 

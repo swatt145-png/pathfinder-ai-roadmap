@@ -183,22 +183,106 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TIMEOUTS_MS = {
-  serper: 8000,
-  youtube: 12000,
+  serper: 5000,
+  youtube: 7000,
   agent1: 18000,
-  agent2: 14000,
-  reranker: 12000,
+  agent2: 9000,
+  reranker: 8000,
 };
 
 const RETRIEVAL_THRESHOLDS = {
-  topicMinUnique: 24,
-  moduleMinUnique: 16,
+  topicMinUnique: 16,
+  moduleMinUnique: 10,
+};
+
+const PIPELINE_LIMITS = {
+  weakModuleCandidateThreshold: 8,
+  weakModuleRatioForTopicAnchors: 0.3,
+  shortModuleHours: 2,
+  agent2CandidatesPerModule: 14,
+  rerankerCandidatesPerModule: 10,
+  rerankerMinCandidates: 4,
 };
 
 const CACHE_TTL = {
   serperHours: 48,
   youtubeHours: 168,
 };
+
+function extractJsonObject(raw: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const unfenced = fenceMatch?.[1]?.trim() || trimmed;
+  const start = unfenced.indexOf("{");
+  const end = unfenced.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  return unfenced.slice(start, end + 1);
+}
+
+function parsePossiblyMalformedJson(value: unknown): any | null {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    const extracted = extractJsonObject(value);
+    if (!extracted) return null;
+    try {
+      return JSON.parse(extracted);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildFallbackRoadmap(
+  topic: string,
+  skillLevel: string,
+  timelineWeeks: number,
+  hoursPerDay: number,
+  totalHours: number,
+  daysInTimeline: number,
+): any {
+  const total = Math.max(1, Number(totalHours || 1));
+  const moduleCount = total <= 2 ? 1 : total <= 6 ? 2 : total <= 12 ? 3 : 4;
+  const moduleHours = Math.max(0.5, Math.round((total / moduleCount) * 10) / 10);
+  const modules = Array.from({ length: moduleCount }).map((_, i) => {
+    const dayStart = Math.max(1, Math.floor((i * daysInTimeline) / moduleCount) + 1);
+    const nextStart = Math.max(dayStart, Math.floor(((i + 1) * daysInTimeline) / moduleCount));
+    const dayEnd = i === moduleCount - 1 ? Math.max(dayStart, daysInTimeline) : Math.max(dayStart, nextStart);
+    const moduleIndex = i + 1;
+    return {
+      id: `mod_${moduleIndex}`,
+      title: `Module ${moduleIndex}: ${topic}`,
+      description: `Focused learning block ${moduleIndex} for ${topic}.`,
+      estimated_hours: moduleHours,
+      day_start: dayStart,
+      day_end: dayEnd,
+      week: Math.max(1, Math.ceil(dayStart / 7)),
+      prerequisites: [],
+      learning_objectives: [
+        `Understand core concepts for module ${moduleIndex}`,
+        `Apply key ideas in practice for module ${moduleIndex}`,
+      ],
+      resources: [],
+      anchor_terms: [topic.toLowerCase(), "tutorial", "practice"],
+      quiz: [],
+    };
+  });
+
+  return {
+    topic,
+    skill_level: skillLevel,
+    timeline_weeks: Math.max(0.1, Number(timelineWeeks || 0.1)),
+    hours_per_day: Math.max(0.5, Number(hoursPerDay || 1)),
+    total_hours: Math.round(modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10) / 10,
+    summary: `A concise, practical roadmap for ${topic} tailored to your available time.`,
+    modules,
+    tips: "Stay consistent, complete each module in order, and review key takeaways after every session.",
+  };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1160,10 +1244,10 @@ async function batchAIContextFitScoring(
   
   for (const mod of modules) {
     const candidates = allModuleCandidates.get(mod.id) || [];
-    // Sort by heuristic context_fit_score (not authority) to get most relevant top 20
+    // Sort by heuristic context_fit_score (not authority) to get most relevant candidates.
     const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
     // Apply diversity caps before sending to Agent 2
-    const top = applyDiversityCaps(sorted, 20, goal, topic);
+    const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
     
     if (top.length === 0) continue;
     
@@ -1254,9 +1338,9 @@ Return ONLY valid JSON:
       const candidates = allModuleCandidates.get(modScores.module_id);
       if (!candidates) continue;
       
-      // Build context-fit-sorted top 20 to map indices back
+      // Build context-fit-sorted top set to map indices back
       const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
-      const top = applyDiversityCaps(sorted, 20, goal, topic);
+      const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
       
       for (const cs of (modScores.candidate_scores || [])) {
         if (cs.index >= 0 && cs.index < top.length) {
@@ -1612,8 +1696,8 @@ async function fetchTopicAnchors(
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const goalConfig = getGoalSearchConfig(goal, topic);
   const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
-  const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 6) : Math.max(goalConfig.videoCount, 8);
-  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 6) : Math.max(goalConfig.webCount, 8);
+  const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 4) : Math.min(goalConfig.videoCount, 5);
+  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 3) : Math.min(goalConfig.webCount, 4);
   const precisionQueries = fastMode ? plan.precision.slice(0, 1) : plan.precision;
   const expansionQueries = fastMode ? [] : plan.expansion;
   const runQueryBatch = async (queries: string[]) => {
@@ -1658,9 +1742,11 @@ async function fetchModuleResults(
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const config = getGoalSearchConfig(goal, `${topic} ${module?.title || ""}`);
   const plan = buildModuleQueryPlan(module, topic, level, goal, certificationIntent);
-  const effectiveVideoCount = fastMode ? 5 : Math.max(config.videoCount - 1, 5);
-  const effectiveWebCount = fastMode ? 4 : Math.max(config.webCount - 1, 5);
-  const precisionQueries = fastMode ? plan.precision.slice(0, 1) : plan.precision;
+  const effectiveVideoCount = fastMode ? Math.min(config.videoCount, 4) : Math.min(config.videoCount, 5);
+  const effectiveWebCount = fastMode ? Math.min(config.webCount, 3) : Math.min(config.webCount, 4);
+  const moduleHours = Number(module?.estimated_hours || 1);
+  const shortModule = moduleHours <= PIPELINE_LIMITS.shortModuleHours;
+  const precisionQueries = (fastMode || shortModule) ? plan.precision.slice(0, 1) : plan.precision;
   const expansionQueries = fastMode ? [] : plan.expansion;
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
@@ -1678,10 +1764,7 @@ async function fetchModuleResults(
   };
 
   let combined = await runQueryBatch(precisionQueries);
-  const minUnique = Math.max(
-    12,
-    Math.min(22, RETRIEVAL_THRESHOLDS.moduleMinUnique + Math.round(Number(module?.estimated_hours || 1))),
-  );
+  const minUnique = RETRIEVAL_THRESHOLDS.moduleMinUnique;
   const precisionUnique = countUniqueSerperResults(combined);
   if (!fastMode && precisionUnique < minUnique) {
     const expanded = await runQueryBatch(expansionQueries);
@@ -1832,15 +1915,16 @@ async function batchRerank(
   
   for (const mod of modules) {
     const candidates = moduleCandidates.get(mod.id) || [];
-    const top12 = [...candidates]
+    if (candidates.length < PIPELINE_LIMITS.rerankerMinCandidates) continue;
+    const topCandidates = [...candidates]
       .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score))
-      .slice(0, 12);
+      .slice(0, PIPELINE_LIMITS.rerankerCandidatesPerModule);
 
     rerankerModules.push({
       moduleId: mod.id,
       moduleTitle: mod.title,
       moduleDescription: mod.description || "",
-      candidates: top12.map((c, i) => ({
+      candidates: topCandidates.map((c, i) => ({
         index: i,
         title: c.title,
         url: c.url,
@@ -1854,6 +1938,7 @@ async function batchRerank(
       })),
     });
   }
+  if (rerankerModules.length === 0) return new Map();
 
   const goalSpecificRerankerRule =
     goal === "hands_on"
@@ -2313,22 +2398,22 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     if (!responseText || responseText.trim().length === 0) {
       throw new Error("AI returned an empty response. Please try again.");
     }
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseErr) {
-      console.error("Failed to parse AI response:", responseText.substring(0, 500));
-      throw new Error("AI returned an invalid response. Please try again.");
-    }
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("No response from AI. Please try again.");
+    const data = parsePossiblyMalformedJson(responseText);
+    const content = data?.choices?.[0]?.message?.content ?? responseText;
 
     let roadmap;
-    try {
-      roadmap = JSON.parse(content);
-    } catch (parseErr) {
-      console.error("Failed to parse roadmap JSON:", content.substring(0, 500));
-      throw new Error("AI returned malformed roadmap data. Please try again.");
+    roadmap = parsePossiblyMalformedJson(content);
+    if (!roadmap || !Array.isArray(roadmap.modules)) {
+      console.error("Failed to parse roadmap JSON from content:", String(content).substring(0, 500));
+      roadmap = buildFallbackRoadmap(
+        topic,
+        skill_level,
+        effectiveTimelineWeeks,
+        effectiveHoursPerDay,
+        totalHours,
+        daysInTimeline
+      );
+      console.warn("Using fallback roadmap structure due to malformed Agent 1 output.");
     }
 
     sanitizeRoadmapPlaceholders(roadmap);
@@ -2345,13 +2430,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const certificationIntent = detectCertificationIntent(topic);
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 2: STAGE 2A — Topic-Wide Anchor Retrieval
-    // ════════════════════════════════════════════════════════════════════════
-    console.log(`Stage 2A: Fetching topic-wide anchors for "${topic}"...`);
-    const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode);
-
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 3: STAGE 2B — Module-Specific Retrieval (parallelized)
+    // STEP 2: STAGE 2B — Module-Specific Retrieval (parallelized, first pass)
     // ════════════════════════════════════════════════════════════════════════
     console.log(`Stage 2B: Fetching module-specific results for ${roadmap.modules?.length || 0} modules...`);
     const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
@@ -2360,16 +2439,34 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const allModuleResults = await Promise.all(moduleResultsPromises);
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 4: Merge, deduplicate, count appearances per module
+    // STEP 3: Merge pass #1 (module-only), then conditionally run topic anchors.
     // ════════════════════════════════════════════════════════════════════════
     const totalAvailableMinutes = totalHours * 60;
     const allModuleCandidates = new Map<string, CandidateResource[]>();
+    const emptyTopicAnchors = { videos: [] as SerperVideoResult[], web: [] as SerperWebResult[] };
 
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
       const mod = roadmap.modules[i];
       const moduleResults = allModuleResults[i];
-      const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls, excludedDomains);
+      const candidates = mergeAndDeduplicate(emptyTopicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls, excludedDomains);
       allModuleCandidates.set(mod.id, candidates);
+    }
+
+    const moduleCandidateCounts = (roadmap.modules || []).map((mod: any) => (allModuleCandidates.get(mod.id) || []).length);
+    const weakModules = moduleCandidateCounts.filter((count) => count < PIPELINE_LIMITS.weakModuleCandidateThreshold).length;
+    const weakRatio = moduleCandidateCounts.length > 0 ? weakModules / moduleCandidateCounts.length : 0;
+
+    if (weakRatio >= PIPELINE_LIMITS.weakModuleRatioForTopicAnchors) {
+      console.log(`Stage 2A: Weak module coverage (${weakModules}/${moduleCandidateCounts.length}); fetching topic-wide anchors for "${topic}"...`);
+      const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode);
+      for (let i = 0; i < (roadmap.modules || []).length; i++) {
+        const mod = roadmap.modules[i];
+        const moduleResults = allModuleResults[i];
+        const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls, excludedDomains);
+        allModuleCandidates.set(mod.id, candidates);
+      }
+    } else {
+      console.log(`Stage 2A: Skipped topic anchors; module coverage healthy (${weakModules}/${moduleCandidateCounts.length} weak modules).`);
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -2438,6 +2535,9 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         console.warn(`Stage 4/5 produced 0 candidates for "${mod.title}". Using relaxed rescue pool.`);
         stage5Filtered = rescuePool.slice(0, 8);
       }
+      stage5Filtered = [...stage5Filtered]
+        .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score))
+        .slice(0, 18);
 
       allModuleCandidates.set(mod.id, stage5Filtered);
     }
@@ -2501,8 +2601,11 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 8: STAGE 8 — Batch LLM Reranker
     // ════════════════════════════════════════════════════════════════════════
-    console.log(`Stage 8: Running batch LLM reranker...`);
-    const rerankerSelections = fastMode
+    const eligibleForRerank = (roadmap.modules || []).some((mod: any) =>
+      (allModuleCandidates.get(mod.id) || []).length >= PIPELINE_LIMITS.rerankerMinCandidates
+    );
+    console.log(`Stage 8: ${eligibleForRerank ? "Running" : "Skipping"} batch LLM reranker...`);
+    const rerankerSelections = (fastMode || !eligibleForRerank)
       ? new Map<string, string[]>()
       : await batchRerank(
           allModuleCandidates,
