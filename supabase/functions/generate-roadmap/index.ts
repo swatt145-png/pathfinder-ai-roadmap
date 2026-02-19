@@ -183,9 +183,9 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TIMEOUTS_MS = {
-  serper: 5000,
-  youtube: 7000,
-  agent1: 18000,
+  serper: 3500,
+  youtube: 5000,
+  agent1: 12000,
   agent2: 9000,
   reranker: 8000,
 };
@@ -203,6 +203,13 @@ const PIPELINE_LIMITS = {
   rerankerCandidatesPerModule: 10,
   rerankerMinCandidates: 4,
 };
+
+const FAST_MODE_MAX_HOURS = 24;
+const FAST_MODE_MAX_MODULES = 6;
+const ENABLE_EXPENSIVE_LLM_STAGES = false;
+const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-2.5-flash-lite";
+const ROADMAP_MODEL_AGENT2 = Deno.env.get("ROADMAP_MODEL_AGENT2") || "google/gemini-3-pro-preview";
+const ROADMAP_MODEL_RERANKER = Deno.env.get("ROADMAP_MODEL_RERANKER") || "google/gemini-2.5-flash-lite";
 
 const CACHE_TTL = {
   serperHours: 48,
@@ -408,8 +415,9 @@ function isAllowedResourceUrl(url: string): boolean {
     const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
     const path = parsed.pathname.toLowerCase();
     if (DISALLOWED_RESOURCE_DOMAINS.some(d => host.includes(d))) return false;
-    if (host === "google.com") return false;
+    if (/^(?:m\.)?google\.[a-z.]+$/i.test(host)) return false;
     if (host.includes("google.") && path.startsWith("/search")) return false;
+    if (host.includes("youtube.com") && path.startsWith("/results")) return false;
     return true;
   } catch {
     return false;
@@ -1317,7 +1325,7 @@ Return ONLY valid JSON:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-pro-preview",
+        model: ROADMAP_MODEL_AGENT2,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       }),
@@ -2002,7 +2010,7 @@ Return ONLY valid JSON:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: ROADMAP_MODEL_RERANKER,
         messages: [{ role: "user", content: rerankerPrompt }],
         response_format: { type: "json_object" },
       }),
@@ -2194,11 +2202,14 @@ function sanitizeRoadmapText(value: string): string {
   const cleaned = value
     .replace(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?google\.[^)]+)\)/gi, "$1")
     .replace(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?youtube\.com\/results[^)]*)\)/gi, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?(?:[^)\s]+\.)?coursera\.(?:org|com)[^)]*)\)/gi, "$1")
     .replace(/https?:\/\/(?:www\.)?google\.[^\s)]+/gi, "")
     .replace(/https?:\/\/(?:www\.)?youtube\.com\/results[^\s)]+/gi, "")
+    .replace(/https?:\/\/(?:www\.)?(?:[^\s)]+\.)?coursera\.(?:org|com)[^\s)]*/gi, "")
     .replace(/\b(?:google|youtube)\s+(?:search\s+)?link\b/gi, "")
+    .replace(/\bcoursera\s+(?:link|course)\b/gi, "")
     .replace(/\b(?:google|youtube)\s+(?:it|this|that)\b/gi, "")
-    .replace(/\b(?:search|google|look up|find)\s+(?:on\s+)?(?:google|youtube|online|the web)\b[^.]*[.]?/gi, "")
+    .replace(/\b(?:search|google|look up|find)\s+(?:on\s+)?(?:google|youtube|coursera|online|the web)\b[^.]*[.]?/gi, "")
     .replace(/\s{2,}/g, " ")
     .trim();
   return cleaned || value;
@@ -2233,6 +2244,7 @@ serve(async (req) => {
     const daysInTimeline = isHoursOnly ? 1 : (timeline_days || (timeline_weeks * 7));
     const studyDays = isHoursOnly ? 1 : (include_weekends === false ? Math.round(daysInTimeline * 5 / 7) : daysInTimeline);
     const totalHours = providedTotalHours || (studyDays * hours_per_day);
+    const expectedFastMode = totalHours <= FAST_MODE_MAX_HOURS;
     const effectiveHoursPerDay = isHoursOnly ? totalHours : hours_per_day;
     const effectiveTimelineWeeks = isHoursOnly ? Math.round((totalHours / (effectiveHoursPerDay || 1) / 7) * 100) / 100 : (timeline_days ? Math.round((timeline_days / 7) * 10) / 10 : timeline_weeks);
 
@@ -2348,7 +2360,8 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     console.log(`Generating roadmap: topic="${topic}", goal=${effectiveGoal}, level=${skill_level}, hours=${totalHours}`);
 
     let response: Response | null = null;
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    const agent1Attempts = expectedFastMode ? 1 : 2;
+    for (let attempt = 1; attempt <= agent1Attempts; attempt++) {
       try {
         response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
@@ -2357,7 +2370,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash-lite",
+            model: ROADMAP_MODEL_AGENT1,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
@@ -2367,7 +2380,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         }, TIMEOUTS_MS.agent1);
         break;
       } catch (e) {
-        if (attempt < 2) {
+        if (attempt < agent1Attempts) {
           const reason = isAbortError(e) ? "timed out" : "failed";
           console.warn(`Agent 1 ${reason}; retrying once...`);
           await sleep(300);
@@ -2420,7 +2433,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     normalizeModulePlan(roadmap, totalHours, daysInTimeline);
     enforceModuleTimeWindowConsistency(roadmap.modules || [], effectiveHoursPerDay);
     const moduleCount = Array.isArray(roadmap.modules) ? roadmap.modules.length : 0;
-    const fastMode = totalHours <= 8 || moduleCount <= 4;
+    const fastMode = totalHours <= FAST_MODE_MAX_HOURS || moduleCount <= FAST_MODE_MAX_MODULES;
     if (Array.isArray(roadmap.modules)) {
       for (const mod of roadmap.modules) mod.quiz = [];
       roadmap.total_hours = Math.round(
@@ -2456,7 +2469,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const weakModules = moduleCandidateCounts.filter((count) => count < PIPELINE_LIMITS.weakModuleCandidateThreshold).length;
     const weakRatio = moduleCandidateCounts.length > 0 ? weakModules / moduleCandidateCounts.length : 0;
 
-    if (weakRatio >= PIPELINE_LIMITS.weakModuleRatioForTopicAnchors) {
+    if (!fastMode && weakRatio >= PIPELINE_LIMITS.weakModuleRatioForTopicAnchors) {
       console.log(`Stage 2A: Weak module coverage (${weakModules}/${moduleCandidateCounts.length}); fetching topic-wide anchors for "${topic}"...`);
       const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode);
       for (let i = 0; i < (roadmap.modules || []).length; i++) {
@@ -2553,7 +2566,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     }
 
     const [aiScoringSuccess, negotiatedCandidates] = await Promise.all([
-      fastMode
+      (fastMode || !ENABLE_EXPENSIVE_LLM_STAGES)
         ? Promise.resolve(false)
         : batchAIContextFitScoring(
             allModuleCandidates,
@@ -2605,7 +2618,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       (allModuleCandidates.get(mod.id) || []).length >= PIPELINE_LIMITS.rerankerMinCandidates
     );
     console.log(`Stage 8: ${eligibleForRerank ? "Running" : "Skipping"} batch LLM reranker...`);
-    const rerankerSelections = (fastMode || !eligibleForRerank)
+    const rerankerSelections = (fastMode || !ENABLE_EXPENSIVE_LLM_STAGES || !eligibleForRerank)
       ? new Map<string, string[]>()
       : await batchRerank(
           allModuleCandidates,
