@@ -89,7 +89,7 @@ export function ModuleDetail({
       if (!user || !roadmapId || resources.length === 0) return;
       const urls = resources.map((r) => r.url);
       const { data, error } = await supabase
-        .from("resource_feedback")
+        .from("resource_feedback" as any)
         .select("resource_url,relevant,liked")
         .eq("user_id", user.id)
         .eq("roadmap_id", roadmapId)
@@ -97,7 +97,7 @@ export function ModuleDetail({
         .in("resource_url", urls);
       if (error || !data) return;
       const next: Record<string, { liked: boolean | null; relevant: boolean | null }> = {};
-      for (const row of data) {
+      for (const row of data as any[]) {
         next[row.resource_url] = { liked: row.liked, relevant: row.relevant };
       }
       setFeedbackByUrl(next);
@@ -142,7 +142,7 @@ export function ModuleDetail({
   const upsertFeedback = async (resourceUrl: string, next: { liked: boolean | null; relevant: boolean | null }) => {
     if (!user || !roadmapId) return;
     setFeedbackByUrl((prev) => ({ ...prev, [resourceUrl]: next }));
-    await supabase.from("resource_feedback").upsert({
+    await (supabase.from as any)("resource_feedback").upsert({
       user_id: user.id,
       roadmap_id: roadmapId,
       module_id: module.id,
