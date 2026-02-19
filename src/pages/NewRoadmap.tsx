@@ -158,64 +158,99 @@ export default function NewRoadmap() {
       setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1));
     }, 4500);
 
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
-        body: { user_id: user.id, topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: false, deadline_date: null, include_weekends: true, timeline_mode: timelineUnit },
-      });
+    const MAX_RETRIES = 2;
+    const requestBody = { user_id: user.id, topic, skill_level: skillLevel, learning_goal: learningGoal, timeline_weeks: computedTimelineWeeks, timeline_days: computedTimelineDays, hours_per_day: computedHoursPerDay, total_hours: computedTotalHours, hard_deadline: false, deadline_date: null, include_weekends: true, timeline_mode: timelineUnit };
 
-      clearInterval(stepInterval);
+    let lastError: Error | null = null;
 
-      if (fnError) {
-        const detailedMessage = await extractFunctionErrorMessage(fnError);
-        throw new Error(detailedMessage);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`Retrying roadmap generation (attempt ${attempt + 1}/${MAX_RETRIES + 1})...`);
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+        }
+
+        const { data, error: fnError } = await supabase.functions.invoke("generate-roadmap", {
+          body: requestBody,
+        });
+
+        clearInterval(stepInterval);
+
+        if (fnError) {
+          const detailedMessage = await extractFunctionErrorMessage(fnError);
+          const err = new Error(detailedMessage);
+          if (isTransientRelayError(detailedMessage) && attempt < MAX_RETRIES) {
+            lastError = err;
+            continue;
+          }
+          throw err;
+        }
+        if (data?.error) {
+          const err = new Error(data.error);
+          if (isTransientRelayError(data.error) && attempt < MAX_RETRIES) {
+            lastError = err;
+            continue;
+          }
+          throw err;
+        }
+
+        const roadmapData = data as RoadmapData;
+
+        const { error: insertError } = await supabase.from("roadmaps").insert({
+          user_id: user.id,
+          topic: roadmapData.topic,
+          skill_level: roadmapData.skill_level,
+          learning_goal: learningGoal,
+          timeline_weeks: roadmapData.timeline_weeks,
+          hours_per_day: roadmapData.hours_per_day,
+          hard_deadline: false,
+          deadline_date: null,
+          roadmap_data: roadmapData as any,
+          original_roadmap_data: roadmapData as any,
+          total_modules: roadmapData.modules.length,
+          status: "active",
+        });
+
+        if (insertError) throw insertError;
+
+        if (reviseState?.replaceRoadmapId) {
+          const oldRoadmapId = reviseState.replaceRoadmapId;
+          await supabase.from("progress").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
+          await supabase.from("adaptations").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
+          await supabase.from("roadmaps").delete().eq("id", oldRoadmapId).eq("user_id", user.id);
+        }
+
+        const { data: newRm } = await supabase
+          .from("roadmaps")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const newId = newRm?.[0]?.id;
+        navigate(newId ? `/dashboard/${newId}` : "/my-roadmaps");
+        return;
+      } catch (err: any) {
+        const msg = err.message || "";
+        if (isTransientRelayError(msg) && attempt < MAX_RETRIES) {
+          lastError = err;
+          continue;
+        }
+        clearInterval(stepInterval);
+        if (isTransientRelayError(msg)) {
+          setError("Our servers are busy right now. Please try again in a moment.");
+        } else {
+          setError(msg || "Failed to generate roadmap. Please try again.");
+        }
+        setLoading(false);
+        return;
       }
-      if (data?.error) throw new Error(data.error);
-
-      const roadmapData = data as RoadmapData;
-
-      const { error: insertError } = await supabase.from("roadmaps").insert({
-        user_id: user.id,
-        topic: roadmapData.topic,
-        skill_level: roadmapData.skill_level,
-        learning_goal: learningGoal,
-        timeline_weeks: roadmapData.timeline_weeks,
-        hours_per_day: roadmapData.hours_per_day,
-        hard_deadline: false,
-        deadline_date: null,
-        roadmap_data: roadmapData as any,
-        original_roadmap_data: roadmapData as any,
-        total_modules: roadmapData.modules.length,
-        status: "active",
-      });
-
-      if (insertError) throw insertError;
-
-      if (reviseState?.replaceRoadmapId) {
-        const oldRoadmapId = reviseState.replaceRoadmapId;
-        await supabase.from("progress").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
-        await supabase.from("adaptations").delete().eq("roadmap_id", oldRoadmapId).eq("user_id", user.id);
-        await supabase.from("roadmaps").delete().eq("id", oldRoadmapId).eq("user_id", user.id);
-      }
-
-      const { data: newRm } = await supabase
-        .from("roadmaps")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      const newId = newRm?.[0]?.id;
-      navigate(newId ? `/dashboard/${newId}` : "/my-roadmaps");
-    } catch (err: any) {
-      clearInterval(stepInterval);
-      const msg = err.message || "";
-      if (isTransientRelayError(msg)) {
-        setError("Our servers are busy right now. Please try again in a moment.");
-      } else {
-        setError(msg || "Failed to generate roadmap. Please try again.");
-      }
-      setLoading(false);
     }
+
+    // All retries exhausted
+    clearInterval(stepInterval);
+    setError("Our servers are busy right now. Please try again in a moment.");
+    setLoading(false);
   };
 
   if (checkingActive) {

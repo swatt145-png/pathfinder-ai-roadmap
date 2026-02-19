@@ -186,8 +186,7 @@ const TIMEOUTS_MS = {
   serper: 3500,
   youtube: 2500,   // reduced from 5000 — proceed without enrichment if YouTube is slow
   agent1: 8000,    // reduced from 12000 — fail fast and fall back to heuristic roadmap
-  agent2: 9000,
-  reranker: 8000,
+  agent2: 12000,   // combined scoring + selection (replaces old agent2 9s + reranker 8s = 17s serial)
 };
 
 const RETRIEVAL_THRESHOLDS = {
@@ -200,8 +199,6 @@ const PIPELINE_LIMITS = {
   weakModuleRatioForTopicAnchors: 0.3,
   shortModuleHours: 2,
   agent2CandidatesPerModule: 18,
-  rerankerCandidatesPerModule: 10,
-  rerankerMinCandidates: 4,
 };
 
 const FAST_MODE_MAX_HOURS = 24;
@@ -209,7 +206,6 @@ const FAST_MODE_MAX_MODULES = 6;
 const ENABLE_EXPENSIVE_LLM_STAGES = true;
 const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-2.5-flash-lite";
 const ROADMAP_MODEL_AGENT2 = Deno.env.get("ROADMAP_MODEL_AGENT2") || "google/gemini-3-pro-preview";
-const ROADMAP_MODEL_RERANKER = Deno.env.get("ROADMAP_MODEL_RERANKER") || "google/gemini-2.5-flash-lite";
 
 const CACHE_TTL = {
   serperHours: 48,
@@ -1217,7 +1213,7 @@ function computeContextFitScoreFallback(candidate: CandidateResource, ctx: Modul
   return Math.max(0, Math.min(score, 100));
 }
 
-// ─── STAGE 6: AI-Powered Context Fit Scoring (Agent 2) ──────────────────────
+// ─── STAGE 6+8: Combined AI Scoring + Selection (Agent 2) ────────────────────
 
 interface AIFitScoringInput {
   moduleId: string;
@@ -1237,28 +1233,36 @@ interface AIFitScoringInput {
     authority_bump: number;
     content_type: string;
     reason_flags: string[];
+    view_count: number;
+    appearances_count: number;
   }>;
 }
 
-async function batchAIContextFitScoring(
+interface Agent2Result {
+  success: boolean;
+  selections: Map<string, string[]>;
+}
+
+async function batchAIScoringAndSelection(
   allModuleCandidates: Map<string, CandidateResource[]>,
   modules: any[],
   topic: string,
   goal: string,
   level: string,
   apiKey: string
-): Promise<boolean> {
+): Promise<Agent2Result> {
+  const emptyResult: Agent2Result = { success: false, selections: new Map() };
   const scoringModules: AIFitScoringInput[] = [];
-  
+
   for (const mod of modules) {
     const candidates = allModuleCandidates.get(mod.id) || [];
     // Sort by heuristic context_fit_score (not authority) to get most relevant candidates.
     const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
     // Apply diversity caps before sending to Agent 2
     const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
-    
+
     if (top.length === 0) continue;
-    
+
     scoringModules.push({
       moduleId: mod.id,
       moduleTitle: mod.title,
@@ -1277,41 +1281,78 @@ async function batchAIContextFitScoring(
         authority_bump: c.authority_score,
         content_type: c.type,
         reason_flags: c.reason_flags || [],
+        view_count: c.view_count || 0,
+        appearances_count: c.appearances_count,
       })),
     });
   }
 
-  if (scoringModules.length === 0) return false;
+  if (scoringModules.length === 0) return emptyResult;
 
-  const prompt = `You are Agent 2: the Resource Fit Scorer for a learning roadmap.
+  const goalInstruction = goal === "hands_on"
+    ? "Prefer practical tutorials, code-alongs, project builds, labs, and implementation walkthroughs."
+    : goal === "conceptual"
+    ? "Prefer concept explainers: videos + study articles/docs focused on mental models and how/why."
+    : goal === "quick_overview"
+    ? "Prefer concise full-topic overviews: crash courses, start-to-finish guides, top takeaways."
+    : "Prefer deep and comprehensive resources: advanced articles, official docs, long-form explainers, and research papers when relevant.";
+
+  const prompt = `You are the Resource Evaluator and Curator for a learning roadmap. You have TWO jobs in ONE pass:
+
+**JOB 1 — SCORE** each candidate resource's FIT (0-100) for its module.
+**JOB 2 — SELECT** the best 1-5 resources per module for the final roadmap.
 
 Learner profile:
 - Topic: ${topic}
 - Learning Goal: ${goal}
 - Proficiency Level: ${level}
 
-Your job: Score each candidate resource's FIT (0-100) for its module. Consider:
+=== SCORING CRITERIA (Job 1) ===
 
 1. SEMANTIC RELEVANCE (0-40): Does this resource actually teach what the module needs? Not just keyword overlap — does the *content* align with the module's learning objectives?
 2. LEVEL ALIGNMENT (0-20): Is this resource pitched at the right difficulty? A "Python basics" video is wrong for an advanced module even if the topic matches.
-3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? (${goal === "hands_on" ? "Prefer practical tutorials, code-alongs, project builds, labs, and implementation walkthroughs." : goal === "conceptual" ? "Prefer concept explainers: videos + study articles/docs focused on mental models and how/why." : goal === "quick_overview" ? "Prefer concise full-topic overviews: crash courses, start-to-finish guides, top takeaways." : "Prefer deep and comprehensive resources: advanced articles, official docs, long-form explainers, and research papers when relevant."})
+3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? ${goalInstruction}
 4. PEDAGOGICAL QUALITY (0-10): Based on title/description, does this look like quality educational content vs clickbait/listicle?
 5. TOOL/FRAMEWORK FIT (0-10): If the module is about React, a Vue tutorial scores 0 here. If tool-agnostic topic, give 5-10.
 
-Each candidate includes authority_tier and authority_bump. These are informational only — do NOT let authority override your content fit assessment. A high-authority source with poor content fit should score low. A low-authority source with excellent content fit should score high.
+Each candidate includes authority_tier and authority_bump. These are informational only — do NOT let authority override your content fit assessment.
+Score STRICTLY. 80+ = excellent fit, 50-79 = acceptable, below 50 = poor fit.
 
-Score STRICTLY. A score of 80+ means "excellent fit". 50-79 means "acceptable". Below 50 means "poor fit".
+=== SELECTION RULES (Job 2) ===
+
+After scoring, select the best 1-5 resources per module. The number is VARIABLE — use fewer if time is tight or if one excellent resource covers everything.
+
+- A module CAN have just 1 resource if it's excellent and fits the time budget perfectly.
+- Do NOT add filler resources just to reach a count. Each must add unique value.
+- Use your scores as the PRIMARY signal for selection.
+- Avoid low-view unknown creators unless uniquely valuable.
+- Avoid redundancy — don't pick 3 similar videos.
+- Time is a HARD FEASIBILITY CONSTRAINT, NOT a ranking bonus.
+- If a single long high-quality resource fits the module budget perfectly, prefer it over multiple short ones.
+- Exclude discussion/recommendation threads (e.g. "best resources to learn X" posts).
+- Never select search-result/listing pages.
+
+=== GLOBAL CONSTRAINTS (MANDATORY) ===
+
+1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules — EXCEPT continuation resources (marked with "(Continue: X–Y min)" in the title). Always select continuation resources if present.
+2. HARD TIME BUDGET: Each module's total selected resource minutes must not exceed its estimated hours. Remove lowest-value resource if over budget.
+3. STACK CONSISTENCY: If user did not specify a language/framework — for conceptual goals prefer tool-agnostic resources; for hands-on goals pick ONE consistent stack.
+4. COVERAGE BEFORE REDUNDANCY: Maximize coverage of module learning objectives. Never select multiple resources teaching identical content from the same channel.
+5. SPANNING RESOURCES: If a candidate title contains "(Continue: X–Y min)", it is a continuation of a long high-quality resource spanning multiple modules. ALWAYS select these.
 
 Modules and candidates:
 ${JSON.stringify(scoringModules, null, 1)}
 
 Return ONLY valid JSON:
 {
-  "scores": [
+  "modules": [
     {
       "module_id": "mod_1",
       "candidate_scores": [
         { "index": 0, "score": 75, "reason": "one short sentence" }
+      ],
+      "selected": [
+        { "url": "...", "why_selected": "one short sentence" }
       ]
     }
   ]
@@ -1332,25 +1373,29 @@ Return ONLY valid JSON:
     }, TIMEOUTS_MS.agent2);
 
     if (!response.ok) {
-      console.error(`AI Context Fit Scorer error: ${response.status}`);
-      return false;
+      console.error(`Agent 2 (Score+Select) error: ${response.status}`);
+      return emptyResult;
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
-    if (!content) return false;
+    if (!content) return emptyResult;
 
-    const parsed = JSON.parse(content);
-    
-    for (const modScores of (parsed.scores || [])) {
-      const candidates = allModuleCandidates.get(modScores.module_id);
+    const parsed = parsePossiblyMalformedJson(content);
+    if (!parsed?.modules) return emptyResult;
+
+    const selections = new Map<string, string[]>();
+
+    for (const modResult of (parsed.modules || [])) {
+      if (!modResult.module_id) continue;
+      const candidates = allModuleCandidates.get(modResult.module_id);
       if (!candidates) continue;
-      
-      // Build context-fit-sorted top set to map indices back
+
+      // Apply scores back to candidates
       const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
       const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
-      
-      for (const cs of (modScores.candidate_scores || [])) {
+
+      for (const cs of (modResult.candidate_scores || [])) {
         if (cs.index >= 0 && cs.index < top.length) {
           const candidate = top[cs.index];
           const original = candidates.find(c => c.url === candidate.url);
@@ -1359,17 +1404,30 @@ Return ONLY valid JSON:
           }
         }
       }
+
+      // Extract selections
+      const selectedUrls = (modResult.selected || []).map((s: any) => s.url).filter(Boolean);
+      if (selectedUrls.length > 0) {
+        selections.set(modResult.module_id, selectedUrls);
+      }
+
+      // Store why_selected on candidates
+      for (const s of (modResult.selected || [])) {
+        if (!s.url || !s.why_selected) continue;
+        const match = candidates.find(c => c.url === s.url);
+        if (match) match.why_selected = s.why_selected;
+      }
     }
 
-    console.log(`AI Context Fit Scorer: Scored candidates for ${parsed.scores?.length || 0} modules`);
-    return true;
+    console.log(`Agent 2 (Score+Select): Processed ${parsed.modules?.length || 0} modules, selected resources for ${selections.size} modules`);
+    return { success: true, selections };
   } catch (e) {
     if (isAbortError(e)) {
-      console.warn("AI Context Fit Scorer timed out; using heuristic fallback.");
-      return false;
+      console.warn("Agent 2 (Score+Select) timed out; using heuristic fallback.");
+      return emptyResult;
     }
-    console.error("AI Context Fit Scorer failed:", e);
-    return false;
+    console.error("Agent 2 (Score+Select) failed:", e);
+    return emptyResult;
   }
 }
 
@@ -1891,169 +1949,6 @@ function enrichCandidatesWithYouTube(
   });
 }
 
-// ─── STAGE 8: Batch LLM Reranker ─────────────────────────────────────────────
-
-interface RerankerInput {
-  moduleId: string;
-  moduleTitle: string;
-  moduleDescription: string;
-  candidates: Array<{
-    index: number;
-    title: string;
-    url: string;
-    type: string;
-    channel_or_site: string;
-    duration_minutes: number;
-    view_count: number;
-    appearances_count: number;
-    authority_score: number;
-    context_fit_score: number;
-  }>;
-}
-
-async function batchRerank(
-  moduleCandidates: Map<string, CandidateResource[]>,
-  modules: any[],
-  topic: string,
-  goal: string,
-  level: string,
-  apiKey: string
-): Promise<Map<string, string[]>> {
-  const rerankerModules: RerankerInput[] = [];
-  
-  for (const mod of modules) {
-    const candidates = moduleCandidates.get(mod.id) || [];
-    if (candidates.length < PIPELINE_LIMITS.rerankerMinCandidates) continue;
-    const topCandidates = [...candidates]
-      .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score))
-      .slice(0, PIPELINE_LIMITS.rerankerCandidatesPerModule);
-
-    rerankerModules.push({
-      moduleId: mod.id,
-      moduleTitle: mod.title,
-      moduleDescription: mod.description || "",
-      candidates: topCandidates.map((c, i) => ({
-        index: i,
-        title: c.title,
-        url: c.url,
-        type: c.type,
-        channel_or_site: c.channel || (() => { try { return new URL(c.url).hostname.replace("www.", ""); } catch { return "unknown"; } })(),
-        duration_minutes: c.estimated_minutes,
-        view_count: c.view_count || 0,
-        appearances_count: c.appearances_count,
-        authority_score: c.authority_score,
-        context_fit_score: c.context_fit_score,
-      })),
-    });
-  }
-  if (rerankerModules.length === 0) return new Map();
-
-  const goalSpecificRerankerRule =
-    goal === "hands_on"
-      ? "- Goal preference: prioritize tutorials, labs, code-alongs, practical walkthroughs, and implementation exercises."
-      : goal === "conceptual"
-      ? "- Goal preference: use a balanced mix of explainer videos and concept-focused study articles/docs."
-      : goal === "quick_overview"
-      ? "- Goal preference: prioritize concise full-topic summaries such as crash courses, start-to-finish guides, and top takeaways."
-      : "- Goal preference: prioritize deep, advanced resources (long-form explainers, technical articles/docs, and research papers when relevant).";
-
-  const rerankerPrompt = `You are an Expert Curriculum Curator. Given a learner profile and module candidates, select the best 1-5 resources per module. The number of resources per module is VARIABLE — use fewer if time is tight or if one excellent resource covers everything.
-
-Learner profile:
-- Topic: ${topic}
-- Goal: ${goal}
-- Level: ${level}
-
-Rules:
-- A module CAN have just 1 resource if it's excellent and fits the time budget perfectly.
-- Do NOT add filler resources just to reach a count. Each must add unique value.
-- context_fit_score is the PRIMARY signal — it comes from an AI that evaluated content relevance
-- authority_score is a small tiebreaker (0-5 range) — do not over-weight it
-- Avoid low-view unknown creators unless uniquely valuable
-- Avoid redundancy — don't pick 3 similar videos
-- Time is a HARD FEASIBILITY CONSTRAINT, NOT a ranking bonus
-- If a single long high-quality resource fits the module budget perfectly, prefer it over multiple short ones
-- Exclude discussion/recommendation threads (for example "best resources to learn X" posts)
-- Never select search-result/listing pages (Google/Bing/YouTube search results, catalogs, or "best resources" roundups).
-${goalSpecificRerankerRule}
-
-=== GLOBAL CONSTRAINTS (MANDATORY) ===
-
-1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules — EXCEPT continuation resources (marked with "(Continue: X–Y min)" in the title). Always select continuation resources if present.
-2. HARD TIME BUDGET: Each module's total resource minutes must not exceed its budget. Remove lowest-value resource if over budget.
-3. STACK CONSISTENCY: If user did not specify a language/framework — for conceptual goals prefer tool-agnostic resources; for hands-on goals pick ONE consistent stack.
-4. COVERAGE BEFORE REDUNDANCY: Maximize coverage of module learning objectives. Never select multiple resources teaching identical content from the same channel.
-5. SPANNING RESOURCES: If a candidate title contains "(Continue: X–Y min)", it is a continuation of a long high-quality resource spanning multiple modules. ALWAYS select these — they represent negotiated splits from the curriculum planning phase.
-
-For each module, return the URLs of your selected resources (1-5) and a 1-sentence "why_selected" for each.
-
-Modules and candidates:
-${JSON.stringify(rerankerModules, null, 1)}
-
-Return ONLY valid JSON:
-{
-  "selections": [
-    {
-      "module_id": "...",
-      "selected": [
-        { "url": "...", "why_selected": "..." }
-      ]
-    }
-  ]
-}`;
-
-  try {
-    const response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ROADMAP_MODEL_RERANKER,
-        messages: [{ role: "user", content: rerankerPrompt }],
-        response_format: { type: "json_object" },
-      }),
-    }, TIMEOUTS_MS.reranker);
-
-    if (!response.ok) {
-      console.error(`Reranker LLM error: ${response.status}`);
-      return new Map();
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return new Map();
-
-    const parsed = JSON.parse(content);
-    const result = new Map<string, string[]>();
-    
-    for (const sel of (parsed.selections || [])) {
-      const urls = (sel.selected || []).map((s: any) => s.url);
-      if (!sel.module_id) continue;
-      result.set(sel.module_id, urls);
-      
-      for (const s of (sel.selected || [])) {
-        for (const mod of modules) {
-          const candidates = moduleCandidates.get(mod.id) || [];
-          const match = candidates.find(c => c.url === s.url);
-          if (match) match.why_selected = s.why_selected;
-        }
-      }
-    }
-
-    console.log(`Reranker selected resources for ${result.size} modules`);
-    return result;
-  } catch (e) {
-    if (isAbortError(e)) {
-      console.warn("Reranker timed out; falling back to heuristic ranking.");
-      return new Map();
-    }
-    console.error("Reranker failed:", e);
-    return new Map();
-  }
-}
-
 // ─── System Prompt Builder ───────────────────────────────────────────────────
 
 function buildSystemPrompt(totalHours: number, learningGoal: string, skillLevel: string): string {
@@ -2569,19 +2464,19 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     console.log(`[TIMING] Stages 4-5 filtering: ${Date.now() - tFilter} ms`);
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 6.1: PARALLEL — Agent 2 (AI Scoring) + Negotiation Pass (isolated copies)
+    // STEP 6.1: PARALLEL — Agent 2 (AI Scoring+Selection) + Negotiation Pass
     // ════════════════════════════════════════════════════════════════════════
-    console.log(`Running Agent 2 + Negotiation Pass in parallel...`);
+    console.log(`Running Agent 2 (Score+Select) + Negotiation Pass in parallel...`);
     const usableMinutesForNegotiation = totalHours * 60 * 0.85;
     const negotiationInput = new Map<string, CandidateResource[]>();
     for (const [moduleId, candidates] of allModuleCandidates.entries()) {
       negotiationInput.set(moduleId, candidates.map(c => ({ ...c })));
     }
 
-    const [aiScoringSuccess, negotiatedCandidates] = await Promise.all([
+    const [agent2Result, negotiatedCandidates] = await Promise.all([
       (!ENABLE_EXPENSIVE_LLM_STAGES)
-        ? Promise.resolve(false)
-        : batchAIContextFitScoring(
+        ? Promise.resolve({ success: false, selections: new Map<string, string[]>() } as Agent2Result)
+        : batchAIScoringAndSelection(
             allModuleCandidates,
             roadmap.modules || [],
             topic,
@@ -2618,29 +2513,12 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       allModuleCandidates.set(moduleId, merged);
     }
 
-    if (aiScoringSuccess) {
-      console.log(`Agent 2: AI scoring complete — heuristic scores overridden.`);
+    const rerankerSelections = agent2Result.selections;
+    if (agent2Result.success) {
+      console.log(`Agent 2: AI scoring + selection complete — heuristic scores overridden.`);
     } else {
-      console.warn(`Agent 2: AI scoring failed — falling back to heuristic scores.`);
+      console.warn(`Agent 2: AI scoring + selection failed — falling back to heuristic scores.`);
     }
-
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 8: STAGE 8 — Batch LLM Reranker
-    // ════════════════════════════════════════════════════════════════════════
-    const eligibleForRerank = (roadmap.modules || []).some((mod: any) =>
-      (allModuleCandidates.get(mod.id) || []).length >= PIPELINE_LIMITS.rerankerMinCandidates
-    );
-    console.log(`Stage 8: ${eligibleForRerank ? "Running" : "Skipping"} batch LLM reranker...`);
-    const rerankerSelections = (!ENABLE_EXPENSIVE_LLM_STAGES || !eligibleForRerank)
-      ? new Map<string, string[]>()
-      : await batchRerank(
-          allModuleCandidates,
-          roadmap.modules || [],
-          topic,
-          effectiveGoal,
-          skill_level,
-          LOVABLE_API_KEY
-        );
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 9: STAGE 9 — Final Assembly
@@ -2873,7 +2751,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     console.log(`Final validation: ${totalResources} total resources, ${usedResourceUrls.size} unique URLs, ${Math.round(totalRoadmapMinutes)} mins used of ${Math.round(usableMinutes)} usable.`);
 
     console.log(`[TIMING] Total pipeline: ${Date.now() - t0} ms`);
-    console.log("Roadmap generation complete (10-stage pipeline with 3 AI agents).");
+    console.log("Roadmap generation complete (pipeline with 2 AI agents).");
     return new Response(JSON.stringify(roadmap), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("generate-roadmap error:", e);
