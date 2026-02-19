@@ -132,56 +132,6 @@ export type Database = {
           },
         ]
       }
-      resource_feedback: {
-        Row: {
-          created_at: string
-          id: string
-          liked: boolean | null
-          module_id: string
-          module_title: string | null
-          roadmap_id: string
-          relevant: boolean | null
-          resource_url: string
-          topic_key: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          liked?: boolean | null
-          module_id: string
-          module_title?: string | null
-          roadmap_id: string
-          relevant?: boolean | null
-          resource_url: string
-          topic_key: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          liked?: boolean | null
-          module_id?: string
-          module_title?: string | null
-          roadmap_id?: string
-          relevant?: boolean | null
-          resource_url?: string
-          topic_key?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "resource_feedback_roadmap_id_fkey"
-            columns: ["roadmap_id"]
-            isOneToOne: false
-            referencedRelation: "roadmaps"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       roadmaps: {
         Row: {
           completed_modules: number | null
