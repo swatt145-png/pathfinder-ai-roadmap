@@ -24,16 +24,12 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
   const [signUpSuccess, setSignUpSuccess] = useState(false);
   const { signUp, signIn } = useAuth();
 
-  // Load saved credentials on mount
+  // Load saved email on mount
   useEffect(() => {
-    const saved = localStorage.getItem("rememberedCredentials");
-    if (saved) {
-      try {
-        const { email: savedEmail, password: savedPassword } = JSON.parse(saved);
-        setEmail(savedEmail || "");
-        setPassword(savedPassword || "");
-        setRememberMe(true);
-      } catch {}
+    const savedEmail = localStorage.getItem("rememberedEmail");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
     }
   }, []);
 
@@ -57,9 +53,9 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
         setError(error);
       } else {
         if (rememberMe) {
-          localStorage.setItem("rememberedCredentials", JSON.stringify({ email, password }));
+          localStorage.setItem("rememberedEmail", email);
         } else {
-          localStorage.removeItem("rememberedCredentials");
+          localStorage.removeItem("rememberedEmail");
         }
         onOpenChange(false);
       }
