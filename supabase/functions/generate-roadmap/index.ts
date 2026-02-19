@@ -603,8 +603,14 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string, supabase
           });
         }
         if (supabaseAdmin && cacheRows.length > 0) {
-          supabaseAdmin.from("youtube_metadata_cache").upsert(cacheRows, { onConflict: "video_id" })
-            .catch((e: any) => console.warn("YouTube cache write failed:", e));
+          try {
+            const upsertResult = supabaseAdmin.from("youtube_metadata_cache").upsert(cacheRows, { onConflict: "video_id" });
+            if (upsertResult && typeof upsertResult.catch === "function") {
+              upsertResult.catch((e: any) => console.warn("YouTube cache write failed:", e));
+            }
+          } catch (e) {
+            console.warn("YouTube cache write failed:", e);
+          }
         }
       } catch (e) {
         console.error("YouTube API fetch failed:", e);
@@ -667,13 +673,20 @@ async function searchSerper(
       const results = type === "videos" ? (data.videos || []) : (data.organic || []);
       if (supabaseAdmin && allowCacheWrite) {
         // Fire-and-forget cache write — don't block the return.
-        supabaseAdmin.from("resource_search_cache").upsert({
-          query_hash: queryHash,
-          query_text: query,
-          search_type: type,
-          response_json: results,
-          expires_at: new Date(Date.now() + CACHE_TTL.serperHours * 60 * 60 * 1000).toISOString(),
-        }, { onConflict: "query_hash,search_type" }).catch((e: any) => console.warn("Serper cache write failed:", e));
+        try {
+          const upsertResult = supabaseAdmin.from("resource_search_cache").upsert({
+            query_hash: queryHash,
+            query_text: query,
+            search_type: type,
+            response_json: results,
+            expires_at: new Date(Date.now() + CACHE_TTL.serperHours * 60 * 60 * 1000).toISOString(),
+          }, { onConflict: "query_hash,search_type" });
+          if (upsertResult && typeof upsertResult.catch === "function") {
+            upsertResult.catch((e: any) => console.warn("Serper cache write failed:", e));
+          }
+        } catch (e) {
+          console.warn("Serper cache write failed:", e);
+        }
       }
       return results;
     } catch (e) {
