@@ -185,7 +185,8 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 const TIMEOUTS_MS = {
   serper: 6000,    // generous timeout — Serper is the critical data source; timing out here means 0 resources
   youtube: 3000,   // proceed without enrichment if YouTube is slow, but give it a fair chance
-  agent1: 8000,    // fail fast and fall back to heuristic roadmap
+  agent1Base: 10000, // base timeout for short roadmaps (1 week)
+  agent1PerWeek: 3000, // extra time per additional week (more modules = more output)
   agent2: 8000,    // most responses arrive in 3-5s; 8s is generous
   geminiDirect: 3000, // fast timeout for direct Gemini — fall back to gateway quickly if unreachable
 };
@@ -2373,12 +2374,13 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const agent1Attempts = 1; // always 1 attempt — retrying doubles worst-case latency; fallback roadmap handles failures
     for (let attempt = 1; attempt <= agent1Attempts; attempt++) {
       try {
+        const agent1Timeout = TIMEOUTS_MS.agent1Base + TIMEOUTS_MS.agent1PerWeek * Math.max(0, Math.ceil(daysInTimeline / 7) - 1);
         response = await callLLM(
           ROADMAP_MODEL_AGENT1,
           [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
           LOVABLE_API_KEY,
           GEMINI_API_KEY,
-          TIMEOUTS_MS.agent1,
+          agent1Timeout,
         );
         break;
       } catch (e) {
