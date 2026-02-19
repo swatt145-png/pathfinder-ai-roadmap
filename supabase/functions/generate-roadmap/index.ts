@@ -183,10 +183,10 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TIMEOUTS_MS = {
-  serper: 3500,
-  youtube: 2500,   // reduced from 5000 — proceed without enrichment if YouTube is slow
-  agent1: 8000,    // reduced from 12000 — fail fast and fall back to heuristic roadmap
-  agent2: 12000,   // combined scoring + selection (replaces old agent2 9s + reranker 8s = 17s serial)
+  serper: 3000,    // reduced from 3500 — fail fast, no retry
+  youtube: 2000,   // reduced from 2500 — proceed without enrichment if YouTube is slow
+  agent1: 8000,    // fail fast and fall back to heuristic roadmap
+  agent2: 10000,   // reduced from 12000 — combined scoring + selection
 };
 
 const RETRIEVAL_THRESHOLDS = {
@@ -201,8 +201,8 @@ const PIPELINE_LIMITS = {
   agent2CandidatesPerModule: 18,
 };
 
-const FAST_MODE_MAX_HOURS = 24;
-const FAST_MODE_MAX_MODULES = 6;
+const FAST_MODE_MAX_HOURS = 40;
+const FAST_MODE_MAX_MODULES = 8;
 const ENABLE_EXPENSIVE_LLM_STAGES = true;
 const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-2.5-flash-lite";
 const ROADMAP_MODEL_AGENT2 = Deno.env.get("ROADMAP_MODEL_AGENT2") || "google/gemini-3-pro-preview";
@@ -359,6 +359,18 @@ function normalizeResourceUrl(url: string): string {
     let path = parsed.pathname || "/";
     if (path.length > 1) path = path.replace(/\/+$/, "");
 
+    // Unwrap Google redirect URLs — extract the actual destination URL.
+    if (host.includes("google.") && (path === "/url" || path === "/interstitial")) {
+      const realUrl = parsed.searchParams.get("q") || parsed.searchParams.get("url") || parsed.searchParams.get("sa");
+      if (realUrl && realUrl.startsWith("http")) return normalizeResourceUrl(realUrl);
+    }
+
+    // Unwrap Google AMP cache URLs.
+    if (host.includes("google.") && path.startsWith("/amp/s/")) {
+      const ampTarget = path.replace("/amp/s/", "https://");
+      try { return normalizeResourceUrl(ampTarget); } catch { /* fall through */ }
+    }
+
     // Keep stable canonicalization for YouTube watch URLs.
     if ((host === "youtube.com" || host === "m.youtube.com") && path === "/watch") {
       const videoId = parsed.searchParams.get("v");
@@ -369,8 +381,13 @@ function normalizeResourceUrl(url: string): string {
       if (videoId) return `https://youtube.com/watch?v=${videoId}`;
     }
 
-    // Collapse Google search URLs to one canonical key.
+    // Collapse Google search URLs to one canonical key (but not product docs like developers.google.com, cloud.google.com).
     if (host.includes("google.") && path.startsWith("/search")) {
+      return `https://${host}/search`;
+    }
+    // Collapse search subdomains (scholar, books, cse, news).
+    const searchSubdomainPrefixes = ["scholar.", "books.", "cse.", "news."];
+    if (searchSubdomainPrefixes.some(p => host.startsWith(p)) && host.includes("google.")) {
       return `https://${host}/search`;
     }
 
@@ -410,10 +427,20 @@ function isAllowedResourceUrl(url: string): boolean {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
     const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
     const path = parsed.pathname.toLowerCase();
+    const query = parsed.search.toLowerCase();
     if (DISALLOWED_RESOURCE_DOMAINS.some(d => host.includes(d))) return false;
+    // Block all bare Google domains (google.com, google.co.in, m.google.com, etc.)
     if (/^(?:m\.)?google\.[a-z.]+$/i.test(host)) return false;
+    // Block any Google subdomain with /search path
     if (host.includes("google.") && path.startsWith("/search")) return false;
+    // Block Google search subdomains (scholar, books, cse) but allow product docs (developers, cloud)
+    const googleSearchSubdomains = ["scholar.google.", "books.google.", "cse.google.", "news.google."];
+    if (googleSearchSubdomains.some(d => host.startsWith(d) || host.includes(`.${d}`))) return false;
+    // Block YouTube search results
     if (host.includes("youtube.com") && path.startsWith("/results")) return false;
+    // Block Bing, DuckDuckGo, and other search engines
+    if ((host === "bing.com" || host.endsWith(".bing.com")) && path.startsWith("/search")) return false;
+    if (host === "duckduckgo.com" || host === "search.yahoo.com") return false;
     return true;
   } catch {
     return false;
@@ -515,11 +542,9 @@ async function fetchYouTubeMetadata(videoIds: string[], apiKey: string, supabase
         });
       }
       if (supabaseAdmin && cacheRows.length > 0) {
-        try {
-          await supabaseAdmin.from("youtube_metadata_cache").upsert(cacheRows, { onConflict: "video_id" });
-        } catch (e) {
-          console.warn("YouTube cache write failed:", e);
-        }
+        // Fire-and-forget cache write — don't block the return.
+        supabaseAdmin.from("youtube_metadata_cache").upsert(cacheRows, { onConflict: "video_id" })
+          .catch((e: any) => console.warn("YouTube cache write failed:", e));
       }
     } catch (e) {
       console.error("YouTube API fetch failed:", e);
@@ -558,45 +583,35 @@ async function searchSerper(
     }
   }
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const res = await fetchWithTimeout(url, {
-        method: "POST",
-        headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ q: query, num }),
-      }, TIMEOUTS_MS.serper);
-      if (!res.ok) {
-        console.error(`Serper ${type} error: ${res.status}`);
-        return [];
-      }
-      const data = await res.json();
-      const results = type === "videos" ? (data.videos || []) : (data.organic || []);
-      if (supabaseAdmin && allowCacheWrite) {
-        try {
-          await supabaseAdmin.from("resource_search_cache").upsert({
-            query_hash: queryHash,
-            query_text: query,
-            search_type: type,
-            response_json: results,
-            expires_at: new Date(Date.now() + CACHE_TTL.serperHours * 60 * 60 * 1000).toISOString(),
-          }, { onConflict: "query_hash,search_type" });
-        } catch (e) {
-          console.warn("Serper cache write failed:", e);
-        }
-      }
-      return results;
-    } catch (e) {
-      const timeoutMsg = isAbortError(e) ? "timeout" : "fetch failed";
-      if (attempt < 2) {
-        console.warn(`Serper ${type} ${timeoutMsg}; retrying once for query: ${query.substring(0, 80)}`);
-        await sleep(200);
-        continue;
-      }
-      console.error(`Serper ${type} ${timeoutMsg}:`, e);
+  // Single attempt — retrying doubles worst-case latency for marginal gain.
+  try {
+    const res = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ q: query, num }),
+    }, TIMEOUTS_MS.serper);
+    if (!res.ok) {
+      console.error(`Serper ${type} error: ${res.status}`);
       return [];
     }
+    const data = await res.json();
+    const results = type === "videos" ? (data.videos || []) : (data.organic || []);
+    if (supabaseAdmin && allowCacheWrite) {
+      // Fire-and-forget cache write — don't block the return.
+      supabaseAdmin.from("resource_search_cache").upsert({
+        query_hash: queryHash,
+        query_text: query,
+        search_type: type,
+        response_json: results,
+        expires_at: new Date(Date.now() + CACHE_TTL.serperHours * 60 * 60 * 1000).toISOString(),
+      }, { onConflict: "query_hash,search_type" }).catch((e: any) => console.warn("Serper cache write failed:", e));
+    }
+    return results;
+  } catch (e) {
+    const timeoutMsg = isAbortError(e) ? "timeout" : "fetch failed";
+    console.error(`Serper ${type} ${timeoutMsg}:`, e);
+    return [];
   }
-  return [];
 }
 
 function estimateArticleMinutes(snippet: string): number {
@@ -1243,51 +1258,51 @@ interface Agent2Result {
   selections: Map<string, string[]>;
 }
 
-async function batchAIScoringAndSelection(
-  allModuleCandidates: Map<string, CandidateResource[]>,
-  modules: any[],
+// ─── Per-Module AI Scoring (Single Module) ────────────────────────────────────
+
+interface ModuleScoringResult {
+  moduleId: string;
+  success: boolean;
+  selections: string[];
+}
+
+async function scoreModuleResources(
+  mod: any,
+  candidates: CandidateResource[],
   topic: string,
   goal: string,
   level: string,
   apiKey: string
-): Promise<Agent2Result> {
-  const emptyResult: Agent2Result = { success: false, selections: new Map() };
-  const scoringModules: AIFitScoringInput[] = [];
+): Promise<ModuleScoringResult> {
+  const moduleId = mod.id;
+  const emptyResult: ModuleScoringResult = { moduleId, success: false, selections: [] };
 
-  for (const mod of modules) {
-    const candidates = allModuleCandidates.get(mod.id) || [];
-    // Sort by heuristic context_fit_score (not authority) to get most relevant candidates.
-    const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
-    // Apply diversity caps before sending to Agent 2
-    const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
+  const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
+  const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
+  if (top.length === 0) return emptyResult;
 
-    if (top.length === 0) continue;
-
-    scoringModules.push({
-      moduleId: mod.id,
-      moduleTitle: mod.title,
-      moduleDescription: mod.description || "",
-      learningObjectives: mod.learning_objectives || [],
-      candidates: top.map((c, i) => ({
-        index: i,
-        title: c.title,
-        url: c.url,
-        type: c.type,
-        channel: c.channel || (() => { try { return new URL(c.url).hostname.replace("www.", ""); } catch { return "unknown"; } })(),
-        duration_minutes: c.estimated_minutes,
-        description: c.description,
-        authority_tier: c.authority_tier || "UNKNOWN",
-        authority_score_norm: c.authority_score_norm || 0,
-        authority_bump: c.authority_score,
-        content_type: c.type,
-        reason_flags: c.reason_flags || [],
-        view_count: c.view_count || 0,
-        appearances_count: c.appearances_count,
-      })),
-    });
-  }
-
-  if (scoringModules.length === 0) return emptyResult;
+  const scoringInput: AIFitScoringInput = {
+    moduleId,
+    moduleTitle: mod.title,
+    moduleDescription: mod.description || "",
+    learningObjectives: mod.learning_objectives || [],
+    candidates: top.map((c, i) => ({
+      index: i,
+      title: c.title,
+      url: c.url,
+      type: c.type,
+      channel: c.channel || (() => { try { return new URL(c.url).hostname.replace("www.", ""); } catch { return "unknown"; } })(),
+      duration_minutes: c.estimated_minutes,
+      description: c.description,
+      authority_tier: c.authority_tier || "UNKNOWN",
+      authority_score_norm: c.authority_score_norm || 0,
+      authority_bump: c.authority_score,
+      content_type: c.type,
+      reason_flags: c.reason_flags || [],
+      view_count: c.view_count || 0,
+      appearances_count: c.appearances_count,
+    })),
+  };
 
   const goalInstruction = goal === "hands_on"
     ? "Prefer practical tutorials, code-alongs, project builds, labs, and implementation walkthroughs."
@@ -1297,64 +1312,55 @@ async function batchAIScoringAndSelection(
     ? "Prefer concise full-topic overviews: crash courses, start-to-finish guides, top takeaways."
     : "Prefer deep and comprehensive resources: advanced articles, official docs, long-form explainers, and research papers when relevant.";
 
-  const prompt = `You are the Resource Evaluator and Curator for a learning roadmap. You have TWO jobs in ONE pass:
-
-**JOB 1 — SCORE** each candidate resource's FIT (0-100) for its module.
-**JOB 2 — SELECT** the best 1-5 resources per module for the final roadmap.
+  const prompt = `You are the Resource Evaluator for ONE module of a learning roadmap. Score and select the best resources.
 
 Learner profile:
 - Topic: ${topic}
 - Learning Goal: ${goal}
 - Proficiency Level: ${level}
 
-=== SCORING CRITERIA (Job 1) ===
+Module: "${mod.title}"
+Description: ${mod.description || ""}
+Learning Objectives: ${(mod.learning_objectives || []).join("; ")}
+Time Budget: ${mod.estimated_hours || 1} hours
 
-1. SEMANTIC RELEVANCE (0-40): Does this resource actually teach what the module needs? Not just keyword overlap — does the *content* align with the module's learning objectives?
-2. LEVEL ALIGNMENT (0-20): Is this resource pitched at the right difficulty? A "Python basics" video is wrong for an advanced module even if the topic matches.
+=== SCORING CRITERIA ===
+
+Score each candidate resource's FIT (0-100):
+1. SEMANTIC RELEVANCE (0-40): Does this resource actually teach what this module needs? Not just keyword overlap — does the *content* align with the learning objectives?
+2. LEVEL ALIGNMENT (0-20): Is this resource pitched at the right difficulty for a ${level} learner?
 3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? ${goalInstruction}
-4. PEDAGOGICAL QUALITY (0-10): Based on title/description, does this look like quality educational content vs clickbait/listicle?
-5. TOOL/FRAMEWORK FIT (0-10): If the module is about React, a Vue tutorial scores 0 here. If tool-agnostic topic, give 5-10.
+4. PEDAGOGICAL QUALITY (0-10): Quality educational content vs clickbait/listicle?
+5. TOOL/FRAMEWORK FIT (0-10): Does the tech stack match what this module teaches?
 
-Each candidate includes authority_tier and authority_bump. These are informational only — do NOT let authority override your content fit assessment.
-Score STRICTLY. 80+ = excellent fit, 50-79 = acceptable, below 50 = poor fit.
+authority_tier and authority_bump are informational only — do NOT let authority override content fit.
+Score STRICTLY. 80+ = excellent, 50-79 = acceptable, below 50 = poor.
 
-=== SELECTION RULES (Job 2) ===
+=== SELECTION RULES ===
 
-After scoring, select the best 1-5 resources per module. The number is VARIABLE — use fewer if time is tight or if one excellent resource covers everything.
+Select the best 1-5 resources. The number is VARIABLE.
 
-- A module CAN have just 1 resource if it's excellent and fits the time budget perfectly.
-- Do NOT add filler resources just to reach a count. Each must add unique value.
-- Use your scores as the PRIMARY signal for selection.
+- A module CAN have just 1 resource if it's excellent and fits the time budget.
+- Do NOT add filler. Each resource must add unique value.
+- Use your scores as the PRIMARY signal.
 - Avoid low-view unknown creators unless uniquely valuable.
 - Avoid redundancy — don't pick 3 similar videos.
-- Time is a HARD FEASIBILITY CONSTRAINT, NOT a ranking bonus.
-- If a single long high-quality resource fits the module budget perfectly, prefer it over multiple short ones.
-- Exclude discussion/recommendation threads (e.g. "best resources to learn X" posts).
-- Never select search-result/listing pages.
+- Time budget is a HARD CONSTRAINT: total selected minutes must not exceed ${Math.round((mod.estimated_hours || 1) * 60)} minutes.
+- Prefer one long high-quality resource over multiple short ones when it fits the budget.
+- Exclude discussion threads and search-result/listing pages.
+- If a candidate title contains "(Continue: X–Y min)", it's a continuation resource — ALWAYS select it.
+- For hands-on goals, pick ONE consistent tech stack across resources.
 
-=== GLOBAL CONSTRAINTS (MANDATORY) ===
-
-1. GLOBAL RESOURCE UNIQUENESS: A resource URL may appear AT MOST ONCE across all modules — EXCEPT continuation resources (marked with "(Continue: X–Y min)" in the title). Always select continuation resources if present.
-2. HARD TIME BUDGET: Each module's total selected resource minutes must not exceed its estimated hours. Remove lowest-value resource if over budget.
-3. STACK CONSISTENCY: If user did not specify a language/framework — for conceptual goals prefer tool-agnostic resources; for hands-on goals pick ONE consistent stack.
-4. COVERAGE BEFORE REDUNDANCY: Maximize coverage of module learning objectives. Never select multiple resources teaching identical content from the same channel.
-5. SPANNING RESOURCES: If a candidate title contains "(Continue: X–Y min)", it is a continuation of a long high-quality resource spanning multiple modules. ALWAYS select these.
-
-Modules and candidates:
-${JSON.stringify(scoringModules, null, 1)}
+Candidates:
+${JSON.stringify(scoringInput.candidates, null, 1)}
 
 Return ONLY valid JSON:
 {
-  "modules": [
-    {
-      "module_id": "mod_1",
-      "candidate_scores": [
-        { "index": 0, "score": 75, "reason": "one short sentence" }
-      ],
-      "selected": [
-        { "url": "...", "why_selected": "one short sentence" }
-      ]
-    }
+  "candidate_scores": [
+    { "index": 0, "score": 75, "reason": "one short sentence" }
+  ],
+  "selected": [
+    { "url": "...", "why_selected": "one short sentence" }
   ]
 }`;
 
@@ -1373,7 +1379,7 @@ Return ONLY valid JSON:
     }, TIMEOUTS_MS.agent2);
 
     if (!response.ok) {
-      console.error(`Agent 2 (Score+Select) error: ${response.status}`);
+      console.error(`Agent 2 (module "${mod.title}") error: ${response.status}`);
       return emptyResult;
     }
 
@@ -1382,53 +1388,82 @@ Return ONLY valid JSON:
     if (!content) return emptyResult;
 
     const parsed = parsePossiblyMalformedJson(content);
-    if (!parsed?.modules) return emptyResult;
+    if (!parsed) return emptyResult;
 
-    const selections = new Map<string, string[]>();
-
-    for (const modResult of (parsed.modules || [])) {
-      if (!modResult.module_id) continue;
-      const candidates = allModuleCandidates.get(modResult.module_id);
-      if (!candidates) continue;
-
-      // Apply scores back to candidates
-      const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
-      const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
-
-      for (const cs of (modResult.candidate_scores || [])) {
-        if (cs.index >= 0 && cs.index < top.length) {
-          const candidate = top[cs.index];
-          const original = candidates.find(c => c.url === candidate.url);
-          if (original) {
-            original.context_fit_score = Math.max(0, Math.min(cs.score, 100));
-          }
+    // Apply scores back to candidates
+    for (const cs of (parsed.candidate_scores || [])) {
+      if (cs.index >= 0 && cs.index < top.length) {
+        const candidate = top[cs.index];
+        const original = candidates.find(c => c.url === candidate.url);
+        if (original) {
+          original.context_fit_score = Math.max(0, Math.min(cs.score, 100));
         }
       }
-
-      // Extract selections
-      const selectedUrls = (modResult.selected || []).map((s: any) => s.url).filter(Boolean);
-      if (selectedUrls.length > 0) {
-        selections.set(modResult.module_id, selectedUrls);
-      }
-
-      // Store why_selected on candidates
-      for (const s of (modResult.selected || [])) {
-        if (!s.url || !s.why_selected) continue;
-        const match = candidates.find(c => c.url === s.url);
-        if (match) match.why_selected = s.why_selected;
-      }
     }
 
-    console.log(`Agent 2 (Score+Select): Processed ${parsed.modules?.length || 0} modules, selected resources for ${selections.size} modules`);
-    return { success: true, selections };
+    // Extract selections
+    const selectedUrls = (parsed.selected || []).map((s: any) => s.url).filter(Boolean);
+
+    // Store why_selected on candidates
+    for (const s of (parsed.selected || [])) {
+      if (!s.url || !s.why_selected) continue;
+      const match = candidates.find(c => c.url === s.url);
+      if (match) match.why_selected = s.why_selected;
+    }
+
+    console.log(`Agent 2 (module "${mod.title}"): scored ${parsed.candidate_scores?.length || 0} candidates, selected ${selectedUrls.length}`);
+    return { moduleId, success: true, selections: selectedUrls };
   } catch (e) {
     if (isAbortError(e)) {
-      console.warn("Agent 2 (Score+Select) timed out; using heuristic fallback.");
+      console.warn(`Agent 2 (module "${mod.title}") timed out; using heuristic fallback.`);
       return emptyResult;
     }
-    console.error("Agent 2 (Score+Select) failed:", e);
+    console.error(`Agent 2 (module "${mod.title}") failed:`, e);
     return emptyResult;
   }
+}
+
+// ─── Parallel Per-Module AI Scoring Orchestrator ──────────────────────────────
+
+async function parallelModuleAIScoring(
+  allModuleCandidates: Map<string, CandidateResource[]>,
+  modules: any[],
+  topic: string,
+  goal: string,
+  level: string,
+  apiKey: string
+): Promise<Agent2Result> {
+  const modulesWithCandidates = modules.filter(mod => {
+    const candidates = allModuleCandidates.get(mod.id) || [];
+    return candidates.length > 0;
+  });
+
+  if (modulesWithCandidates.length === 0) {
+    return { success: false, selections: new Map() };
+  }
+
+  console.log(`Agent 2: Launching ${modulesWithCandidates.length} parallel per-module scoring agents...`);
+  const tAgent2 = Date.now();
+
+  // Fire all module scoring calls in parallel
+  const results = await Promise.all(
+    modulesWithCandidates.map(mod =>
+      scoreModuleResources(mod, allModuleCandidates.get(mod.id) || [], topic, goal, level, apiKey)
+    )
+  );
+
+  // Aggregate results
+  const selections = new Map<string, string[]>();
+  let successCount = 0;
+  for (const result of results) {
+    if (result.success && result.selections.length > 0) {
+      selections.set(result.moduleId, result.selections);
+      successCount++;
+    }
+  }
+
+  console.log(`[TIMING] Agent 2 parallel scoring: ${Date.now() - tAgent2} ms (${successCount}/${modulesWithCandidates.length} modules succeeded)`);
+  return { success: successCount > 0, selections };
 }
 
 // ─── STAGE 7: Clustering & Diversity (FLEXIBLE) ─────────────────────────────
@@ -1763,9 +1798,9 @@ async function fetchTopicAnchors(
   const goalConfig = getGoalSearchConfig(goal, topic);
   const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
   const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 4) : Math.min(goalConfig.videoCount, 5);
-  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 3) : Math.min(goalConfig.webCount, 4);
-  const precisionQueries = fastMode ? plan.precision.slice(0, 1) : plan.precision;
-  const expansionQueries = fastMode ? [] : plan.expansion;
+  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 2) : Math.min(goalConfig.webCount, 3);
+  // Always use only 1 precision query for topic anchors — the expansion round rarely helps and adds latency.
+  const precisionQueries = plan.precision.slice(0, 1);
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
     for (const q of queries) {
@@ -1781,15 +1816,7 @@ async function fetchTopicAnchors(
     return batch;
   };
 
-  let combined = await runQueryBatch(precisionQueries);
-  const precisionUnique = countUniqueSerperResults(combined);
-  if (!fastMode && precisionUnique < RETRIEVAL_THRESHOLDS.topicMinUnique) {
-    const expanded = await runQueryBatch(expansionQueries);
-    combined = mergeSerperResults(combined, expanded);
-    console.log(
-      `Topic anchors expanded: precision pool ${precisionUnique} < ${RETRIEVAL_THRESHOLDS.topicMinUnique}, ran fallback queries.`,
-    );
-  }
+  const combined = await runQueryBatch(precisionQueries);
 
   console.log(`Topic anchors: ${combined.videos.length} videos, ${combined.web.length} web results`);
   return combined;
@@ -1809,11 +1836,13 @@ async function fetchModuleResults(
   const config = getGoalSearchConfig(goal, `${topic} ${module?.title || ""}`);
   const plan = buildModuleQueryPlan(module, topic, level, goal, certificationIntent);
   const effectiveVideoCount = fastMode ? Math.min(config.videoCount, 4) : Math.min(config.videoCount, 5);
-  const effectiveWebCount = fastMode ? Math.min(config.webCount, 3) : Math.min(config.webCount, 4);
+  const effectiveWebCount = fastMode ? Math.min(config.webCount, 2) : Math.min(config.webCount, 3);
   const moduleHours = Number(module?.estimated_hours || 1);
   const shortModule = moduleHours <= PIPELINE_LIMITS.shortModuleHours;
-  const precisionQueries = (fastMode || shortModule) ? plan.precision.slice(0, 1) : plan.precision;
-  const expansionQueries = fastMode ? [] : plan.expansion;
+  // Always use 1 precision query — second precision query adds latency with diminishing returns.
+  const precisionQueries = plan.precision.slice(0, 1);
+  // Only run expansion queries for non-short modules in non-fast mode, and with a higher threshold.
+  const expansionQueries = (fastMode || shortModule) ? [] : plan.expansion.slice(0, 1);
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
     for (const q of queries) {
@@ -1832,11 +1861,11 @@ async function fetchModuleResults(
   let combined = await runQueryBatch(precisionQueries);
   const minUnique = RETRIEVAL_THRESHOLDS.moduleMinUnique;
   const precisionUnique = countUniqueSerperResults(combined);
-  if (!fastMode && precisionUnique < minUnique) {
+  if (!fastMode && !shortModule && precisionUnique < Math.floor(minUnique * 0.6)) {
     const expanded = await runQueryBatch(expansionQueries);
     combined = mergeSerperResults(combined, expanded);
     console.log(
-      `Module "${module?.title || "unknown"}" expanded: precision pool ${precisionUnique} < ${minUnique}, ran fallback queries.`,
+      `Module "${module?.title || "unknown"}" expanded: precision pool ${precisionUnique} < ${Math.floor(minUnique * 0.6)}, ran fallback query.`,
     );
   }
 
@@ -2464,9 +2493,11 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     console.log(`[TIMING] Stages 4-5 filtering: ${Date.now() - tFilter} ms`);
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 6.1: PARALLEL — Agent 2 (AI Scoring+Selection) + Negotiation Pass
+    // STEP 6.1: PARALLEL — Per-Module AI Agents (Score+Select) + Negotiation
+    // Each module gets its own gemini-3-pro agent running in parallel.
+    // Wall-clock time = slowest single module (~3-4s) instead of batch (~10-12s).
     // ════════════════════════════════════════════════════════════════════════
-    console.log(`Running Agent 2 (Score+Select) + Negotiation Pass in parallel...`);
+    console.log(`Running per-module AI agents + Negotiation Pass in parallel...`);
     const usableMinutesForNegotiation = totalHours * 60 * 0.85;
     const negotiationInput = new Map<string, CandidateResource[]>();
     for (const [moduleId, candidates] of allModuleCandidates.entries()) {
@@ -2476,7 +2507,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const [agent2Result, negotiatedCandidates] = await Promise.all([
       (!ENABLE_EXPENSIVE_LLM_STAGES)
         ? Promise.resolve({ success: false, selections: new Map<string, string[]>() } as Agent2Result)
-        : batchAIScoringAndSelection(
+        : parallelModuleAIScoring(
             allModuleCandidates,
             roadmap.modules || [],
             topic,
@@ -2740,6 +2771,26 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       } else {
         console.warn(`Module "${mod.title}" has 0 resources after full pipeline; returning empty resources.`);
         mod.resources = [];
+      }
+
+      // Final safety net: strip any resource whose URL is a search engine page.
+      if (mod.resources && mod.resources.length > 0) {
+        mod.resources = mod.resources.filter((r: Resource) => {
+          try {
+            const u = new URL(r.url);
+            const h = u.hostname.toLowerCase().replace(/^www\./, "");
+            const p = u.pathname.toLowerCase();
+            // Block bare Google domains (google.com, m.google.com, google.co.in)
+            if (/^(?:m\.)?google\.[a-z.]+$/i.test(h)) return false;
+            // Block /search path on any Google subdomain
+            if (h.includes("google.") && p.startsWith("/search")) return false;
+            // Block known Google search subdomains
+            if (/^(?:scholar|books|cse|news)\.google\./i.test(h)) return false;
+            // Block other search engines
+            if (h === "bing.com" || h === "duckduckgo.com" || h === "search.yahoo.com") return false;
+            return true;
+          } catch { return false; }
+        });
       }
 
       // Remove anchor_terms from final output (internal use only)
