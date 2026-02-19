@@ -184,8 +184,8 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 
 const TIMEOUTS_MS = {
   serper: 3500,
-  youtube: 5000,
-  agent1: 12000,
+  youtube: 2500,   // reduced from 5000 — proceed without enrichment if YouTube is slow
+  agent1: 8000,    // reduced from 12000 — fail fast and fall back to heuristic roadmap
   agent2: 9000,
   reranker: 8000,
 };
@@ -199,14 +199,14 @@ const PIPELINE_LIMITS = {
   weakModuleCandidateThreshold: 8,
   weakModuleRatioForTopicAnchors: 0.3,
   shortModuleHours: 2,
-  agent2CandidatesPerModule: 14,
+  agent2CandidatesPerModule: 18,
   rerankerCandidatesPerModule: 10,
   rerankerMinCandidates: 4,
 };
 
 const FAST_MODE_MAX_HOURS = 24;
 const FAST_MODE_MAX_MODULES = 6;
-const ENABLE_EXPENSIVE_LLM_STAGES = false;
+const ENABLE_EXPENSIVE_LLM_STAGES = true;
 const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-2.5-flash-lite";
 const ROADMAP_MODEL_AGENT2 = Deno.env.get("ROADMAP_MODEL_AGENT2") || "google/gemini-3-pro-preview";
 const ROADMAP_MODEL_RERANKER = Deno.env.get("ROADMAP_MODEL_RERANKER") || "google/gemini-2.5-flash-lite";
@@ -2357,10 +2357,11 @@ Return ONLY valid JSON with this exact structure:
 IMPORTANT for anchor_terms: For each module, provide 3-8 concrete technical terms that are specific to that module's content. These should be specific entities (e.g., "lambda", "serverless", "faas") NOT generic words (e.g., "learn", "understand"). They will be used for precise resource filtering.
 IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", or "find resources online" anywhere in modules or tips.`;
 
+    const t0 = Date.now();
     console.log(`Generating roadmap: topic="${topic}", goal=${effectiveGoal}, level=${skill_level}, hours=${totalHours}`);
 
     let response: Response | null = null;
-    const agent1Attempts = expectedFastMode ? 1 : 2;
+    const agent1Attempts = 1; // always 1 attempt — retrying doubles worst-case latency; fallback roadmap handles failures
     for (let attempt = 1; attempt <= agent1Attempts; attempt++) {
       try {
         response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -2434,6 +2435,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     enforceModuleTimeWindowConsistency(roadmap.modules || [], effectiveHoursPerDay);
     const moduleCount = Array.isArray(roadmap.modules) ? roadmap.modules.length : 0;
     const fastMode = totalHours <= FAST_MODE_MAX_HOURS || moduleCount <= FAST_MODE_MAX_MODULES;
+    console.log(`[TIMING] Agent 1 (structure): ${Date.now() - t0} ms`);
     if (Array.isArray(roadmap.modules)) {
       for (const mod of roadmap.modules) mod.quiz = [];
       roadmap.total_hours = Math.round(
@@ -2443,44 +2445,52 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const certificationIntent = detectCertificationIntent(topic);
 
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 2: STAGE 2B — Module-Specific Retrieval (parallelized, first pass)
-    // ════════════════════════════════════════════════════════════════════════
-    console.log(`Stage 2B: Fetching module-specific results for ${roadmap.modules?.length || 0} modules...`);
-    const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
-      fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode)
-    );
-    const allModuleResults = await Promise.all(moduleResultsPromises);
-
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 3: Merge pass #1 (module-only), then conditionally run topic anchors.
+    // STEP 2: STAGE 2A+2B — Module results + topic anchors fully parallel.
+    // Previously, topic anchors fired sequentially AFTER module results only
+    // when coverage was weak — adding a full second Serper round (3–7 s) to
+    // the critical path. Now both fetches start at the same time; topic
+    // anchors are always available when the merge runs, with no serial wait.
     // ════════════════════════════════════════════════════════════════════════
     const totalAvailableMinutes = totalHours * 60;
     const allModuleCandidates = new Map<string, CandidateResource[]>();
     const emptyTopicAnchors = { videos: [] as SerperVideoResult[], web: [] as SerperWebResult[] };
 
+    console.log(`Stage 2: Fetching module results + topic anchors in parallel (${roadmap.modules?.length || 0} modules, fastMode=${fastMode})...`);
+    const t2Start = Date.now();
+
+    const moduleResultsPromises = (roadmap.modules || []).map((mod: any) =>
+      fetchModuleResults(mod, topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode)
+    );
+    // In fast mode topic anchors are skipped (fewer queries already); in normal mode
+    // fire them now in parallel so the sequential round-trip is eliminated.
+    const topicAnchorPromise = !fastMode
+      ? fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode)
+      : Promise.resolve(emptyTopicAnchors);
+
+    const [allModuleResults, topicAnchors] = await Promise.all([
+      Promise.all(moduleResultsPromises),
+      topicAnchorPromise,
+    ]);
+
+    console.log(`Stage 2: retrieval done in ${Date.now() - t2Start} ms`);
+
+    // Single merge pass — topic anchors already in hand, no second await needed.
     for (let i = 0; i < (roadmap.modules || []).length; i++) {
       const mod = roadmap.modules[i];
-      const moduleResults = allModuleResults[i];
-      const candidates = mergeAndDeduplicate(emptyTopicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls, excludedDomains);
+      const candidates = mergeAndDeduplicate(
+        !fastMode ? topicAnchors : emptyTopicAnchors,
+        allModuleResults[i],
+        mod.title,
+        totalAvailableMinutes,
+        excludedUrls,
+        excludedDomains,
+      );
       allModuleCandidates.set(mod.id, candidates);
     }
 
     const moduleCandidateCounts = (roadmap.modules || []).map((mod: any) => (allModuleCandidates.get(mod.id) || []).length);
     const weakModules = moduleCandidateCounts.filter((count) => count < PIPELINE_LIMITS.weakModuleCandidateThreshold).length;
-    const weakRatio = moduleCandidateCounts.length > 0 ? weakModules / moduleCandidateCounts.length : 0;
-
-    if (!fastMode && weakRatio >= PIPELINE_LIMITS.weakModuleRatioForTopicAnchors) {
-      console.log(`Stage 2A: Weak module coverage (${weakModules}/${moduleCandidateCounts.length}); fetching topic-wide anchors for "${topic}"...`);
-      const topicAnchors = await fetchTopicAnchors(topic, skill_level, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, fastMode);
-      for (let i = 0; i < (roadmap.modules || []).length; i++) {
-        const mod = roadmap.modules[i];
-        const moduleResults = allModuleResults[i];
-        const candidates = mergeAndDeduplicate(topicAnchors, moduleResults, mod.title, totalAvailableMinutes, excludedUrls, excludedDomains);
-        allModuleCandidates.set(mod.id, candidates);
-      }
-    } else {
-      console.log(`Stage 2A: Skipped topic anchors; module coverage healthy (${weakModules}/${moduleCandidateCounts.length} weak modules).`);
-    }
+    console.log(`Stage 2: ${weakModules}/${moduleCandidateCounts.length} modules with thin coverage (threshold: ${PIPELINE_LIMITS.weakModuleCandidateThreshold}).`);
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 5: STAGE 3 — YouTube API Enrichment (batch all video IDs)
@@ -2497,14 +2507,16 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
 
     let ytMap = new Map<string, YouTubeMetadata>();
     if (allVideoIds.size > 0) {
+      const tYT = Date.now();
       console.log(`Stage 3: Enriching ${allVideoIds.size} YouTube videos with metadata...`);
       ytMap = await fetchYouTubeMetadata([...allVideoIds], YOUTUBE_API_KEY, supabaseAdmin);
-      console.log(`Got metadata for ${ytMap.size} videos.`);
+      console.log(`[TIMING] YouTube enrichment: ${Date.now() - tYT} ms (${ytMap.size} hits)`);
     }
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 6: STAGES 4-5 — Enhanced Hard Filter + Light Authority + Enrichment
     // ════════════════════════════════════════════════════════════════════════
+    const tFilter = Date.now();
     const moduleRescuePools = new Map<string, CandidateResource[]>();
     for (const mod of (roadmap.modules || [])) {
       const candidates = allModuleCandidates.get(mod.id) || [];
@@ -2554,6 +2566,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
 
       allModuleCandidates.set(mod.id, stage5Filtered);
     }
+    console.log(`[TIMING] Stages 4-5 filtering: ${Date.now() - tFilter} ms`);
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 6.1: PARALLEL — Agent 2 (AI Scoring) + Negotiation Pass (isolated copies)
@@ -2566,7 +2579,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     }
 
     const [aiScoringSuccess, negotiatedCandidates] = await Promise.all([
-      (fastMode || !ENABLE_EXPENSIVE_LLM_STAGES)
+      (!ENABLE_EXPENSIVE_LLM_STAGES)
         ? Promise.resolve(false)
         : batchAIContextFitScoring(
             allModuleCandidates,
@@ -2618,7 +2631,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       (allModuleCandidates.get(mod.id) || []).length >= PIPELINE_LIMITS.rerankerMinCandidates
     );
     console.log(`Stage 8: ${eligibleForRerank ? "Running" : "Skipping"} batch LLM reranker...`);
-    const rerankerSelections = (fastMode || !ENABLE_EXPENSIVE_LLM_STAGES || !eligibleForRerank)
+    const rerankerSelections = (!ENABLE_EXPENSIVE_LLM_STAGES || !eligibleForRerank)
       ? new Map<string, string[]>()
       : await batchRerank(
           allModuleCandidates,
@@ -2859,6 +2872,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     const totalResources = (roadmap.modules || []).reduce((sum: number, m: any) => sum + (m.resources?.length || 0), 0);
     console.log(`Final validation: ${totalResources} total resources, ${usedResourceUrls.size} unique URLs, ${Math.round(totalRoadmapMinutes)} mins used of ${Math.round(usableMinutes)} usable.`);
 
+    console.log(`[TIMING] Total pipeline: ${Date.now() - t0} ms`);
     console.log("Roadmap generation complete (10-stage pipeline with 3 AI agents).");
     return new Response(JSON.stringify(roadmap), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
