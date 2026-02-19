@@ -1237,8 +1237,8 @@ function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: numbe
   const articles = candidates.filter(c => c.type === "article" || c.type === "tutorial" || c.type === "practice");
 
   const handsOn = goal === "hands_on";
-  const maxVideos = Math.ceil(maxPerModule * (handsOn ? 0.65 : 0.4));
-  const maxDocs = Math.ceil(maxPerModule * (handsOn ? 0.15 : 0.4));
+  const maxVideos = Math.ceil(maxPerModule * (handsOn ? 0.55 : 0.40));
+  const maxDocs = Math.ceil(maxPerModule * (handsOn ? 0.15 : 0.35));
   const maxArticles = maxPerModule - Math.min(videos.length, maxVideos) - Math.min(docs.length, maxDocs);
 
   const result: CandidateResource[] = [];
@@ -1431,6 +1431,7 @@ Select the best 1-5 resources. The number is VARIABLE.
 - Use your scores as the PRIMARY signal.
 - Avoid low-view unknown creators unless uniquely valuable.
 - Avoid redundancy — don't pick 3 similar videos.
+- DIVERSITY PREFERENCE: When quality is comparable, prefer a mix of resource types (videos, articles, docs, tutorials) over all-video selections. A single excellent video that fills the time budget is fine — but when choosing among similar-quality candidates, favor type variety.
 - Time budget is a HARD CONSTRAINT: total selected minutes must not exceed ${Math.round((mod.estimated_hours || 1) * 60)} minutes.
 - Prefer one long high-quality resource over multiple short ones when it fits the budget.
 - Exclude discussion threads and search-result/listing pages.
@@ -1734,8 +1735,8 @@ function getGoalSearchConfig(goal: string, _topic = ""): GoalSearchConfig {
     case "hands_on":
       return {
         queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"],
-        videoCount: 10,
-        webCount: 4,
+        videoCount: 8,
+        webCount: 6,
         semanticHint: "project based practical walkthrough",
         intentTokens: ["implementation", "code walkthrough", "real project"],
         outcomeTokens: ["build from scratch", "hands-on lab", "practical exercise"],
@@ -1743,8 +1744,8 @@ function getGoalSearchConfig(goal: string, _topic = ""): GoalSearchConfig {
     case "quick_overview":
       return {
         queryModifiers: ["crash course", "full guide", "start to finish", "top 10", "overview", "essentials"],
-        videoCount: 7,
-        webCount: 5,
+        videoCount: 6,
+        webCount: 6,
         semanticHint: "high level summary and key takeaways",
         intentTokens: ["key ideas", "summary", "what matters most"],
         outcomeTokens: ["fast understanding", "cheat sheet", "essentials only"],
@@ -1879,7 +1880,7 @@ async function fetchTopicAnchors(
   const goalConfig = getGoalSearchConfig(goal, topic);
   const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
   const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 4) : Math.min(goalConfig.videoCount, 5);
-  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 2) : Math.min(goalConfig.webCount, 3);
+  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 3) : Math.min(goalConfig.webCount, 5);
   // Always use only 1 precision query for topic anchors — the expansion round rarely helps and adds latency.
   const precisionQueries = plan.precision.slice(0, 1);
   const runQueryBatch = async (queries: string[]) => {
@@ -2764,6 +2765,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         }
       }
 
+
       // Coverage repair: if resource time is below 60% of module time, keep filling with best remaining fits.
       const coverageTarget = moduleMinutes * 0.6;
       if (moduleTotal < coverageTarget) {
@@ -2894,6 +2896,66 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
 
       // Remove anchor_terms from final output (internal use only)
       delete mod.anchor_terms;
+    }
+
+    // ── Roadmap-level diversity pass ──
+    // If the entire roadmap is >75% video, swap weakest videos in multi-resource
+    // modules for the best available non-video candidate from rescue pools.
+    {
+      const allResources = (roadmap.modules || []).flatMap((m: any) => m.resources || []);
+      const videoCount = allResources.filter((r: Resource) => r.type === "video").length;
+      const totalCount = allResources.length;
+      const videoRatio = totalCount > 0 ? videoCount / totalCount : 0;
+      const targetMaxVideoRatio = 0.70;
+
+      if (videoRatio > targetMaxVideoRatio && totalCount >= 3) {
+        const videosToReplace = Math.ceil(videoCount - totalCount * targetMaxVideoRatio);
+        let replaced = 0;
+        console.log(`Roadmap diversity: ${videoCount}/${totalCount} resources are videos (${Math.round(videoRatio * 100)}%). Swapping up to ${videosToReplace} for articles/docs.`);
+
+        // Iterate modules — prefer swapping in modules with multiple resources
+        const sortedModules = [...(roadmap.modules || [])]
+          .filter((m: any) => (m.resources?.length || 0) >= 2)
+          .sort((a: any, b: any) => (b.resources?.length || 0) - (a.resources?.length || 0));
+
+        for (const mod of sortedModules) {
+          if (replaced >= videosToReplace) break;
+          const resources = mod.resources as Resource[];
+          const moduleVideos = resources.filter((r: Resource) => r.type === "video");
+          if (moduleVideos.length < 2) continue; // keep at least 1 video per module
+
+          // Find the weakest video (last one, since they're roughly score-ordered)
+          const weakestVideo = moduleVideos[moduleVideos.length - 1];
+          const rescuePool = moduleRescuePools.get(mod.id) || [];
+          const bestNonVideo = rescuePool.find((c: CandidateResource) =>
+            c.type !== "video" &&
+            !usedResourceUrls.has(normalizeResourceUrl(c.url)) &&
+            !isGarbage(c) &&
+            isAllowedResourceUrl(c.url)
+          );
+
+          if (bestNonVideo) {
+            const idx = resources.findIndex((r: Resource) => r.url === weakestVideo.url);
+            if (idx >= 0) {
+              resources[idx] = {
+                title: bestNonVideo.title,
+                url: bestNonVideo.url,
+                type: bestNonVideo.type,
+                estimated_minutes: bestNonVideo.estimated_minutes,
+                description: bestNonVideo.description,
+                channel: bestNonVideo.channel,
+                view_count: bestNonVideo.view_count,
+                like_count: bestNonVideo.like_count,
+                quality_signal: bestNonVideo.quality_signal,
+              } as Resource;
+              usedResourceUrls.add(normalizeResourceUrl(bestNonVideo.url));
+              replaced++;
+              console.log(`Roadmap diversity: Swapped video "${weakestVideo.title}" → article/doc "${bestNonVideo.title}" in module "${mod.title}"`);
+            }
+          }
+        }
+        console.log(`Roadmap diversity: Replaced ${replaced}/${videosToReplace} videos with non-video resources.`);
+      }
     }
 
     // ── Final validation log ──
