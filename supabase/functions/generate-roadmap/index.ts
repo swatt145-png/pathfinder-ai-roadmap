@@ -183,10 +183,10 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const TIMEOUTS_MS = {
-  serper: 3000,    // reduced from 3500 — fail fast, no retry
-  youtube: 2000,   // reduced from 2500 — proceed without enrichment if YouTube is slow
+  serper: 6000,    // generous timeout — Serper is the critical data source; timing out here means 0 resources
+  youtube: 3000,   // proceed without enrichment if YouTube is slow, but give it a fair chance
   agent1: 8000,    // fail fast and fall back to heuristic roadmap
-  agent2: 8000,    // reduced from 10000 — most responses arrive in 3-5s; 8s is generous
+  agent2: 8000,    // most responses arrive in 3-5s; 8s is generous
   geminiDirect: 3000, // fast timeout for direct Gemini — fall back to gateway quickly if unreachable
 };
 
@@ -644,35 +644,46 @@ async function searchSerper(
     }
   }
 
-  // Single attempt — retrying doubles worst-case latency for marginal gain.
-  try {
-    const res = await fetchWithTimeout(url, {
-      method: "POST",
-      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ q: query, num }),
-    }, TIMEOUTS_MS.serper);
-    if (!res.ok) {
-      console.error(`Serper ${type} error: ${res.status}`);
+  // Retry once on transient failures (timeout, network error).
+  // Serper is the sole source of resource candidates — if it fails, the entire
+  // roadmap ships with 0 resources, which is worse than a slightly longer wait.
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, {
+        method: "POST",
+        headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ q: query, num }),
+      }, TIMEOUTS_MS.serper);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.error(`Serper ${type} error: HTTP ${res.status} — ${body.slice(0, 200)}`);
+        // Don't retry auth/billing errors — key is invalid, retrying won't help
+        if (res.status === 401 || res.status === 403 || res.status === 402) return [];
+        if (attempt < maxAttempts) { await sleep(500); continue; }
+        return [];
+      }
+      const data = await res.json();
+      const results = type === "videos" ? (data.videos || []) : (data.organic || []);
+      if (supabaseAdmin && allowCacheWrite) {
+        // Fire-and-forget cache write — don't block the return.
+        supabaseAdmin.from("resource_search_cache").upsert({
+          query_hash: queryHash,
+          query_text: query,
+          search_type: type,
+          response_json: results,
+          expires_at: new Date(Date.now() + CACHE_TTL.serperHours * 60 * 60 * 1000).toISOString(),
+        }, { onConflict: "query_hash,search_type" }).catch((e: any) => console.warn("Serper cache write failed:", e));
+      }
+      return results;
+    } catch (e) {
+      const timeoutMsg = isAbortError(e) ? "timeout" : "fetch failed";
+      console.error(`Serper ${type} ${timeoutMsg} (attempt ${attempt}/${maxAttempts}):`, e);
+      if (attempt < maxAttempts) { await sleep(500); continue; }
       return [];
     }
-    const data = await res.json();
-    const results = type === "videos" ? (data.videos || []) : (data.organic || []);
-    if (supabaseAdmin && allowCacheWrite) {
-      // Fire-and-forget cache write — don't block the return.
-      supabaseAdmin.from("resource_search_cache").upsert({
-        query_hash: queryHash,
-        query_text: query,
-        search_type: type,
-        response_json: results,
-        expires_at: new Date(Date.now() + CACHE_TTL.serperHours * 60 * 60 * 1000).toISOString(),
-      }, { onConflict: "query_hash,search_type" }).catch((e: any) => console.warn("Serper cache write failed:", e));
-    }
-    return results;
-  } catch (e) {
-    const timeoutMsg = isAbortError(e) ? "timeout" : "fetch failed";
-    console.error(`Serper ${type} ${timeoutMsg}:`, e);
-    return [];
   }
+  return [];
 }
 
 function estimateArticleMinutes(snippet: string): number {
@@ -2007,7 +2018,14 @@ function enrichCandidatesWithYouTube(
     const videoId = extractYouTubeVideoId(c.url);
     if (!videoId) return true;
     const meta = ytMap.get(videoId);
-    if (!meta) return false;
+    if (!meta) {
+      // Keep the video even without YouTube metadata — the API may have
+      // timed out or hit quota.  Score with heuristic fallback so it
+      // still participates in selection rather than being silently dropped.
+      computeLightAuthorityBump(c);
+      c.context_fit_score = computeContextFitScoreFallback(c, ctx);
+      return true;
+    }
     if (isDiscussionOrMetaResource(c.url, meta.title || c.title, "")) return false;
     if (isVideoLikelyOffTopic(meta.title || c.title, meta.channel || "", ctx)) return false;
 
@@ -2249,21 +2267,8 @@ serve(async (req) => {
     const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       : null;
-    let resolvedUserId: string | null = user_id || null;
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const authHeader = req.headers.get("Authorization");
-      if (authHeader) {
-        try {
-          const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: { headers: { Authorization: authHeader } },
-          });
-          const { data: authData } = await supabaseAuth.auth.getUser();
-          if (authData?.user?.id) resolvedUserId = authData.user.id;
-        } catch (e) {
-          console.warn("Unable to resolve user from auth token:", e);
-        }
-      }
-    }
+    // Reuse the auth user already validated above — no need for a second getUser() call
+    let resolvedUserId: string | null = user_id || authUser.id || null;
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 1: Generate roadmap structure via AI (Agent 1)
@@ -2474,8 +2479,20 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
     }
 
     const moduleCandidateCounts = (roadmap.modules || []).map((mod: any) => (allModuleCandidates.get(mod.id) || []).length);
+    const totalCandidatesAcrossModules = moduleCandidateCounts.reduce((sum: number, c: number) => sum + c, 0);
     const weakModules = moduleCandidateCounts.filter((count: number) => count < PIPELINE_LIMITS.weakModuleCandidateThreshold).length;
-    console.log(`Stage 2: ${weakModules}/${moduleCandidateCounts.length} modules with thin coverage (threshold: ${PIPELINE_LIMITS.weakModuleCandidateThreshold}).`);
+    console.log(`Stage 2: ${totalCandidatesAcrossModules} total candidates, ${weakModules}/${moduleCandidateCounts.length} modules with thin coverage (threshold: ${PIPELINE_LIMITS.weakModuleCandidateThreshold}).`);
+
+    // Fail fast if resource search returned absolutely nothing — the Serper API
+    // key may be invalid, expired, or the service may be down. Returning a
+    // roadmap with 0 resources is worse than returning an error the user can retry.
+    if (totalCandidatesAcrossModules === 0) {
+      console.error("CRITICAL: Resource search returned 0 candidates for ALL modules. Serper API may be down or key may be invalid.");
+      return new Response(
+        JSON.stringify({ error: "Resource search failed — no learning resources could be found. Please try again in a moment." }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // ════════════════════════════════════════════════════════════════════════
     // STEP 5: STAGE 3 — YouTube API Enrichment (batch all video IDs)
@@ -2866,10 +2883,25 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
 
     // ── Final validation log ──
     const totalResources = (roadmap.modules || []).reduce((sum: number, m: any) => sum + (m.resources?.length || 0), 0);
+    const pipelineDiag = {
+      totalCandidatesAfterSerper: totalCandidatesAcrossModules,
+      youtubeVideosFound: ytMap.size,
+      youtubeVideosRequested: allVideoIds.size,
+      agent2Success: agent2Result.success,
+      totalResourcesAssigned: totalResources,
+      totalMinutesUsed: Math.round(totalRoadmapMinutes),
+      usableMinutesBudget: Math.round(usableMinutes),
+      pipelineMs: Date.now() - t0,
+    };
     console.log(`Final validation: ${totalResources} total resources, ${usedResourceUrls.size} unique URLs, ${Math.round(totalRoadmapMinutes)} mins used of ${Math.round(usableMinutes)} usable.`);
+    console.log(`Pipeline diagnostics: ${JSON.stringify(pipelineDiag)}`);
 
     console.log(`[TIMING] Total pipeline: ${Date.now() - t0} ms`);
     console.log("Roadmap generation complete (pipeline with 2 AI agents).");
+
+    // Attach diagnostics so frontend/logs can identify pipeline failures
+    roadmap._pipeline_diag = pipelineDiag;
+
     return new Response(JSON.stringify(roadmap), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("generate-roadmap error:", e);

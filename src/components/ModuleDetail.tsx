@@ -250,6 +250,11 @@ export function ModuleDetail({
             )}
           </div>
           <div className="space-y-3">
+            {visibleResources.length === 0 && (
+              <div className="glass p-4 text-center">
+                <p className="text-muted-foreground text-sm">No resources were found for this module. Try revising your roadmap or adapting the plan to refresh resources.</p>
+              </div>
+            )}
             {visibleResources.map((r, i) => {
               const isChecked = completedResources.includes(r.title);
               const IconComponent = RESOURCE_ICONS[r.type] ?? FileText;

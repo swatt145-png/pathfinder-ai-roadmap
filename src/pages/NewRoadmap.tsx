@@ -196,6 +196,15 @@ export default function NewRoadmap() {
 
         const roadmapData = data as RoadmapData;
 
+        // Log pipeline diagnostics for debugging resource issues
+        if ((data as any)?._pipeline_diag) {
+          console.log("[Roadmap Pipeline Diagnostics]", (data as any)._pipeline_diag);
+        }
+        const totalRes = roadmapData.modules?.reduce((s, m) => s + (m.resources?.length || 0), 0) || 0;
+        if (totalRes === 0) {
+          console.warn("[Roadmap] WARNING: Generated roadmap has 0 resources across all modules!", (data as any)?._pipeline_diag);
+        }
+
         const { data: insertedRows, error: insertError } = await supabase.from("roadmaps").insert({
           user_id: user.id,
           topic: roadmapData.topic,

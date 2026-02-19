@@ -768,7 +768,7 @@ async function enrichRoadmapYouTube(roadmap: any, apiKey: string): Promise<void>
       const id = extractYouTubeVideoId(r.url);
       if (!id) return true;
       const meta = metaMap.get(id);
-      if (!meta) return false;
+      if (!meta) return true; // Keep video even without metadata (API may have failed)
       if (!isVideoRelevant(meta.title, meta.channel, mod.title, topic)) {
         console.warn(`Excluding off-topic video: "${meta.title}" by ${meta.channel}`);
         return false;

@@ -561,7 +561,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-heading font-semibold text-base truncate">{mod.title}</p>
-                  <p className="text-sm text-muted-foreground">Day {mod.day_start}-{mod.day_end} · {mod.estimated_hours}h · {mod.resources.length} resources</p>
+                  <p className="text-sm text-muted-foreground">Day {mod.day_start}-{mod.day_end} · {mod.estimated_hours}h · {(mod.resources || []).length} resources</p>
                 </div>
                 <span className={`text-sm px-2 py-1 rounded-full shrink-0 font-heading font-semibold ${
                   status === "completed" ? "bg-success/20 text-success" :
