@@ -1237,7 +1237,7 @@ function applyDiversityCaps(candidates: CandidateResource[], maxPerModule: numbe
   const articles = candidates.filter(c => c.type === "article" || c.type === "tutorial" || c.type === "practice");
 
   const handsOn = goal === "hands_on";
-  const maxVideos = Math.ceil(maxPerModule * (handsOn ? 0.45 : 0.35));
+  const maxVideos = Math.max(1, Math.floor(maxPerModule * (handsOn ? 0.45 : 0.35)));
   const maxDocs = Math.ceil(maxPerModule * (handsOn ? 0.15 : 0.35));
   const maxArticles = maxPerModule - Math.min(videos.length, maxVideos) - Math.min(docs.length, maxDocs);
 
@@ -2826,7 +2826,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       // Per-module video ratio enforcement: max 60% videos
       let finalizedResources = [...cleanedResources];
       if (finalizedResources.length >= 2) {
-        const maxModuleVideos = Math.ceil(finalizedResources.length * 0.60);
+        const maxModuleVideos = Math.max(1, Math.floor(finalizedResources.length * 0.60));
         const modVideos = finalizedResources.filter(r => r.type === "video");
         if (modVideos.length > maxModuleVideos) {
           // Keep the highest-scored videos, remove excess
@@ -2859,6 +2859,18 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
 
           finalizedResources.push(c);
           finalizedMinutes += c.estimated_minutes;
+        }
+      }
+
+      // Re-enforce video ratio after top-up (top-up may have added more videos)
+      if (finalizedResources.length >= 2) {
+        const maxVidsAfterTopUp = Math.max(1, Math.floor(finalizedResources.length * 0.60));
+        const vidsAfterTopUp = finalizedResources.filter(r => r.type === "video");
+        if (vidsAfterTopUp.length > maxVidsAfterTopUp) {
+          const sortedVids = [...vidsAfterTopUp].sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+          const vidsToRemove = new Set(sortedVids.slice(maxVidsAfterTopUp).map(v => v.url));
+          finalizedResources = finalizedResources.filter(r => r.type !== "video" || !vidsToRemove.has(r.url));
+          finalizedMinutes = finalizedResources.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
         }
       }
 

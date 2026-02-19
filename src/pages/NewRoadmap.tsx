@@ -291,11 +291,15 @@ export default function NewRoadmap() {
         }
 
         const newId = insertedRows?.[0]?.id;
-        // Fire-and-forget: generate quizzes (flashcards) in background
+        // Schedule background quiz generation after navigation completes
+        // Using setTimeout ensures the async work isn't cancelled by React unmount
         if (newId) {
-          generateAllQuizzesInBackground(newId, roadmapData, learningGoal, supabase).catch((err) =>
-            console.warn("[Flashcards] Background quiz generation failed:", err)
-          );
+          const quizArgs = { roadmapId: newId, roadmapData, learningGoal, supabaseClient: supabase };
+          setTimeout(() => {
+            generateAllQuizzesInBackground(quizArgs.roadmapId, quizArgs.roadmapData, quizArgs.learningGoal, quizArgs.supabaseClient).catch((err) =>
+              console.warn("[Flashcards] Background quiz generation failed:", err)
+            );
+          }, 500);
         }
         navigate(newId ? `/dashboard/${newId}` : "/my-roadmaps");
         return;
