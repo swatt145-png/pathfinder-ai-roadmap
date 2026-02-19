@@ -133,6 +133,11 @@ interface SerperVideoResult { title: string; link: string; duration?: string; }
 const DISALLOWED_RESOURCE_DOMAINS = [
   "coursera.org",
   "coursera.com",
+  "tiktok.com",
+  "instagram.com",
+  "facebook.com",
+  "x.com",
+  "twitter.com",
 ];
 
 interface CandidateResource {
@@ -198,12 +203,28 @@ function detectResourceType(url: string): CandidateResource["type"] {
 
 function parseDurationToMinutes(duration?: string): number {
   if (!duration) return 15;
-  const hms = duration.match(/(\d+):(\d+):(\d+)/);
-  if (hms) return parseInt(hms[1]) * 60 + parseInt(hms[2]);
-  const ms = duration.match(/(\d+):(\d+)/);
-  if (ms) return parseInt(ms[1]);
-  const min = duration.match(/(\d+)\s*min/i);
-  if (min) return parseInt(min[1]);
+  const raw = duration.trim().toLowerCase();
+  const hms = raw.match(/^(\d+):(\d+):(\d+)$/);
+  if (hms) {
+    const hours = parseInt(hms[1], 10);
+    const minutes = parseInt(hms[2], 10);
+    const seconds = parseInt(hms[3], 10);
+    return Math.max(1, (hours * 60) + minutes + (seconds > 0 ? 1 : 0));
+  }
+  const ms = raw.match(/^(\d+):(\d+)$/);
+  if (ms) {
+    const minutes = parseInt(ms[1], 10);
+    const seconds = parseInt(ms[2], 10);
+    return Math.max(1, minutes + (seconds > 0 ? 1 : 0));
+  }
+  const hrMin = raw.match(/(?:(\d+)\s*h(?:ours?)?)?\s*(?:(\d+)\s*m(?:in(?:ute)?s?)?)?/i);
+  if (hrMin && (hrMin[1] || hrMin[2])) {
+    const hours = parseInt(hrMin[1] || "0", 10);
+    const minutes = parseInt(hrMin[2] || "0", 10);
+    return Math.max(1, (hours * 60) + minutes);
+  }
+  const min = raw.match(/(\d+)\s*min/i);
+  if (min) return Math.max(1, parseInt(min[1], 10));
   return 15;
 }
 
@@ -696,9 +717,15 @@ function isVideoRelevant(title: string, channel: string, moduleTitle: string, to
   const searchContext = `${moduleTitle} ${topic}`.toLowerCase();
   const topicWords = searchContext.split(/\s+/).filter(w => w.length > 3);
   const matchCount = topicWords.filter(w => combined.includes(w)).length;
+  const similarity = computeSemanticSimilarity(searchContext, combined);
+  const hashtagCount = (combined.match(/#[a-z0-9_]+/g) || []).length;
+  const socialShortsSignal = /\b(tiktok|reels|shorts|vlog|trend|viral)\b/i.test(combined);
   if (matchCount >= 2) return true;
   const hasTechSignal = TECH_RELEVANCE_KEYWORDS.some(kw => combined.includes(kw));
   if (hasTechSignal && matchCount >= 1) return true;
+  if (similarity < 0.1 && matchCount === 0) return false;
+  if (hashtagCount >= 3 && similarity < 0.16 && matchCount === 0) return false;
+  if (socialShortsSignal && similarity < 0.2 && matchCount === 0) return false;
   if (matchCount === 0 && !hasTechSignal) return false;
   return true;
 }
@@ -750,7 +777,7 @@ async function enrichRoadmapYouTube(roadmap: any, apiKey: string): Promise<void>
         return false;
       }
       r.title = meta.title || r.title;
-      r.estimated_minutes = meta.durationMinutes || r.estimated_minutes;
+      r.estimated_minutes = Math.max(1, meta.durationMinutes || r.estimated_minutes);
       r.channel = meta.channel;
       r.view_count = meta.viewCount;
       r.like_count = meta.likeCount;

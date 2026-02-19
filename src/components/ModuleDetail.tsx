@@ -17,6 +17,7 @@ interface ModuleDetailProps {
   onUpdateCompletedModule?: (moduleId: string, selfReport: string, notes: string) => void;
   onMarkNotComplete?: (moduleId: string) => void;
   onGoToNextModule?: () => void;
+  nextModuleTitle?: string;
   roadmapId?: string;
   roadmapTopic?: string;
   onGenerateQuiz?: (moduleId: string) => Promise<void>;
@@ -52,6 +53,7 @@ export function ModuleDetail({
   onUpdateCompletedModule,
   onMarkNotComplete,
   onGoToNextModule,
+  nextModuleTitle,
   roadmapId,
   roadmapTopic,
   onGenerateQuiz,
@@ -196,7 +198,7 @@ export function ModuleDetail({
           <button
             onClick={onGoToNextModule}
             aria-label="Go to next module"
-            title="Next module"
+            title={nextModuleTitle ? `Next module: ${nextModuleTitle}` : "Next module"}
             className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-white/10 hover:border-primary/40 hover:bg-white/5"
           >
             <ArrowRight className="w-4 h-4" />
@@ -367,6 +369,17 @@ export function ModuleDetail({
               <Save className="mr-2 h-4 w-4" />
               {saved ? "Saved ✓" : "Save Changes"}
             </Button>
+            {onGoToNextModule && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onGoToNextModule}
+                className="w-full border-white/10 hover:bg-white/5 text-base"
+              >
+                {nextModuleTitle ? `Next Module: ${nextModuleTitle}` : "Go to Next Module"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
 
             <Button
               variant="outline"
@@ -441,6 +454,17 @@ export function ModuleDetail({
             >
               Complete Module ✅
             </Button>
+            {onGoToNextModule && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onGoToNextModule}
+                className="w-full border-white/10 hover:bg-white/5 text-base"
+              >
+                {nextModuleTitle ? `Open Next Module: ${nextModuleTitle}` : "Open Next Module"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
           </div>
         )}
       </div>

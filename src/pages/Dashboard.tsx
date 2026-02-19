@@ -417,6 +417,20 @@ export default function Dashboard() {
   if (!roadmapData) return null;
 
   const getModuleStatus = (mod: Module) => progressMap[mod.id]?.status ?? "not_started";
+  const getNextModule = (current: Module | null): Module | null => {
+    if (!current || !roadmapData?.modules?.length) return null;
+    const byId = roadmapData.modules.findIndex((m) => m.id === current.id);
+    if (byId >= 0) return roadmapData.modules[byId + 1] ?? null;
+
+    const ordered = [...roadmapData.modules].sort((a, b) => {
+      const dayStartDiff = Number(a.day_start || 0) - Number(b.day_start || 0);
+      if (dayStartDiff !== 0) return dayStartDiff;
+      return a.title.localeCompare(b.title);
+    });
+    const byTitle = ordered.findIndex((m) => m.title === current.title);
+    if (byTitle >= 0) return ordered[byTitle + 1] ?? null;
+    return null;
+  };
 
   // All modules are clickable regardless of order — firstIncomplete is just for the "Continue" CTA
   const firstIncomplete = roadmapData.modules.find((m) => getModuleStatus(m) !== "completed");
@@ -647,10 +661,9 @@ export default function Dashboard() {
         <ModuleDetail
           module={selectedModule}
           progress={progressMap[selectedModule.id]}
+          nextModuleTitle={getNextModule(selectedModule)?.title}
           onGoToNextModule={(() => {
-            if (!roadmapData) return undefined;
-            const currentIndex = roadmapData.modules.findIndex((m) => m.id === selectedModule.id);
-            const nextModule = currentIndex >= 0 ? roadmapData.modules[currentIndex + 1] : null;
+            const nextModule = getNextModule(selectedModule);
             if (!nextModule) return undefined;
             return () => setSelectedModule(nextModule);
           })()}

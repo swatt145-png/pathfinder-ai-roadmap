@@ -133,6 +133,11 @@ const DEPRIORITIZE_DOMAINS = [
 const DISALLOWED_RESOURCE_DOMAINS = [
   "coursera.org",
   "coursera.com",
+  "tiktok.com",
+  "instagram.com",
+  "facebook.com",
+  "x.com",
+  "twitter.com",
 ];
 
 // YouTube channel tiers
@@ -234,12 +239,28 @@ function detectResourceType(url: string): CandidateResource["type"] {
 
 function parseDurationToMinutes(duration?: string): number {
   if (!duration) return 15;
-  const hms = duration.match(/(\d+):(\d+):(\d+)/);
-  if (hms) return parseInt(hms[1]) * 60 + parseInt(hms[2]);
-  const ms = duration.match(/(\d+):(\d+)/);
-  if (ms) return parseInt(ms[1]);
-  const min = duration.match(/(\d+)\s*min/i);
-  if (min) return parseInt(min[1]);
+  const raw = duration.trim().toLowerCase();
+  const hms = raw.match(/^(\d+):(\d+):(\d+)$/);
+  if (hms) {
+    const hours = parseInt(hms[1], 10);
+    const minutes = parseInt(hms[2], 10);
+    const seconds = parseInt(hms[3], 10);
+    return Math.max(1, (hours * 60) + minutes + (seconds > 0 ? 1 : 0));
+  }
+  const ms = raw.match(/^(\d+):(\d+)$/);
+  if (ms) {
+    const minutes = parseInt(ms[1], 10);
+    const seconds = parseInt(ms[2], 10);
+    return Math.max(1, minutes + (seconds > 0 ? 1 : 0));
+  }
+  const hrMin = raw.match(/(?:(\d+)\s*h(?:ours?)?)?\s*(?:(\d+)\s*m(?:in(?:ute)?s?)?)?/i);
+  if (hrMin && (hrMin[1] || hrMin[2])) {
+    const hours = parseInt(hrMin[1] || "0", 10);
+    const minutes = parseInt(hrMin[2] || "0", 10);
+    return Math.max(1, (hours * 60) + minutes);
+  }
+  const min = raw.match(/(\d+)\s*min/i);
+  if (min) return Math.max(1, parseInt(min[1], 10));
   return 15;
 }
 
@@ -586,6 +607,23 @@ function computeHybridSimilarity(text1: string, text2: string): number {
   return Math.max(0, Math.min(1, lexical * 0.35 + embedding * 0.65));
 }
 
+function isVideoLikelyOffTopic(title: string, channel: string, ctx: ModuleContext): boolean {
+  const combined = `${title} ${channel}`.toLowerCase();
+  const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`.toLowerCase();
+  const similarity = computeHybridSimilarity(moduleText, combined);
+  const hashtags = (combined.match(/#[a-z0-9_]+/g) || []).length;
+  const socialShortsSignal = /\b(tiktok|reels|shorts|vlog|trend|viral)\b/i.test(combined);
+  const anchorTerms = (ctx.anchorTerms || []).map(a => a.toLowerCase()).filter(a => a.length > 2);
+  const hasAnchor = anchorTerms.length === 0
+    ? false
+    : anchorTerms.some(a => combined.includes(a));
+
+  if (similarity < 0.1 && !hasAnchor) return true;
+  if (hashtags >= 3 && similarity < 0.16 && !hasAnchor) return true;
+  if (socialShortsSignal && similarity < 0.2 && !hasAnchor) return true;
+  return false;
+}
+
 function countUniqueSerperResults(results: { videos: SerperVideoResult[]; web: SerperWebResult[] }): number {
   const unique = new Set<string>();
   for (const v of results.videos || []) {
@@ -875,7 +913,7 @@ function applyStage4Filter(
     // 4.1: Embedding similarity threshold
     const resourceText = `${c.title} ${c.description} ${c.channel || ""}`;
     const similarity = computeHybridSimilarity(moduleText, resourceText);
-    if (similarity < 0.12) continue;
+    if (similarity < 0.14) continue;
 
     // Keep a relaxed pool to prevent starvation when anchors are too narrow/noisy.
     const penalty = computeScopePenalty(c, ctx);
@@ -1062,6 +1100,8 @@ function computeContextFitScoreFallback(candidate: CandidateResource, ctx: Modul
   if (candidate.type === "video" && ytMeta) {
     const channelLower = ytMeta.channel.toLowerCase();
     if (goalChannels.some(ch => channelLower.includes(ch))) qualityFit = Math.min(qualityFit + 3, 15);
+    if (ytMeta.viewCount >= 1_000_000) qualityFit = Math.min(qualityFit + 2, 15);
+    else if (ytMeta.viewCount >= 100_000) qualityFit = Math.min(qualityFit + 1, 15);
   }
 
   const topicOrModuleCert = detectCertificationIntent(`${ctx.topic} ${ctx.moduleTitle}`);
@@ -1740,10 +1780,11 @@ function enrichCandidatesWithYouTube(
     const meta = ytMap.get(videoId);
     if (!meta) return false;
     if (isDiscussionOrMetaResource(c.url, meta.title || c.title, "")) return false;
+    if (isVideoLikelyOffTopic(meta.title || c.title, meta.channel || "", ctx)) return false;
 
     // Enrich
     c.title = meta.title || c.title;
-    c.estimated_minutes = meta.durationMinutes || c.estimated_minutes;
+    c.estimated_minutes = Math.max(1, meta.durationMinutes || c.estimated_minutes);
     c.channel = meta.channel;
     c.view_count = meta.viewCount;
     c.like_count = meta.likeCount;
@@ -2562,6 +2603,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       // If no resources fit budget, pick the shortest candidate
       if (budgetedResources.length === 0 && uniqueResources.length > 0) {
         const shortest = [...uniqueResources]
+          .filter(c => c.is_continuation || (c.estimated_minutes <= moduleBudgetCap * 1.1))
           .filter(c => totalRoadmapMinutes + c.estimated_minutes <= usableMinutes)
           .sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
         if (shortest) {
