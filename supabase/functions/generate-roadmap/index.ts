@@ -182,13 +182,13 @@ const GOAL_RESOURCES: Record<string, GoalResources> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const TIMEOUTS_MS = {
-  serper: 6000,    // generous timeout — Serper is the critical data source; timing out here means 0 resources
-  youtube: 3000,   // proceed without enrichment if YouTube is slow, but give it a fair chance
-  agent1Base: 10000, // base timeout for short roadmaps (1 week)
-  agent1PerWeek: 3000, // extra time per additional week (more modules = more output)
-  agent2: 8000,    // most responses arrive in 3-5s; 8s is generous
-  geminiDirect: 3000, // fast timeout for direct Gemini — fall back to gateway quickly if unreachable
+const TIMEOUTS_MS: Record<string, number> = {
+  serper: 8000,
+  youtube: 4000,
+  agent1Base: 15000,
+  agent1PerWeek: 4000,
+  agent2: 12000,
+  geminiDirect: 5000,
 };
 
 const RETRIEVAL_THRESHOLDS = {
