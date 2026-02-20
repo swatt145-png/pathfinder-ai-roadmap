@@ -30,11 +30,14 @@ const LEARNING_GOALS = [
 ];
 
 const QUICK_STARTS = [
-  { label: "SQL Basics in 2 weeks", topic: "SQL Basics", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
-  { label: "Python for Data Science in 1 month", topic: "Python for Data Science", weeks: 4, hours: 1, skill: "beginner", goal: "hands_on" },
-  { label: "System Design Concepts in 3 weeks", topic: "System Design Concepts", weeks: 3, hours: 1, skill: "intermediate", goal: "conceptual" },
-  { label: "Machine Learning Models in 10 days", topic: "Machine Learning Models", weeks: 1.5, hours: 1.5, skill: "intermediate", goal: "hands_on" },
-  { label: "GRC in Cybersecurity in 1 week", topic: "GRC in Cybersecurity", weeks: 1, hours: 1, skill: "beginner", goal: "quick_overview" },
+  { label: "Python in 2 weeks", topic: "Python", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "Machine Learning in 1 month", topic: "Machine Learning", weeks: 4, hours: 1.5, skill: "intermediate", goal: "hands_on" },
+  { label: "Product Management in 3 weeks", topic: "Product Management", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
+  { label: "UI/UX Design in 2 weeks", topic: "UI/UX Design", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "Finance & Investing in 3 weeks", topic: "Finance & Investing", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
+  { label: "Digital Marketing in 2 weeks", topic: "Digital Marketing", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "Leadership in 1 week", topic: "Leadership", weeks: 1, hours: 1, skill: "intermediate", goal: "quick_overview" },
+  { label: "Cybersecurity in 3 weeks", topic: "Cybersecurity", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
 ];
 
 const LOADING_STEPS = [

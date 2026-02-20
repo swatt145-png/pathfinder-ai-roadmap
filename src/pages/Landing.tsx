@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { HowItWorks } from "@/components/HowItWorks";
 import { ExploreCategories } from "@/components/ExploreCategories";
 import { WhyPathfinder } from "@/components/WhyPathfinder";
-import { PopularSkills } from "@/components/PopularSkills";
+import { PopularSkillsCTA } from "@/components/PopularSkills";
 import logo from "@/assets/logo.png";
 
 export default function Landing() {
@@ -73,7 +73,7 @@ export default function Landing() {
         </div>
 
         <div className="relative z-10 text-center max-w-xl animate-fade-in">
-          <img src={logo} alt="PathFinder logo" className="h-36 w-36 mx-auto mb-5 object-contain" />
+          <img src={logo} alt="PathFinder logo" className="h-36 w-36 mx-auto mb-5 mt-8 object-contain" />
           <h1 className="font-heading text-6xl md:text-7xl font-extrabold gradient-text mb-4">
             PathFinder
           </h1>
@@ -127,10 +127,10 @@ export default function Landing() {
         </div>
       </section>
 
-      <ExploreCategories />
       <HowItWorks />
       <WhyPathfinder />
-      <PopularSkills />
+      <ExploreCategories />
+      <PopularSkillsCTA />
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
     </>

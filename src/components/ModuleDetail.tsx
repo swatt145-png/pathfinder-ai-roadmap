@@ -183,6 +183,8 @@ export function ModuleDetail({
     setQuizGenerationError(null);
     try {
       await onGenerateQuiz(module.id);
+      // Auto-open quiz after successful generation
+      setQuizOpen(true);
     } catch (e: any) {
       setQuizGenerationError(e?.message || "Failed to generate quiz.");
     } finally {
