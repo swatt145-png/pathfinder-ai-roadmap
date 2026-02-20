@@ -366,11 +366,15 @@ function getLevelSearchModifier(level: string): string {
 async function searchSerper(query: string, apiKey: string, type: "search" | "videos", num: number) {
   const url = type === "videos" ? "https://google.serper.dev/videos" : "https://google.serper.dev/search";
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(url, {
       method: "POST",
       headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({ q: query, num }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     if (!res.ok) return [];
     const data = await res.json();
     return type === "videos" ? (data.videos || []) : (data.organic || []);
@@ -565,14 +569,15 @@ async function refreshResourcesForAdaptedRoadmap(
   if (!serperKey || !roadmap?.modules?.length) return;
   const modules = roadmap.modules || [];
   const certificationIntent = detectCertificationIntent(topic);
-  const topicAnchors = await fetchTopicAnchors(topic, level, goal, certificationIntent, serperKey);
   const preferredStack = goal === "hands_on" ? inferPreferredStack(topic, modules) : null;
 
-  const moduleResults = await Promise.all(
-    modules.map((mod: any) => completedModuleIds.has(mod.id)
+  // Run topic anchors and all module searches in parallel
+  const [topicAnchors, ...moduleResults] = await Promise.all([
+    fetchTopicAnchors(topic, level, goal, certificationIntent, serperKey),
+    ...modules.map((mod: any) => completedModuleIds.has(mod.id)
       ? Promise.resolve({ videos: [], web: [] })
-      : fetchModuleResults(mod, topic, level, goal, certificationIntent, serperKey))
-  );
+      : fetchModuleResults(mod, topic, level, goal, certificationIntent, serperKey)),
+  ]);
 
   const usedUrls = new Set<string>();
   const usedVideoIds = new Set<string>();
@@ -910,15 +915,26 @@ Return ONLY valid JSON:
   "recommendation": "adapted_plan",
   "recommendation_reason": "1 sentence"
 }`;
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-preview",
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-        response_format: { type: "json_object" },
-      }),
-    });
+    const aiController = new AbortController();
+    const aiTimeout = setTimeout(() => aiController.abort(), 45000);
+    let response: Response;
+    try {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "google/gemini-3-pro-preview",
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+          response_format: { type: "json_object" },
+        }),
+        signal: aiController.signal,
+      });
+    } catch (e: any) {
+      clearTimeout(aiTimeout);
+      if (e.name === "AbortError") throw new Error("AI call timed out after 45s");
+      throw e;
+    }
+    clearTimeout(aiTimeout);
 
     if (!response.ok) {
       if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -952,6 +968,8 @@ Return ONLY valid JSON:
     const roadmapTopic = roadmap_data?.topic || "Learning Topic";
     const roadmapLevel = roadmap_data?.skill_level || "beginner";
     const completedModuleIdSet = new Set<string>(completedModuleIds);
+    const skipResourceRefresh = !isCrashCourse && !isSplit; // REDISTRIBUTE keeps existing resources
+
     if (result.options) {
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
@@ -967,22 +985,25 @@ Return ONLY valid JSON:
               opt.updated_roadmap.modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10
             ) / 10;
           }
-          await refreshResourcesForAdaptedRoadmap(
-            opt.updated_roadmap,
-            completedModuleIdSet,
-            roadmapTopic,
-            roadmapLevel,
-            effectiveGoal,
-            hrsPerDay,
-            totalCompletedHours + Number(opt.total_remaining_hours || totalAvailableHours),
-            SERPER_API_KEY
-          );
+          // Skip expensive resource re-fetch for REDISTRIBUTE (only timing changes)
+          if (!skipResourceRefresh) {
+            await refreshResourcesForAdaptedRoadmap(
+              opt.updated_roadmap,
+              completedModuleIdSet,
+              roadmapTopic,
+              roadmapLevel,
+              effectiveGoal,
+              hrsPerDay,
+              totalCompletedHours + Number(opt.total_remaining_hours || totalAvailableHours),
+              SERPER_API_KEY
+            );
+          }
         }
       }
     }
 
-    // Enrich YouTube URLs after curation
-    if (YOUTUBE_API_KEY && result.options) {
+    // Enrich YouTube URLs after curation (skip for redistribute — resources unchanged)
+    if (YOUTUBE_API_KEY && !skipResourceRefresh && result.options) {
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
           await enrichRoadmapYouTube(opt.updated_roadmap, YOUTUBE_API_KEY);
