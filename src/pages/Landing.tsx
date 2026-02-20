@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { AuthModal } from "@/components/AuthModal";
 import { Button } from "@/components/ui/button";
-import { Compass, BarChart3, Zap, Brain, Loader2, Search, RefreshCw } from "lucide-react";
+import { Compass, BarChart3, Zap, Brain, Loader2, Search, RefreshCw, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { HowItWorks } from "@/components/HowItWorks";
@@ -13,6 +14,7 @@ export default function Landing() {
   const [authTab, setAuthTab] = useState<"signin" | "signup">("signup");
   const [guestLoading, setGuestLoading] = useState(false);
   const { signInAsGuest } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const features = [
     { icon: Compass, text: "Personalized roadmaps for any tech skill" },
@@ -29,6 +31,15 @@ export default function Landing() {
 
   return (
     <>
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          onClick={toggleTheme}
+          className="w-10 h-10 rounded-full flex items-center justify-center border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-sm"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
+      </div>
       <div className="flex min-h-[80vh] items-center justify-center px-4 pb-0">
         <div className="text-center max-w-xl animate-fade-in">
           <img src={logo} alt="PathFinder logo" className="h-36 w-36 mx-auto mb-5 object-contain" />
@@ -50,7 +61,7 @@ export default function Landing() {
 
           <Button
             onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-            className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 hover:glow-primary"
+            className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 hover:shadow-md"
           >
             Get Started
           </Button>
@@ -62,7 +73,7 @@ export default function Landing() {
             >
               Sign In
             </button>
-            <span className="text-white/20">|</span>
+            <span className="text-border">|</span>
             <button
               onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
               className="text-primary hover:underline font-semibold text-base"

@@ -554,7 +554,7 @@ export default function Dashboard() {
               <span className="text-muted-foreground">{completedCount} of {totalModules} modules</span>
               <span className="text-primary font-heading font-bold">{progressPercent}%</span>
             </div>
-            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-2 bg-muted/50 rounded-full overflow-hidden">
               <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
             </div>
           </div>
@@ -596,7 +596,7 @@ export default function Dashboard() {
             <Button
               type="button"
               onClick={() => setSelectedModule(firstIncomplete)}
-              className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate overflow-hidden hover:glow-primary transition-all"
+              className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate overflow-hidden transition-all"
             >
               <span className="truncate min-w-0">Continue to Next Module: {firstIncomplete.title}</span>
               <ArrowRight className="ml-2 h-4 w-4 shrink-0" />
@@ -633,7 +633,7 @@ export default function Dashboard() {
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-heading font-bold shrink-0 ${
                   status === "completed" ? "bg-success/20 text-success" :
                   status === "in_progress" ? "bg-primary/20 text-primary" :
-                  "bg-white/5 text-muted-foreground"
+                  "bg-muted/50 text-muted-foreground"
                 }`}>
                   {status === "completed" ? "✓" : i + 1}
                 </div>
@@ -645,7 +645,7 @@ export default function Dashboard() {
                   status === "completed" ? "bg-success/20 text-success" :
                   isUpNext ? "bg-primary/20 text-primary border border-primary/40" :
                   status === "in_progress" ? "bg-primary/20 text-primary" :
-                  "bg-white/5 text-muted-foreground"
+                  "bg-muted/50 text-muted-foreground"
                 }`}>
                   {status === "completed" ? "Completed ✓" : isUpNext ? "Up Next →" : status === "in_progress" ? "In Progress" : "Not Started"}
                 </span>
@@ -672,19 +672,19 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 hover:glow-primary transition-all">
+              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
                 <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
               </Button>
-              <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 hover:glow-primary transition-all">
+              <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
                 Revert to Previous Plan
               </Button>
-              <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 hover:glow-primary transition-all">
+              <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
                 Revise My Roadmap
               </Button>
-              <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 hover:glow-primary transition-all">
+              <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
                 Archive Roadmap
               </Button>
-              <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 hover:glow-primary transition-all">
+              <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
                 Create New Roadmap
               </Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-sm h-11">
@@ -710,19 +710,19 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 hover:glow-primary transition-all">
+              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
                 <Settings2 className="mr-2 h-5 w-5" /> Adapt My Plan
               </Button>
-              <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 hover:glow-primary transition-all">
+              <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
                 Revert to Previous Plan
               </Button>
-              <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 hover:glow-primary transition-all">
+              <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
                 Revise My Roadmap
               </Button>
-              <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 hover:glow-primary transition-all">
+              <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
                 Archive Roadmap
               </Button>
-              <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 hover:glow-primary transition-all">
+              <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
                 Create New Roadmap
               </Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-base h-12">
@@ -857,7 +857,7 @@ export default function Dashboard() {
       )}
 
       <Dialog open={archiveConfirmOpen} onOpenChange={setArchiveConfirmOpen}>
-        <DialogContent className="glass-strong border-white/10">
+        <DialogContent className="glass-strong border-border">
           <DialogHeader>
             <DialogTitle className="font-heading">Archive this roadmap?</DialogTitle>
             <DialogDescription>
@@ -865,7 +865,7 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setArchiveConfirmOpen(false)} className="border-white/10">
+            <Button variant="outline" onClick={() => setArchiveConfirmOpen(false)} className="border-border">
               Cancel
             </Button>
             <Button onClick={handleArchiveAndNew} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
@@ -876,7 +876,7 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={revertConfirmOpen} onOpenChange={(open) => { setRevertConfirmOpen(open); if (!open) setRevertMessage(null); }}>
-        <DialogContent className="glass-strong border-white/10">
+        <DialogContent className="glass-strong border-border">
           <DialogHeader>
             <DialogTitle className="font-heading">{revertMessage ? "No previous plan" : "Revert to previous plan?"}</DialogTitle>
             <DialogDescription>
@@ -885,12 +885,12 @@ export default function Dashboard() {
           </DialogHeader>
           <DialogFooter className="gap-2">
             {revertMessage ? (
-              <Button variant="outline" onClick={() => { setRevertConfirmOpen(false); setRevertMessage(null); }} className="border-white/10">
+              <Button variant="outline" onClick={() => { setRevertConfirmOpen(false); setRevertMessage(null); }} className="border-border">
                 OK
               </Button>
             ) : (
               <>
-                <Button variant="outline" onClick={() => setRevertConfirmOpen(false)} className="border-white/10" disabled={reverting}>
+                <Button variant="outline" onClick={() => setRevertConfirmOpen(false)} className="border-border" disabled={reverting}>
                   Cancel
                 </Button>
                 <Button onClick={handleRevertToPreviousPlan} disabled={reverting} className="gradient-primary text-primary-foreground font-heading font-bold">
@@ -903,7 +903,7 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={reviseConfirmOpen} onOpenChange={setReviseConfirmOpen}>
-        <DialogContent className="glass-strong border-white/10">
+        <DialogContent className="glass-strong border-border">
           <DialogHeader>
             <DialogTitle className="font-heading">Revise this roadmap?</DialogTitle>
             <DialogDescription>
@@ -911,7 +911,7 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setReviseConfirmOpen(false)} className="border-white/10">
+            <Button variant="outline" onClick={() => setReviseConfirmOpen(false)} className="border-border">
               Cancel
             </Button>
             <Button
@@ -939,7 +939,7 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="glass-strong border-white/10">
+        <DialogContent className="glass-strong border-border">
           <DialogHeader>
             <DialogTitle className="font-heading">Permanently delete this roadmap?</DialogTitle>
             <DialogDescription>
@@ -947,7 +947,7 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} className="border-white/10" disabled={deleting}>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} className="border-border" disabled={deleting}>
               Cancel
             </Button>
             <Button onClick={handleDeleteRoadmap} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">

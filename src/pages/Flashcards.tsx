@@ -151,11 +151,11 @@ export default function Flashcards() {
                 <button
                   key={i}
                   onClick={() => { setSelectedCard(i); setFlipped(false); }}
-                  className="group relative rounded-xl overflow-hidden bg-card border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
+                  className="group relative rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
                 >
                   <div className={`bg-gradient-to-r ${gradient} px-4 py-2.5 flex items-center justify-between`}>
-                    <span className="text-sm font-heading font-bold text-white truncate max-w-[70%]">{card.module}</span>
-                    <span className="text-xs text-white/70 shrink-0">#{i + 1}</span>
+                    <span className="text-sm font-heading font-bold text-primary-foreground truncate max-w-[70%]">{card.module}</span>
+                    <span className="text-xs text-primary-foreground/70 shrink-0">#{i + 1}</span>
                   </div>
                   <div className="p-4 min-h-[100px] flex flex-col justify-between">
                     <p className="font-heading font-semibold text-sm text-foreground line-clamp-3 mb-3">{card.front}</p>
@@ -200,10 +200,10 @@ export default function Flashcards() {
                   <button
                     key={rm.id}
                     onClick={() => setSelectedRoadmap(rm)}
-                    className="group rounded-xl overflow-hidden bg-card border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
+                    className="group rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
                   >
                     <div className={`bg-gradient-to-r ${grad} px-5 py-4 h-16 flex items-center`}>
-                      <h3 className="font-heading font-bold text-lg text-white line-clamp-2">{rm.topic}</h3>
+                      <h3 className="font-heading font-bold text-lg text-primary-foreground line-clamp-2">{rm.topic}</h3>
                     </div>
                     <div className="p-5">
                       <div className="flex items-center justify-between text-sm text-muted-foreground">

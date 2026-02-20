@@ -98,7 +98,7 @@ export default function MyRoadmaps() {
               <Button
                 variant={showArchived ? "default" : "outline"}
                 onClick={() => setShowArchived(!showArchived)}
-                className={showArchived ? "gradient-primary text-primary-foreground font-heading font-bold" : "border-white/10 font-heading font-bold"}
+                className={showArchived ? "gradient-primary text-primary-foreground font-heading font-bold" : "border-border font-heading font-bold"}
               >
                 <Archive className="mr-2 h-4 w-4" />
                 {showArchived ? "Active" : "Archived"}
@@ -153,7 +153,7 @@ export default function MyRoadmaps() {
                   )}
 
                   <div className="mb-3">
-                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
                       <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">{completed} of {total} modules completed</p>
@@ -165,14 +165,14 @@ export default function MyRoadmaps() {
                         <Button
                           onClick={() => navigate(`/dashboard/${rm.id}`)}
                           variant="outline"
-                          className="flex-1 border-white/10 font-heading font-bold"
+                          className="flex-1 border-border font-heading font-bold"
                         >
                           View <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => setUnarchiveConfirmId(rm.id)}
-                          className="border-white/10 hover:bg-primary/10 hover:text-primary"
+                          className="border-border hover:bg-primary/10 hover:text-primary"
                         >
                           Restore
                         </Button>
@@ -188,7 +188,7 @@ export default function MyRoadmaps() {
                         <Button
                           variant="outline"
                           onClick={() => setArchiveConfirmId(rm.id)}
-                          className="border-white/10 hover:bg-destructive/10 hover:text-destructive"
+                          className="border-border hover:bg-destructive/10 hover:text-destructive"
                         >
                           <Archive className="h-4 w-4" />
                         </Button>
@@ -209,7 +209,7 @@ export default function MyRoadmaps() {
       </div>
 
       <Dialog open={!!archiveConfirmId} onOpenChange={() => setArchiveConfirmId(null)}>
-        <DialogContent className="glass-strong border-white/10">
+        <DialogContent className="glass-strong border-border">
           <DialogHeader>
             <DialogTitle className="font-heading">Archive this roadmap?</DialogTitle>
             <DialogDescription>
@@ -217,7 +217,7 @@ export default function MyRoadmaps() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setArchiveConfirmId(null)} className="border-white/10">
+            <Button variant="outline" onClick={() => setArchiveConfirmId(null)} className="border-border">
               Cancel
             </Button>
             <Button onClick={() => archiveConfirmId && handleArchive(archiveConfirmId)} className="gradient-primary text-primary-foreground font-heading font-bold">
@@ -228,7 +228,7 @@ export default function MyRoadmaps() {
       </Dialog>
 
       <Dialog open={!!unarchiveConfirmId} onOpenChange={() => setUnarchiveConfirmId(null)}>
-        <DialogContent className="glass-strong border-white/10">
+        <DialogContent className="glass-strong border-border">
           <DialogHeader>
             <DialogTitle className="font-heading">Restore this roadmap?</DialogTitle>
             <DialogDescription>
@@ -236,7 +236,7 @@ export default function MyRoadmaps() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setUnarchiveConfirmId(null)} className="border-white/10">
+            <Button variant="outline" onClick={() => setUnarchiveConfirmId(null)} className="border-border">
               Cancel
             </Button>
             <Button onClick={() => unarchiveConfirmId && handleUnarchive(unarchiveConfirmId)} className="gradient-primary text-primary-foreground font-heading font-bold">

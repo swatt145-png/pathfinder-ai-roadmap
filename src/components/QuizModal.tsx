@@ -84,7 +84,7 @@ export function QuizModal({ quiz, moduleTitle, onClose, onDone }: QuizModalProps
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative glass-strong max-w-md w-full p-6 animate-fade-in">
         <h3 className="font-heading font-bold text-sm mb-1">{moduleTitle} Quiz</h3>
-        <div className="h-1 bg-white/5 rounded-full mb-6 overflow-hidden">
+        <div className="h-1 bg-muted/50 rounded-full mb-6 overflow-hidden">
           <div className="h-full gradient-primary transition-all" style={{ width: `${((currentQ + 1) / quiz.length) * 100}%` }} />
         </div>
 
@@ -92,7 +92,7 @@ export function QuizModal({ quiz, moduleTitle, onClose, onDone }: QuizModalProps
 
         <div className="space-y-2 mb-6">
           {q.options.map((opt) => {
-            let cls = "glass p-3 text-sm text-left w-full transition-all hover:bg-white/5";
+            let cls = "glass p-3 text-sm text-left w-full transition-all hover:bg-muted/50";
             if (submitted) {
               if (opt === q.correct_answer) cls = "border border-success bg-success/10 p-3 text-sm text-left w-full rounded-2xl";
               else if (opt === selected && isWrong) cls = "border border-destructive bg-destructive/10 p-3 text-sm text-left w-full rounded-2xl";

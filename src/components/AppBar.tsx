@@ -26,7 +26,7 @@ export function AppBar() {
   }, [user]);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/5 bg-background/80 backdrop-blur-lg">
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 md:px-6 border-b border-border bg-background">
       <Link
         to="/home"
         className="flex items-center gap-2 font-heading font-bold text-xl md:text-2xl gradient-text focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
@@ -37,7 +37,7 @@ export function AppBar() {
       <div className="flex items-center gap-3">
         <button
           onClick={toggleTheme}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          className="w-9 h-9 rounded-full flex items-center justify-center border border-border text-foreground hover:bg-muted transition-colors"
           aria-label="Toggle theme"
         >
           {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -48,7 +48,7 @@ export function AppBar() {
               {initial}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="glass-strong border-white/10">
+          <DropdownMenuContent align="end" className="glass-strong border-border">
             <DropdownMenuItem onClick={signOut} className="text-muted-foreground hover:text-foreground cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" /> Sign Out
             </DropdownMenuItem>

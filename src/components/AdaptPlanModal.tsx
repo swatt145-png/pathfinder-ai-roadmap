@@ -147,11 +147,11 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
                 variant="outline"
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 border-white/10 hover:bg-white/5"
+                className="flex-1 border-border hover:bg-muted"
               >
                 Skip for now
               </Button>
-              <Button onClick={handleRecalculate} disabled={loading} className="flex-1 gradient-primary text-primary-foreground font-heading font-bold h-12 hover:glow-primary transition-all">
+              <Button onClick={handleRecalculate} disabled={loading} className="flex-1 gradient-primary text-primary-foreground font-heading font-bold h-12 transition-all">
                 {loading ? <><Loader2 className="animate-spin mr-2" /> Recalculating...</> : "Recalculate"}
               </Button>
             </div>
@@ -164,7 +164,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
               <button
                 key={opt.id}
                 onClick={() => setSelectedOption(opt.id)}
-                className={`w-full text-left p-4 transition-all rounded-xl border-2 ${selectedOption === opt.id ? "border-primary bg-primary/20 shadow-lg shadow-primary/30 ring-2 ring-primary/40" : "glass border-transparent hover:bg-white/5"}`}
+                className={`w-full text-left p-4 transition-all rounded-xl border-2 ${selectedOption === opt.id ? "border-primary bg-primary/20 shadow-lg shadow-primary/30 ring-2 ring-primary/40" : "glass border-transparent hover:bg-muted"}`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`font-heading font-bold text-sm ${selectedOption === opt.id ? "text-primary" : ""}`}>{opt.label}</span>
@@ -182,7 +182,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
 
             <button
               onClick={() => setSelectedOption("keep_current")}
-              className={`w-full text-left p-4 transition-all rounded-xl border-2 ${selectedOption === "keep_current" ? "border-primary bg-primary/20 shadow-lg shadow-primary/30 ring-2 ring-primary/40" : "glass border-transparent hover:bg-white/5"}`}
+              className={`w-full text-left p-4 transition-all rounded-xl border-2 ${selectedOption === "keep_current" ? "border-primary bg-primary/20 shadow-lg shadow-primary/30 ring-2 ring-primary/40" : "glass border-transparent hover:bg-muted"}`}
             >
               <span className={`font-heading font-bold text-sm ${selectedOption === "keep_current" ? "text-primary" : ""}`}>Keep Current Plan</span>
               <p className="text-xs text-muted-foreground mt-1">No changes — continue with your existing roadmap as-is.</p>
@@ -191,11 +191,11 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
             <p className="text-xs text-muted-foreground">💡 {result.recommendation_reason}</p>
 
             {selectedOption === "keep_current" ? (
-              <Button onClick={onClose} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 hover:glow-primary transition-all">
+              <Button onClick={onClose} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 transition-all">
                 Keep My Plan
               </Button>
             ) : (
-              <Button onClick={handleApply} disabled={!selectedOption} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 disabled:opacity-50 hover:glow-primary transition-all">
+              <Button onClick={handleApply} disabled={!selectedOption} className="w-full gradient-primary text-primary-foreground font-heading font-bold h-12 disabled:opacity-50 transition-all">
                 Apply Adapted Plan
               </Button>
             )}

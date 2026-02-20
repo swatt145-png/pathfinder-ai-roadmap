@@ -71,8 +71,8 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-strong sm:max-w-md border-white/10 p-0 gap-0">
-        <div className="flex border-b border-white/10">
+      <DialogContent className="glass-strong sm:max-w-md border-border p-0 gap-0">
+        <div className="flex border-b border-border">
           <button
             onClick={() => switchTab("signup")}
             className={`flex-1 py-4 text-sm font-heading font-semibold transition-colors ${tab === "signup" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"}`}
@@ -106,7 +106,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your name"
                     required
-                    className="bg-white/5 border-white/10 focus:border-primary"
+                    className="bg-muted/50 border-border focus:border-primary"
                   />
                 </div>
               )}
@@ -118,7 +118,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="bg-white/5 border-white/10 focus:border-primary"
+                  className="bg-muted/50 border-border focus:border-primary"
                 />
               </div>
               <div className="space-y-2">
@@ -130,7 +130,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                   placeholder="Min 6 characters"
                   required
                   minLength={6}
-                  className="bg-white/5 border-white/10 focus:border-primary"
+                  className="bg-muted/50 border-border focus:border-primary"
                 />
               </div>
               {tab === "signin" && (

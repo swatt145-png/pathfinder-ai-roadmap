@@ -192,8 +192,8 @@ export function ModuleDetail({
   return (
     <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
       {/* Top bar */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 p-4 border-b border-white/10 bg-background/90 backdrop-blur-lg">
-        <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-white/5">
+      <div className="sticky top-0 z-10 flex items-center gap-3 p-4 border-b border-border bg-background">
+        <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted/50">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -206,7 +206,7 @@ export function ModuleDetail({
               onClick={onGoToNextModule}
               aria-label="Go to next module"
               title={nextModuleTitle ? `Next module: ${nextModuleTitle}` : "Next module"}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-white/10 hover:border-primary/40 hover:bg-white/5"
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-border hover:border-primary/40 hover:bg-muted/50"
             >
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -216,7 +216,7 @@ export function ModuleDetail({
               onClick={onGoToPrevModule}
               aria-label="Go to previous module"
               title={prevModuleTitle ? `Previous module: ${prevModuleTitle}` : "Previous module"}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-white/10 hover:border-primary/40 hover:bg-white/5"
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-border hover:border-primary/40 hover:bg-muted/50"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -287,7 +287,7 @@ export function ModuleDetail({
               return (
                 <div
                   key={i}
-                  className={`glass-strong p-4 flex items-start gap-3 transition-all border ${isChecked ? "opacity-50 border-success/20" : "border-white/10 hover:border-primary/30"}`}
+                  className={`glass-strong p-4 flex items-start gap-3 transition-all border ${isChecked ? "opacity-50 border-success/20" : "border-border hover:border-primary/30"}`}
                 >
                   <button
                     onClick={() => toggleResource(r.title)}
@@ -326,13 +326,13 @@ export function ModuleDetail({
                     <div className="mt-3 flex items-center gap-2">
                       <button
                         onClick={() => { void toggleLiked(r.url); }}
-                        className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.liked ? "border-success/40 text-success bg-success/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.liked ? "border-success/40 text-success bg-success/10" : "border-border text-muted-foreground hover:text-foreground"}`}
                       >
                         Like
                       </button>
                       <button
                         onClick={() => { void toggleNotRelevant(r.url); }}
-                        className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.relevant === false ? "border-destructive/40 text-destructive bg-destructive/10" : "border-white/10 text-muted-foreground hover:text-foreground"}`}
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${feedbackByUrl[r.url]?.relevant === false ? "border-destructive/40 text-destructive bg-destructive/10" : "border-border text-muted-foreground hover:text-foreground"}`}
                       >
                         Not relevant
                       </button>
@@ -355,11 +355,11 @@ export function ModuleDetail({
             onChange={(e) => handleNotesChange(e.target.value)}
             onBlur={handleNotesSave}
             placeholder="Write your notes here — what was easy, difficult, or anything for your reference..."
-            className="min-h-[120px] bg-white/5 border-white/10 focus:border-primary resize-y text-base"
+            className="min-h-[120px] bg-muted/50 border-border focus:border-primary resize-y text-base"
           />
         </div>
 
-        <hr className="border-white/10" />
+        <hr className="border-border" />
 
         {/* Check-in */}
         {isCompleted ? (
@@ -384,7 +384,7 @@ export function ModuleDetail({
                 <button
                   key={opt.value}
                   onClick={() => setSelfReport(opt.value)}
-                  className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-white/5"}`}
+                  className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-muted/50"}`}
                 >
                   <opt.icon className="w-7 h-7 mx-auto" />
                   <span className="text-base mt-1 block font-heading">{opt.label}</span>
@@ -402,7 +402,7 @@ export function ModuleDetail({
             <Button
               variant="outline"
               onClick={() => onMarkNotComplete?.(module.id)}
-              className="w-full border-white/10 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 text-muted-foreground"
+              className="w-full border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 text-muted-foreground"
             >
               <Undo2 className="mr-2 h-4 w-4" />
               Mark Not Complete
@@ -423,7 +423,7 @@ export function ModuleDetail({
                 <button
                   key={opt.value}
                   onClick={() => setSelfReport(opt.value)}
-                  className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-white/5"}`}
+                  className={`p-3 rounded-xl border text-center transition-all ${selfReport === opt.value ? opt.color : "glass hover:bg-muted/50"}`}
                 >
                   <opt.icon className="w-7 h-7 mx-auto" />
                   <span className="text-base mt-1 block font-heading">{opt.label}</span>
@@ -436,7 +436,7 @@ export function ModuleDetail({
                 <Button
                   variant="outline"
                   onClick={() => setQuizOpen(true)}
-                  className="w-full border-white/10 hover:bg-white/5 text-base"
+                  className="w-full border-border hover:bg-muted/50 text-base"
                 >
                   {quizScore != null ? `Quiz Score: ${quizScore}% — Retake` : "Take Quiz"}
                 </Button>
@@ -451,7 +451,7 @@ export function ModuleDetail({
                   variant="outline"
                   onClick={handleGenerateQuiz}
                   disabled={generatingQuiz}
-                  className="w-full border-white/10 hover:bg-white/5 text-base"
+                  className="w-full border-border hover:bg-muted/50 text-base"
                 >
                   {generatingQuiz ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   {generatingQuiz ? "Generating Quiz..." : "Generate Quiz"}
@@ -468,7 +468,7 @@ export function ModuleDetail({
 
             <Button
               onClick={handleComplete}
-              className="w-full h-12 gradient-primary text-primary-foreground font-heading font-bold hover:glow-primary transition-all"
+              className="w-full h-12 gradient-primary text-primary-foreground font-heading font-bold transition-all"
             >
               Complete Module ✅
             </Button>

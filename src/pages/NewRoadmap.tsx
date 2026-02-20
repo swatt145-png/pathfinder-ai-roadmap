@@ -472,7 +472,7 @@ export default function NewRoadmap() {
               {activeCount > 0 && (
                 <Button
                   onClick={() => navigate("/my-roadmaps")}
-                  className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
+                  className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:shadow-md"
                 >
                   <BookOpen className="mr-2 h-4 w-4" />
                   My Roadmaps
@@ -480,7 +480,7 @@ export default function NewRoadmap() {
               )}
               <Button
                 onClick={() => navigate("/flashcards")}
-                className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
+                className="h-12 px-6 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:shadow-md"
               >
                 <Layers className="mr-2 h-4 w-4" />
                 Flashcards
@@ -516,7 +516,7 @@ export default function NewRoadmap() {
                     <button
                       key={g.value}
                       onClick={() => setLearningGoal(g.value)}
-                      className={`glass-blue p-3 text-center transition-all ${learningGoal === g.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-accent/10"}`}
+                      className={`glass-blue p-3 text-center transition-all ${learningGoal === g.value ? "border-primary bg-primary/10 shadow-md shadow-primary/20" : "hover:bg-accent/10"}`}
                     >
                       <g.icon className={`w-5 h-5 mx-auto mb-1 ${learningGoal === g.value ? "text-primary" : "text-muted-foreground"}`} />
                       <span className="block text-xs sm:text-sm font-heading font-semibold">{g.label}</span>
@@ -535,7 +535,7 @@ export default function NewRoadmap() {
                     <button
                       key={s.value}
                       onClick={() => setSkillLevel(s.value)}
-                      className={`glass-blue p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 glow-primary" : "hover:bg-accent/10"}`}
+                      className={`glass-blue p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 shadow-md shadow-primary/20" : "hover:bg-accent/10"}`}
                     >
                       <span className="block text-xs sm:text-base font-heading font-semibold truncate">{s.label}</span>
                       {skillLevel === s.value && <span className="block text-xs sm:text-sm text-muted-foreground mt-1">{s.desc}</span>}
@@ -553,18 +553,18 @@ export default function NewRoadmap() {
                       <>Target {timelineUnit}: <span className="text-primary font-heading font-bold">{timelineValue}</span></>
                     )}
                   </Label>
-                  <div className="flex rounded-lg overflow-hidden border border-white/10">
+                  <div className="flex rounded-lg overflow-hidden border border-border">
                     <button
                       onClick={() => { setTimelineUnit("hours"); setTotalHoursOnly(3); }}
-                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "hours" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "hours" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}`}
                     >Hours</button>
                     <button
                       onClick={() => { setTimelineUnit("days"); setTimelineValue(7); }}
-                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "days" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "days" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}`}
                     >Days</button>
                     <button
                       onClick={() => { setTimelineUnit("weeks"); setTimelineValue(4); }}
-                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "weeks" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/5"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "weeks" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}`}
                     >Weeks</button>
                   </div>
                 </div>
@@ -633,7 +633,7 @@ export default function NewRoadmap() {
                 <Button
                   onClick={handleGenerate}
                   disabled={!topic.trim()}
-                  className="w-full h-16 text-xl font-heading font-bold gradient-primary text-primary-foreground hover:glow-primary transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+                  className="w-full h-16 text-xl font-heading font-bold gradient-primary text-primary-foreground hover:shadow-md transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
                 >
                   Generate My Roadmap ✨
                 </Button>
@@ -659,7 +659,7 @@ export default function NewRoadmap() {
                 {activeCount > 0 && (
                   <Button
                     onClick={() => navigate("/my-roadmaps")}
-                    className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
+                    className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:shadow-md"
                   >
                     <BookOpen className="mr-2 h-4 w-4" />
                     My Roadmaps
@@ -667,7 +667,7 @@ export default function NewRoadmap() {
                 )}
                 <Button
                   onClick={() => navigate("/flashcards")}
-                  className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:glow-primary"
+                  className="flex-1 h-12 text-sm font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-[1.02] hover:shadow-md"
                 >
                   <Layers className="mr-2 h-4 w-4" />
                   Flashcards

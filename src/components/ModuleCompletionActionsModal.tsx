@@ -38,7 +38,7 @@ export function ModuleCompletionActionsModal({
             type="button"
             variant="outline"
             onClick={onReturnToRoadmap}
-            className="w-full border-white/10 hover:bg-white/5"
+            className="w-full border-border hover:bg-muted"
           >
             Return to Roadmap
           </Button>

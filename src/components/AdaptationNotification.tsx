@@ -80,7 +80,7 @@ export function AdaptationNotification({
             variant="outline"
             onClick={onAcceptNoScheduleChange}
             disabled={saving || !proposed}
-            className="w-full border-white/10 hover:bg-white/5"
+            className="w-full border-border hover:bg-muted"
           >
             {saving ? "Applying..." : "Accept (Keep Schedule)"}
           </Button>
@@ -89,7 +89,7 @@ export function AdaptationNotification({
             variant="outline"
             onClick={onKeepCurrent}
             disabled={saving}
-            className="w-full border-white/10 hover:bg-white/5"
+            className="w-full border-border hover:bg-muted"
           >
             Keep Current Plan
           </Button>

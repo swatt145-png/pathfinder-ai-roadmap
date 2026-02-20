@@ -73,7 +73,7 @@ export function RoadmapReviewModal({ roadmapData, completedCount, createdAt, pro
                   <span className={`text-xs px-2 py-0.5 rounded-full font-heading font-semibold shrink-0 ml-2 ${
                     isCompleted ? "bg-success/20 text-success" :
                     isNext ? "bg-primary/20 text-primary border border-primary/40" :
-                    "bg-white/5 text-muted-foreground"
+                    "bg-muted/50 text-muted-foreground"
                   }`}>
                     {isCompleted ? "Completed ✓" : isNext ? "Up Next →" : "Pending"}
                   </span>
@@ -87,7 +87,7 @@ export function RoadmapReviewModal({ roadmapData, completedCount, createdAt, pro
           })}
         </div>
 
-        <Button type="button" variant="outline" onClick={onClose} className="w-full border-white/10 hover:bg-white/5">
+        <Button type="button" variant="outline" onClick={onClose} className="w-full border-border hover:bg-muted">
           Close
         </Button>
       </div>
