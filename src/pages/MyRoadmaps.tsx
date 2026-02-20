@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import WavyBackground from "@/components/WavyBackground";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,6 +84,7 @@ export default function MyRoadmaps() {
   return (
     <>
       <AppBar />
+      <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">

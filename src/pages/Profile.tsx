@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2 } from "lucide-react";
+import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import WavyBackground from "@/components/WavyBackground";
 import { toast } from "@/hooks/use-toast";
 
 export default function Profile() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
@@ -69,8 +72,17 @@ export default function Profile() {
   return (
     <>
       <AppBar />
+      <WavyBackground />
       <div className="min-h-screen pt-20 pb-24 px-4 md:px-12">
-        <div className="max-w-2xl mx-auto animate-fade-in">
+        <div className="max-w-2xl mx-auto animate-fade-in relative">
+          {/* Close button */}
+          <button
+            onClick={() => navigate(-1)}
+            className="absolute top-0 right-0 w-9 h-9 rounded-full flex items-center justify-center border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            aria-label="Close profile"
+          >
+            <X className="h-5 w-5" />
+          </button>
           {/* Avatar & header */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-20 h-20 rounded-full gradient-primary flex items-center justify-center text-3xl font-heading font-bold text-primary-foreground mb-4">

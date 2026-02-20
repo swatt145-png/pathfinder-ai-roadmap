@@ -1,14 +1,20 @@
 import { useState, useEffect } from "react";
-import NeonDogAnimation from "@/components/NeonDogAnimation";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
+import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, BookOpen, Layers, BookOpenCheck, Code2, Zap, GraduationCap, Target, LayoutDashboard, Search, ClipboardCheck, Sparkles } from "lucide-react";
+import { Loader2, BookOpen, Layers, BookOpenCheck, Code2, Zap, GraduationCap } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
+import bookKnowledgeImg from "@/assets/loading/book-knowledge.jpg";
+import stageGoalImg from "@/assets/loading/stage-goal.jpg";
+import stageCurriculumImg from "@/assets/loading/stage-curriculum.jpg";
+import stageResourcesImg from "@/assets/loading/stage-resources.jpg";
+import stageQuizImg from "@/assets/loading/stage-quiz.jpg";
+import stageFinalizeImg from "@/assets/loading/stage-finalize.jpg";
 
 const SKILLS = [
   { value: "beginner", label: "Beginner", desc: "I'm starting from scratch" },
@@ -338,11 +344,11 @@ export default function NewRoadmap() {
   }
 
   const CIRCULAR_STEPS = [
-    { icon: Target, label: "Analyzing goal" },
-    { icon: LayoutDashboard, label: "Building curriculum" },
-    { icon: Search, label: "Curating resources" },
-    { icon: ClipboardCheck, label: "Quiz setup" },
-    { icon: Sparkles, label: "Finalizing roadmap" },
+    { image: stageGoalImg, label: "Analyzing goal" },
+    { image: stageCurriculumImg, label: "Building curriculum" },
+    { image: stageResourcesImg, label: "Curating resources" },
+    { image: stageQuizImg, label: "Quiz setup" },
+    { image: stageFinalizeImg, label: "Finalizing roadmap" },
   ];
 
   if (loading) {
@@ -352,12 +358,13 @@ export default function NewRoadmap() {
     return (
       <>
         <AppBar />
+        <WavyBackground />
         <div className="flex min-h-screen items-center justify-center px-4 pt-14 overflow-hidden">
           <div className="flex flex-col items-center animate-fade-in">
             <div className="relative" style={{ width: 480, height: 480 }}>
-            {/* Center dog animation */}
+            {/* Center book image */}
             <div className="absolute inset-0 flex items-center justify-center z-10">
-              <NeonDogAnimation size="large" />
+              <img src={bookKnowledgeImg} alt="Knowledge book" className="w-48 h-48 md:w-56 md:h-56 rounded-full object-cover shadow-2xl shadow-primary/20 border-2 border-primary/20" />
             </div>
 
             {/* Connecting circle track + arrows */}
@@ -396,7 +403,7 @@ export default function NewRoadmap() {
               })}
             </svg>
 
-            {/* Step icons in circle */}
+            {/* Step images in circle */}
             {CIRCULAR_STEPS.map((step, i) => {
               const angle = (startAngle + (i * 360) / 5) * (Math.PI / 180);
               const x = Math.cos(angle) * radius;
@@ -415,19 +422,15 @@ export default function NewRoadmap() {
                   }}
                 >
                   <div
-                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-700 ${
+                    className={`w-12 h-12 rounded-full overflow-hidden transition-all duration-700 ${
                       isDone
-                        ? "bg-primary/20 border-2 border-primary shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
+                        ? "border-2 border-primary shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
                         : isActive
-                        ? "bg-primary/15 border-2 border-primary animate-pulse shadow-[0_0_18px_hsl(var(--primary)/0.5)]"
-                        : "bg-muted/30 border border-muted-foreground/20"
+                        ? "border-2 border-primary animate-pulse shadow-[0_0_18px_hsl(var(--primary)/0.5)]"
+                        : "border border-muted-foreground/20 opacity-40"
                     }`}
                   >
-                    <step.icon
-                      className={`w-5 h-5 transition-all duration-700 ${
-                        isDone ? "text-primary" : isActive ? "text-primary" : "text-muted-foreground/30"
-                      }`}
-                    />
+                    <img src={step.image} alt={step.label} className="w-full h-full object-cover" />
                   </div>
                   <span
                     className={`text-xs font-heading font-semibold text-center whitespace-nowrap transition-all duration-700 ${
@@ -457,6 +460,7 @@ export default function NewRoadmap() {
   return (
     <>
       <AppBar />
+      <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-7xl mx-auto">
         <div className="animate-fade-in">
           {/* Header row with greeting + nav buttons */}
