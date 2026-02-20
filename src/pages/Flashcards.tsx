@@ -150,24 +150,49 @@ export default function Flashcards() {
               <p className="text-muted-foreground">No flashcards available for this roadmap yet.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cards.map((card, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setSelectedCard(i); setFlipped(false); }}
-                  className="group relative rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
-                >
-                  <div className={`bg-gradient-to-r ${gradient} px-4 py-2.5 flex items-center justify-between`}>
-                    <span className="text-sm font-heading font-bold text-primary-foreground truncate max-w-[70%]">{card.module}</span>
-                    <span className="text-xs text-primary-foreground/70 shrink-0">#{i + 1}</span>
-                  </div>
-                  <div className="p-4 min-h-[100px] flex flex-col justify-between">
-                    <p className="font-heading font-semibold text-sm text-foreground line-clamp-3 mb-3">{card.front}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{card.back.split("\n")[0]}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
+            (() => {
+              // Group cards by module
+              const moduleGroups: { module: string; cards: { card: FlashCard; globalIndex: number }[] }[] = [];
+              cards.forEach((card, i) => {
+                const existing = moduleGroups.find(g => g.module === card.module);
+                if (existing) {
+                  existing.cards.push({ card, globalIndex: i });
+                } else {
+                  moduleGroups.push({ module: card.module, cards: [{ card, globalIndex: i }] });
+                }
+              });
+
+              return (
+                <div className="space-y-8">
+                  {moduleGroups.map((group, gi) => {
+                    const moduleGradient = CARD_COLORS[gi % CARD_COLORS.length];
+                    return (
+                      <div key={group.module}>
+                        <h3 className="font-heading font-bold text-lg text-foreground mb-3">{group.module}</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {group.cards.map(({ card, globalIndex }) => (
+                            <button
+                              key={globalIndex}
+                              onClick={() => { setSelectedCard(globalIndex); setFlipped(false); }}
+                              className="group relative rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
+                            >
+                              <div className={`bg-gradient-to-r ${moduleGradient} px-4 py-2.5 flex items-center justify-between`}>
+                                <span className="text-sm font-heading font-bold text-primary-foreground truncate max-w-[70%]">{card.module}</span>
+                                <span className="text-xs text-primary-foreground/70 shrink-0">#{globalIndex + 1}</span>
+                              </div>
+                              <div className="p-4 min-h-[100px] flex flex-col justify-between">
+                                <p className="font-heading font-semibold text-sm text-foreground line-clamp-3 mb-3">{card.front}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-2">{card.back.split("\n")[0]}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
           )}
         </div>
       </>

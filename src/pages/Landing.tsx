@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { HowItWorks } from "@/components/HowItWorks";
 import { ExploreCategories } from "@/components/ExploreCategories";
 import { WhyPathfinder } from "@/components/WhyPathfinder";
-import { PopularSkillsCTA } from "@/components/PopularSkills";
+
 import logo from "@/assets/logo.png";
 
 export default function Landing() {
@@ -130,7 +130,6 @@ export default function Landing() {
       <HowItWorks />
       <WhyPathfinder />
       <ExploreCategories />
-      <PopularSkillsCTA />
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
     </>
