@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import WavyBackground from "@/components/WavyBackground";
 import { ArrowLeft, ArrowRight, ExternalLink, CheckSquare, Square, ThumbsUp, Minus, ThumbsDown, Save, Target, BookOpen, StickyNote, MessageCircleQuestion, Video, FileText, BookMarked, Code2, Dumbbell, Undo2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -191,6 +192,7 @@ export function ModuleDetail({
 
   return (
     <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
+      <WavyBackground />
       {/* Top bar */}
       <div className="sticky top-0 z-10 flex items-center gap-3 p-4 border-b border-border bg-background">
         <button onClick={onClose} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted/50">

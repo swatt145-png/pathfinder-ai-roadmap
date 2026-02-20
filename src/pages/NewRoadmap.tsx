@@ -352,7 +352,7 @@ export default function NewRoadmap() {
   ];
 
   if (loading) {
-    const radius = 170;
+    const radius = 190;
     const startAngle = -90;
 
     return (
@@ -361,10 +361,10 @@ export default function NewRoadmap() {
         <WavyBackground />
         <div className="flex min-h-screen items-center justify-center px-4 pt-14 overflow-hidden">
           <div className="flex flex-col items-center animate-fade-in">
-            <div className="relative" style={{ width: 480, height: 480 }}>
+            <div className="relative" style={{ width: 520, height: 520 }}>
             {/* Center book image */}
             <div className="absolute inset-0 flex items-center justify-center z-10">
-              <img src={bookKnowledgeImg} alt="Knowledge book" className="w-48 h-48 md:w-56 md:h-56 rounded-full object-cover shadow-2xl shadow-primary/20 border-2 border-primary/20" />
+              <img src={bookKnowledgeImg} alt="Knowledge book" className="w-40 h-40 md:w-48 md:h-48 rounded-full object-cover shadow-2xl shadow-primary/20 border-2 border-primary/20" />
             </div>
 
             {/* Connecting circle track + arrows */}
@@ -422,7 +422,7 @@ export default function NewRoadmap() {
                   }}
                 >
                   <div
-                    className={`w-12 h-12 rounded-full overflow-hidden transition-all duration-700 ${
+                    className={`w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden transition-all duration-700 ${
                       isDone
                         ? "border-2 border-primary shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
                         : isActive
