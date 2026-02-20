@@ -55,7 +55,7 @@ export function ExploreCategories() {
           visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`
           }>
 
-          <h2 className="font-heading text-3xl md:text-5xl font-bold gradient-text mb-3">From Technology to Business
+          <h2 className="font-heading text-3xl md:text-5xl font-bold gradient-text mb-3">Your Personalized Path to Any Field!
 
           </h2>
           <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">
