@@ -24,7 +24,7 @@ const SKILLS = [
 
 const LEARNING_GOALS = [
   { value: "conceptual", label: "Conceptual", icon: BookOpenCheck, desc: "Understand the theory, concepts, and mental models" },
-  { value: "hands_on", label: "Hands-On", icon: Code2, desc: "Build things, write code, solve problems" },
+  { value: "hands_on", label: "Practice", icon: Code2, desc: "Build things, write code, solve problems" },
   { value: "quick_overview", label: "Quick Overview", icon: Zap, desc: "Fast high-level understanding for a demo or meeting" },
   { value: "deep_mastery", label: "Deep Mastery", icon: GraduationCap, desc: "Comprehensive, in-depth expertise" },
 ];
