@@ -561,11 +561,11 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-3 gap-3 text-center text-base">
             <div className="glass-blue p-3">
-              <Clock className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
+              <div className="icon-circle mx-auto mb-1"><Clock className="w-5 h-5 text-primary" /></div>
               <span className="text-sm text-muted-foreground">{completedHours.toFixed(0)}h / {totalHours.toFixed(0)}h</span>
             </div>
             <div className="glass-blue p-3">
-              <BookOpen className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
+              <div className="icon-circle mx-auto mb-1"><BookOpen className="w-5 h-5 text-primary" /></div>
               <span className="text-sm text-muted-foreground">
                 {(() => {
                   const totalDays = roadmapData.timeline_weeks * 7;
@@ -582,7 +582,7 @@ export default function Dashboard() {
               </span>
             </div>
             <div className="glass-blue p-3">
-              <Flame className="w-5 h-5 mx-auto mb-1 text-warning" />
+              <div className="icon-circle mx-auto mb-1" style={{ background: 'hsl(var(--warning) / 0.1)', borderColor: 'hsl(var(--warning) / 0.2)' }}><Flame className="w-5 h-5 text-warning" /></div>
               <span className="text-sm text-muted-foreground">
                 {completedCount > 0 ? `${completedCount} module streak 🔥` : "Start your streak!"}
               </span>
@@ -672,19 +672,19 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
+              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all glow-primary">
                 <Settings2 className="mr-2 h-4 w-4" /> Adapt My Plan
               </Button>
-              <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
+              <Button onClick={() => setRevertConfirmOpen(true)} variant="outline" className="w-full font-heading font-bold text-sm h-11 border-border hover:border-primary/40 hover:bg-primary/10 transition-all">
                 Revert to Previous Plan
               </Button>
-              <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
+              <Button onClick={() => setReviseConfirmOpen(true)} variant="outline" className="w-full font-heading font-bold text-sm h-11 border-border hover:border-primary/40 hover:bg-primary/10 transition-all">
                 Revise My Roadmap
               </Button>
-              <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
+              <Button onClick={() => setArchiveConfirmOpen(true)} variant="secondary" className="w-full font-heading font-bold text-sm h-11 transition-all">
                 Archive Roadmap
               </Button>
-              <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-sm h-11 transition-all">
+              <Button onClick={() => navigate("/new")} variant="outline" className="w-full font-heading font-bold text-sm h-11 border-primary/30 text-primary hover:bg-primary/10 transition-all">
                 Create New Roadmap
               </Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-sm h-11">
@@ -710,19 +710,19 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
+              <Button onClick={() => setAdaptOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all glow-primary">
                 <Settings2 className="mr-2 h-5 w-5" /> Adapt My Plan
               </Button>
-              <Button onClick={() => setRevertConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
+              <Button onClick={() => setRevertConfirmOpen(true)} variant="outline" className="w-full font-heading font-bold text-base h-12 border-border hover:border-primary/40 hover:bg-primary/10 transition-all">
                 Revert to Previous Plan
               </Button>
-              <Button onClick={() => setReviseConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
+              <Button onClick={() => setReviseConfirmOpen(true)} variant="outline" className="w-full font-heading font-bold text-base h-12 border-border hover:border-primary/40 hover:bg-primary/10 transition-all">
                 Revise My Roadmap
               </Button>
-              <Button onClick={() => setArchiveConfirmOpen(true)} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
+              <Button onClick={() => setArchiveConfirmOpen(true)} variant="secondary" className="w-full font-heading font-bold text-base h-12 transition-all">
                 Archive Roadmap
               </Button>
-              <Button onClick={() => navigate("/new")} className="w-full gradient-primary text-primary-foreground font-heading font-bold text-base h-12 transition-all">
+              <Button onClick={() => navigate("/new")} variant="outline" className="w-full font-heading font-bold text-base h-12 border-primary/30 text-primary hover:bg-primary/10 transition-all">
                 Create New Roadmap
               </Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-base h-12">

@@ -113,20 +113,25 @@
     min-height: 100vh;
     transition: background-color 0.3s ease;
     background-image:
-      radial-gradient(ellipse at 50% 0%, hsl(210 25% 16%) 0%, hsl(220 20% 10%) 70%),
+      radial-gradient(ellipse at 20% 0%, hsl(210 40% 18% / 0.5) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, hsl(250 30% 15% / 0.3) 0%, transparent 50%),
       radial-gradient(circle, hsl(var(--primary) / 0.07) 1px, transparent 1px);
-    background-size: 100% 100%, 20px 20px;
+    background-size: 100% 100%, 100% 100%, 20px 20px;
+    background-color: hsl(var(--background));
   }
 
   .light body {
     background-image:
-      radial-gradient(ellipse at 50% 0%, hsl(210 40% 97%) 0%, hsl(210 20% 93%) 70%),
+      radial-gradient(ellipse at 30% 0%, hsl(210 60% 92% / 0.6) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 100%, hsl(230 40% 94% / 0.4) 0%, transparent 50%),
       radial-gradient(circle, hsl(var(--primary) / 0.06) 1px, transparent 1px);
-    background-size: 100% 100%, 20px 20px;
+    background-size: 100% 100%, 100% 100%, 20px 20px;
+    background-color: hsl(var(--background));
   }
 }
 
 @layer utilities {
+  /* ── Glass effects ── */
   .glass {
     background: hsl(var(--glass-bg) / 0.7);
     backdrop-filter: blur(16px);
@@ -151,7 +156,28 @@
     -webkit-backdrop-filter: blur(16px);
     border: 1.5px solid hsl(var(--border));
     box-shadow: 0 2px 8px hsl(var(--background) / 0.3);
+    transition: all 0.25s ease;
     @apply rounded-2xl;
+  }
+
+  .glass-blue:hover {
+    background: hsl(var(--glass-bg) / 0.9);
+    border-color: hsl(var(--primary) / 0.4);
+    box-shadow: 0 6px 20px hsl(var(--primary) / 0.12), 0 2px 6px hsl(var(--background) / 0.3);
+    transform: translateY(-1px);
+  }
+
+  /* Selected state for glass cards — use this class to override glass-blue */
+  .glass-blue-selected {
+    background: hsl(var(--primary) / 0.12) !important;
+    border: 2px solid hsl(var(--primary)) !important;
+    box-shadow: 0 4px 20px hsl(var(--primary) / 0.2), inset 0 1px 0 hsl(var(--primary) / 0.08) !important;
+    transform: scale(1.02);
+  }
+
+  .glass-blue-selected:hover {
+    background: hsl(var(--primary) / 0.16) !important;
+    box-shadow: 0 6px 24px hsl(var(--primary) / 0.25), inset 0 1px 0 hsl(var(--primary) / 0.1) !important;
   }
 
   .gradient-text {
@@ -162,16 +188,20 @@
     @apply bg-gradient-to-r from-primary to-secondary;
   }
 
+  /* Subtle glow on hover for buttons */
   .glow-primary {
-    /* intentionally empty — removed for clean professional look */
+    transition: box-shadow 0.25s ease;
   }
-
+  .glow-primary:hover,
   .hover\:glow-primary:hover {
-    /* intentionally empty — removed for clean professional look */
+    box-shadow: 0 4px 20px hsl(var(--primary) / 0.3), 0 0 40px hsl(var(--primary) / 0.1);
   }
 
   .glow-success {
-    /* intentionally empty — removed for clean professional look */
+    transition: box-shadow 0.25s ease;
+  }
+  .glow-success:hover {
+    box-shadow: 0 4px 20px hsl(var(--success) / 0.3);
   }
 
   .pulse-dot {
@@ -194,6 +224,28 @@
   .neon-focus:focus-within,
   .neon-focus:focus-visible {
     @apply ring-2 ring-ring ring-offset-2 ring-offset-background outline-none;
+  }
+
+  /* Icon background circle for visual interest */
+  .icon-circle {
+    @apply w-10 h-10 rounded-full flex items-center justify-center;
+    background: hsl(var(--primary) / 0.1);
+    border: 1px solid hsl(var(--primary) / 0.2);
+    transition: all 0.25s ease;
+  }
+  .icon-circle:hover {
+    background: hsl(var(--primary) / 0.18);
+    border-color: hsl(var(--primary) / 0.35);
+    transform: scale(1.08);
+  }
+
+  /* Frosted glass nav bar */
+  .glass-nav {
+    background: hsl(var(--background) / 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid hsl(var(--border) / 0.6);
+    box-shadow: 0 1px 3px hsl(var(--background) / 0.2);
   }
 }
 

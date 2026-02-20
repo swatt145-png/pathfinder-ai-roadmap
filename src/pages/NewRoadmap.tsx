@@ -516,7 +516,7 @@ export default function NewRoadmap() {
                     <button
                       key={g.value}
                       onClick={() => setLearningGoal(g.value)}
-                      className={`glass-blue p-3 text-center transition-all ${learningGoal === g.value ? "border-2 border-primary bg-primary/20 shadow-lg shadow-primary/15 scale-[1.02]" : "hover:border-primary/40 hover:bg-primary/8 hover:shadow-md hover:scale-[1.02]"}`}
+                      className={`glass-blue p-3 text-center ${learningGoal === g.value ? "glass-blue-selected" : ""}`}
                     >
                       <g.icon className={`w-5 h-5 mx-auto mb-1 ${learningGoal === g.value ? "text-primary" : "text-muted-foreground"}`} />
                       <span className="block text-xs sm:text-sm font-heading font-semibold">{g.label}</span>
@@ -535,7 +535,7 @@ export default function NewRoadmap() {
                     <button
                       key={s.value}
                       onClick={() => setSkillLevel(s.value)}
-                      className={`glass-blue p-3 text-center transition-all ${skillLevel === s.value ? "border-2 border-primary bg-primary/20 shadow-lg shadow-primary/15 scale-[1.02]" : "hover:border-primary/40 hover:bg-primary/8 hover:shadow-md hover:scale-[1.02]"}`}
+                      className={`glass-blue p-3 text-center ${skillLevel === s.value ? "glass-blue-selected" : ""}`}
                     >
                       <span className="block text-xs sm:text-base font-heading font-semibold truncate">{s.label}</span>
                       {skillLevel === s.value && <span className="block text-xs sm:text-sm text-muted-foreground mt-1">{s.desc}</span>}

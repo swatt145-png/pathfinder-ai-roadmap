@@ -79,7 +79,7 @@ export function HowItWorks() {
               style={{ transitionDelay: `${200 + i * 150}ms` }}>
 
               {/* Icon circle */}
-              <div className="relative z-10 shrink-0 flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-full glass-blue border border-primary/30 md:mb-5">
+              <div className="relative z-10 shrink-0 flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-full glass-blue border border-primary/30 md:mb-5 hover:scale-110 hover:border-primary/50 transition-all duration-300">
                 <Icon className="w-5 h-5 md:w-7 md:h-7 text-primary" />
               </div>
 
