@@ -592,6 +592,29 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Mobile: inline action buttons */}
+        {!selectedModule && (
+        <div className="flex md:hidden flex-wrap gap-2 mb-6">
+          {roadmap?.status === "archived" ? (
+            <>
+              <Button onClick={async () => { await supabase.from("roadmaps").update({ status: "active" }).eq("id", roadmap.id); navigate("/my-roadmaps"); }} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1">
+                <Settings2 className="mr-1.5 h-3.5 w-3.5" /> Restore
+              </Button>
+              <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-xs h-9 flex-1">Delete</Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => setAdaptOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]"><Settings2 className="mr-1 h-3.5 w-3.5" /> Adapt Plan</Button>
+              <Button onClick={() => setRevertConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Revert to Previous</Button>
+              <Button onClick={() => setReviseConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Revise Roadmap</Button>
+              <Button onClick={() => setArchiveConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Archive Roadmap</Button>
+              <Button onClick={() => navigate("/new")} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Create New Roadmap</Button>
+              <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Delete</Button>
+            </>
+          )}
+        </div>
+        )}
+
         {/* Next Step */}
         <div className="mb-6">
           {firstIncomplete ? (
@@ -657,41 +680,24 @@ export default function Dashboard() {
         </div>
 
         </div> {/* end main content */}
-        {/* Fixed right-side action buttons — vertical stack, hidden when module detail is open */}
+        {/* Desktop: fixed right column */}
         {!selectedModule && (
-        <div className="fixed top-20 right-4 md:right-8 z-40 flex flex-col gap-2 w-auto max-w-[160px]">
+        <div className="hidden md:flex fixed top-20 right-8 z-40 flex-col gap-2 w-[160px]">
           {roadmap?.status === "archived" ? (
             <>
-              <Button onClick={async () => {
-                await supabase.from("roadmaps").update({ status: "active" }).eq("id", roadmap.id);
-                navigate("/my-roadmaps");
-              }} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all glow-primary w-full">
+              <Button onClick={async () => { await supabase.from("roadmaps").update({ status: "active" }).eq("id", roadmap.id); navigate("/my-roadmaps"); }} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all glow-primary w-full">
                 <Settings2 className="mr-1.5 h-3.5 w-3.5" /> Restore
               </Button>
-              <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-xs h-9 w-full">
-                Delete
-              </Button>
+              <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 font-heading font-bold text-xs h-9 w-full">Delete</Button>
             </>
           ) : (
             <>
-              <Button onClick={() => setAdaptOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all glow-primary w-full">
-                <Settings2 className="mr-1.5 h-3.5 w-3.5" /> Adapt Plan
-              </Button>
-              <Button onClick={() => setRevertConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">
-                Revert to Previous
-              </Button>
-              <Button onClick={() => setReviseConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">
-                Revise Roadmap
-              </Button>
-              <Button onClick={() => setArchiveConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">
-                Archive Roadmap
-              </Button>
-              <Button onClick={() => navigate("/new")} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">
-                Create New Roadmap
-              </Button>
-              <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 font-heading font-bold text-xs h-9 w-full">
-                Delete
-              </Button>
+              <Button onClick={() => setAdaptOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all glow-primary w-full"><Settings2 className="mr-1.5 h-3.5 w-3.5" /> Adapt Plan</Button>
+              <Button onClick={() => setRevertConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Revert to Previous</Button>
+              <Button onClick={() => setReviseConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Revise Roadmap</Button>
+              <Button onClick={() => setArchiveConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Archive Roadmap</Button>
+              <Button onClick={() => navigate("/new")} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Create New Roadmap</Button>
+              <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 font-heading font-bold text-xs h-9 w-full">Delete</Button>
             </>
           )}
         </div>
