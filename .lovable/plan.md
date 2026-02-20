@@ -1,57 +1,48 @@
 
 
-# Serper API Integration for Real Learning Resources
+## UI Polish: Consistent Hover Effects, Selected States, and Background Enhancements
 
-## Current Architecture (v2 — Enhanced Pipeline)
+### 1. Consistent Hover Effects Across All Buttons
 
-### 10-Stage Curation Pipeline
+**Problem:** The "Get Started" button uses the `Button` component with scale+shadow hover, but "Continue as Guest" is a plain `<button>` with only `hover:scale-105`. Other interactive elements (quick start chips, learning goal cards, skill level cards) also have inconsistent hover behavior.
 
-1. **Stage 1: AI Curriculum Generation** (Agent 1 — gemini-2.5-flash)
-   - Generates modules with `anchor_terms[]` per module for Stage 4 precision filtering
-   - No resources/URLs — just structure
+**Fix:** Standardize all interactive elements to use the same hover pattern -- a visible background color shift, border highlight, slight scale, and shadow lift:
+- **Landing page "Continue as Guest"**: Convert to use the same hover pattern as the "Conceptual" card reference (bg fill + border highlight + scale + shadow)
+- **NewRoadmap selection cards** (Learning Goal, Skill Level): Add a more prominent `hover:bg-primary/8 hover:border-primary/40 hover:shadow-md hover:scale-[1.02]` effect
+- **Quick start chips**: Add matching hover with border highlight and scale
+- **Timeline unit buttons** (Hours/Days/Weeks): Add consistent hover
 
-2. **Stage 2A/2B: High-Recall Retrieval** (Serper API)
-   - Topic-wide anchors + module-specific searches in parallel
+### 2. Clear Selected/Active State for Buttons
 
-3. **Stage 3: YouTube API Enrichment** (batch metadata fetch)
+**Problem:** Selected options (e.g., "Conceptual", "Beginner") only get `border-primary bg-primary/10` which blends into the background. No strong visual distinction.
 
-4. **Stage 4: Enhanced Hard Filtering** (3-layer)
-   - 4.1: Embedding similarity threshold (≥0.05)
-   - 4.2: **Anchor Precision Gate** — module-specific anchor terms, hard reject if 0 match
-   - 4.3: **Scope Mismatch Penalty** — penalizes broad "roadmap/full course" content for non-intro modules (10-15 points)
+**Fix:** Make selected state much more prominent:
+- Selected: `bg-primary/20 border-primary border-2 shadow-lg shadow-primary/15` with a ring effect
+- The selected card's text and icon become `text-primary` (already partially done)
+- Timeline unit buttons: selected gets `bg-primary text-primary-foreground` (solid fill) instead of just `bg-primary/20`
 
-5. **Stage 5: Light Authority Scoring** (bounded priors, NOT selection driver)
-   - Tier-based normalized priors (0-1) with max impact caps:
-     - OFFICIAL_DOCS: 1.00, max +5
-     - VENDOR_DOCS: 0.90, max +4
-     - UNIVERSITY_DIRECT: 0.85, max +4
-     - EDUCATION_DOMAIN: 0.75, max +3
-     - BLOG: 0.60, max +3
-     - YOUTUBE_TRUSTED: 0.80, max +3
-     - YOUTUBE_UNKNOWN: 0.50, max +2
-     - COMMUNITY: 0.42, max +2
-   - Garbage filter (spam domains, thin pages only)
-   - **Diversity caps** before Agent 2: max 40% videos, max 40% docs
+### 3. Subtle Background Enhancements
 
-6. **Stage 6: AI Context Fit Scoring** (Agent 2 — gemini-3-pro-preview)
-   - Receives authority metadata but scores independently on content fit
-   - Runs **in parallel** with Negotiation Pass for speed
+**Problem:** Plain solid background looks flat and dull in both modes.
 
-7. **Negotiation Pass** (span detection for oversized resources)
-   - Runs in parallel with Agent 2
-   - Uses heuristic context_fit for quality gate (≥30)
+**Fix:** Add subtle, non-distracting background patterns/gradients:
+- **Dark mode**: A very subtle radial gradient from the center (slightly lighter) fading to the base background, plus a faint grid dot pattern using CSS
+- **Light mode**: A soft radial gradient with a hint of blue warmth, plus the same faint dot pattern
+- Both applied via CSS on the `body` element, keeping it performant (no extra DOM elements)
 
-8. **Stage 7: Clustering & Diversity**
+### Technical Details
 
-9. **Stage 8: Batch LLM Reranker** (Agent 3 — gemini-2.5-flash-lite)
+**Files to modify:**
 
-10. **Stage 9: Final Assembly**
-    - Budget enforcement even for first/single resources (bug fixed)
-    - Orphan continuation validation (bug fixed — skips if primary not selected)
+1. **`src/index.css`** -- Add subtle background patterns:
+   - Dark mode: `radial-gradient(ellipse at 50% 0%, hsl(210 25% 14%) 0%, hsl(220 20% 10%) 70%)` plus a repeating dot pattern via `radial-gradient(circle, hsl(var(--primary) / 0.03) 1px, transparent 1px)` at `24px 24px` size
+   - Light mode: `radial-gradient(ellipse at 50% 0%, hsl(210 30% 98%) 0%, hsl(210 20% 96%) 70%)` with same dot pattern at lower opacity
 
-### Bug Fixes Applied
-- First resource in module no longer bypasses budget check (was allowing 693-min videos)
-- "Continue watching" only shows if the primary resource was actually selected in a prior module
+2. **`src/pages/Landing.tsx`** -- Update "Continue as Guest" button:
+   - Add `border-2 border-border hover:border-primary/50 hover:bg-primary/10 hover:shadow-lg hover:scale-[1.03]` for consistent hover
+   
+3. **`src/pages/NewRoadmap.tsx`** -- Update selection cards and buttons:
+   - Learning Goal & Skill Level cards: selected state gets `border-2 border-primary bg-primary/15 shadow-lg shadow-primary/15 scale-[1.02]`; hover gets `hover:border-primary/40 hover:bg-primary/8 hover:shadow-md hover:scale-[1.02]`
+   - Timeline unit buttons: selected gets solid `bg-primary text-primary-foreground`; hover gets `hover:bg-primary/15`
+   - Quick start chips: add `hover:border-primary/30 hover:shadow-sm hover:scale-[1.02]`
 
-### Performance
-- Agent 2 + Negotiation Pass run in parallel (~20-30s saved)
