@@ -43,7 +43,7 @@ export function HowItWorks() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="w-full max-w-5xl mx-auto px-4 pt-16 pb-16">
+    <section ref={sectionRef} className="w-full max-w-5xl mx-auto px-4 pt-20 pb-12 border-t border-border/40">
       {/* Header */}
       <div
         className={`text-center mb-14 transition-all duration-700 ${
@@ -53,9 +53,11 @@ export function HowItWorks() {
         <h2 className="font-heading text-3xl md:text-4xl font-bold gradient-text mb-3">
           How Pathfinder Builds Your Learning Path
         </h2>
-        <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">AI agents work together to create a personalized, optimized curriculum 
-
+        <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">
+          AI agents work together to create a personalized, optimized curriculum
         </p>
+        {/* Decorative animated underline */}
+        <div className="mt-4 mx-auto w-24 h-1 rounded-full gradient-primary animate-pulse" />
       </div>
 
       {/* Steps */}
@@ -106,15 +108,14 @@ export function HowItWorks() {
 
       {/* CTA */}
       <div
-        className={`mt-14 flex justify-center transition-all duration-700 ${
+        className={`mt-10 flex justify-center transition-all duration-700 ${
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`
         }
         style={{ transitionDelay: "900ms" }}>
 
         <Button
           onClick={() => navigate("/new")}
-          variant="outline"
-          className="px-8 h-12 text-base font-heading font-semibold border-primary/40 text-primary hover:bg-primary/10">
+          className="px-10 h-13 text-base font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 glow-primary">
 
           Build Your Roadmap
         </Button>
