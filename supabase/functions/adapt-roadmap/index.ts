@@ -968,7 +968,6 @@ Return ONLY valid JSON:
     const roadmapTopic = roadmap_data?.topic || "Learning Topic";
     const roadmapLevel = roadmap_data?.skill_level || "beginner";
     const completedModuleIdSet = new Set<string>(completedModuleIds);
-    const skipResourceRefresh = !isCrashCourse && !isSplit; // REDISTRIBUTE keeps existing resources
 
     if (result.options) {
       for (const opt of result.options) {
@@ -985,25 +984,22 @@ Return ONLY valid JSON:
               opt.updated_roadmap.modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10
             ) / 10;
           }
-          // Skip expensive resource re-fetch for REDISTRIBUTE (only timing changes)
-          if (!skipResourceRefresh) {
-            await refreshResourcesForAdaptedRoadmap(
-              opt.updated_roadmap,
-              completedModuleIdSet,
-              roadmapTopic,
-              roadmapLevel,
-              effectiveGoal,
-              hrsPerDay,
-              totalCompletedHours + Number(opt.total_remaining_hours || totalAvailableHours),
-              SERPER_API_KEY
-            );
-          }
+          await refreshResourcesForAdaptedRoadmap(
+            opt.updated_roadmap,
+            completedModuleIdSet,
+            roadmapTopic,
+            roadmapLevel,
+            effectiveGoal,
+            hrsPerDay,
+            totalCompletedHours + Number(opt.total_remaining_hours || totalAvailableHours),
+            SERPER_API_KEY
+          );
         }
       }
     }
 
-    // Enrich YouTube URLs after curation (skip for redistribute — resources unchanged)
-    if (YOUTUBE_API_KEY && !skipResourceRefresh && result.options) {
+    // Enrich YouTube URLs after curation
+    if (YOUTUBE_API_KEY && result.options) {
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
           await enrichRoadmapYouTube(opt.updated_roadmap, YOUTUBE_API_KEY);
