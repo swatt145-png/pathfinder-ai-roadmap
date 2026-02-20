@@ -347,6 +347,81 @@ function enforceModuleTimeWindowConsistency(
   }
 }
 
+function redistributeDayRanges(
+  modules: any[],
+  totalDays: number,
+  hoursPerDay: number,
+  completedModuleIds: Set<string>
+): void {
+  if (!Array.isArray(modules) || modules.length === 0) return;
+  const safeHoursPerDay = Math.max(Number(hoursPerDay || 0), 0.5);
+
+  // Find where completed modules end
+  let completedDaysUsed = 0;
+  for (const mod of modules) {
+    if (completedModuleIds.has(String(mod.id || ""))) {
+      completedDaysUsed = Math.max(completedDaysUsed, Number(mod.day_end || 0));
+    }
+  }
+
+  const remainingDays = Math.max(1, totalDays - completedDaysUsed);
+  const remainingModules = modules.filter(m => !completedModuleIds.has(String(m.id || "")));
+  if (remainingModules.length === 0) return;
+
+  // Calculate how many days each module needs based on its hours
+  const rawDayNeeds = remainingModules.map(m => {
+    const hrs = Math.max(0.5, Number(m.estimated_hours || 1));
+    return Math.max(1, Math.round(hrs / safeHoursPerDay));
+  });
+
+  const totalRawDays = rawDayNeeds.reduce((a, b) => a + b, 0);
+
+  // Scale day assignments to fit remaining days
+  let scaledDays: number[];
+  if (totalRawDays <= remainingDays) {
+    // More days available than needed — expand proportionally
+    const scale = remainingDays / totalRawDays;
+    scaledDays = rawDayNeeds.map(d => Math.max(1, Math.round(d * scale)));
+  } else {
+    // Fewer days than needed — compress proportionally
+    const scale = remainingDays / totalRawDays;
+    scaledDays = rawDayNeeds.map(d => Math.max(1, Math.round(d * scale)));
+  }
+
+  // Adjust so total matches remainingDays exactly
+  let assignedTotal = scaledDays.reduce((a, b) => a + b, 0);
+  while (assignedTotal > remainingDays && scaledDays.length > 0) {
+    // Find largest allocation and reduce it
+    let maxIdx = 0;
+    for (let i = 1; i < scaledDays.length; i++) {
+      if (scaledDays[i] > scaledDays[maxIdx]) maxIdx = i;
+    }
+    if (scaledDays[maxIdx] <= 1) break;
+    scaledDays[maxIdx]--;
+    assignedTotal--;
+  }
+  while (assignedTotal < remainingDays) {
+    // Find smallest allocation and increase it
+    let minIdx = 0;
+    for (let i = 1; i < scaledDays.length; i++) {
+      if (scaledDays[i] < scaledDays[minIdx]) minIdx = i;
+    }
+    scaledDays[minIdx]++;
+    assignedTotal++;
+  }
+
+  // Assign sequential day_start / day_end / week
+  let currentDay = completedDaysUsed + 1;
+  for (let i = 0; i < remainingModules.length; i++) {
+    const mod = remainingModules[i];
+    const days = scaledDays[i];
+    mod.day_start = currentDay;
+    mod.day_end = currentDay + days - 1;
+    mod.week = Math.max(1, Math.ceil(mod.day_start / 7));
+    currentDay = mod.day_end + 1;
+  }
+}
+
 function getGoalSearchConfig(goal: string): { queryModifiers: string[]; semanticHint: string } {
   switch (goal) {
     case "conceptual":
@@ -873,6 +948,8 @@ You MUST condense all remaining modules to fit within exactly ${totalAvailableHo
 - Keep simpler or narrowly-focused modules as-is, just redistribute their hours proportionally to fill the available time.
 - Give each split module a unique id (original_id + "_part1", "_part2", etc.) and a descriptive title indicating the sub-topic focus.
 - The total estimated_hours of ALL remaining modules combined MUST equal ${totalAvailableHours}h.
+- CRITICAL DAY RANGE RULE: Each module's day_start/day_end must span enough days to accommodate its estimated_hours at ${hrsPerDay}h/day. For example, a module with 6h at ${hrsPerDay}h/day must span at least ${Math.ceil(6 / hrsPerDay)} days, NOT 1 day.
+- Distribute all remaining modules sequentially across days ${totalDaysCompleted + 1} to ${totalDaysCompleted + displayDays} with no gaps. Do NOT assign all modules to day 1 or single-day spans.
 - Day numbering for adapted modules starts at day ${totalDaysCompleted + 1}.
 - timeline_days in the response = ${totalDaysCompleted + displayDays}.
 - hours_per_day = ${hrsPerDay}`;
@@ -1017,6 +1094,12 @@ Return ONLY valid JSON:
         if (opt.updated_roadmap) {
           stripModuleQuizzes(opt.updated_roadmap);
           sanitizeRoadmapPlaceholders(opt.updated_roadmap);
+          redistributeDayRanges(
+            opt.updated_roadmap.modules || [],
+            opt.updated_roadmap.timeline_days || displayDays,
+            hrsPerDay,
+            completedModuleIdSet
+          );
           enforceModuleTimeWindowConsistency(
             opt.updated_roadmap.modules || [],
             hrsPerDay,
