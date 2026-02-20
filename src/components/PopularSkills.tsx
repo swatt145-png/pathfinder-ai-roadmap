@@ -62,28 +62,28 @@ export function PopularSkills() {
           </div>
         </div>
 
-        {/* Skills grid */}
+        {/* Skills grid — compact on mobile */}
         <div
-          className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 transition-all duration-700 ${
+          className={`grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-16 transition-all duration-700 ${
             visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
           style={{ transitionDelay: "200ms" }}
         >
           {skillCategories.map((cat) => (
-            <div key={cat.title} className="space-y-3">
-              <h3 className="font-heading text-lg font-bold text-foreground mb-4">
+            <div key={cat.title} className="space-y-1.5 sm:space-y-3">
+              <h3 className="font-heading text-sm sm:text-lg font-bold text-foreground mb-2 sm:mb-4">
                 {cat.title}
               </h3>
               {cat.skills.map((skill) => (
                 <button
                   key={skill}
                   onClick={() => navigate(`/new?topic=${encodeURIComponent(skill)}`)}
-                  className="flex items-center justify-between w-full text-left px-4 py-3 rounded-xl border border-border/40 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group cursor-pointer"
+                  className="flex items-center justify-between w-full text-left px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border border-border/40 bg-card hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group cursor-pointer"
                 >
-                  <span className="text-sm font-medium text-foreground/80 group-hover:text-primary transition-colors">
+                  <span className="text-xs sm:text-sm font-medium text-foreground/80 group-hover:text-primary transition-colors truncate">
                     {skill}
                   </span>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                  <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all shrink-0 ml-1" />
                 </button>
               ))}
             </div>

@@ -45,8 +45,8 @@ export default function Landing() {
       </div>
 
       {/* Hero Section — with decorative shapes */}
-      <section className="relative flex min-h-[85vh] items-center justify-center px-4 pb-0 overflow-hidden">
-        {/* Decorative shapes */}
+      <section className="relative flex min-h-[85vh] items-center justify-center px-4 pb-8 overflow-hidden">
+        {/* Fluid wave background */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           {/* Top-left violet glow */}
           <div
@@ -58,27 +58,18 @@ export default function Landing() {
             className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full opacity-15 blur-3xl"
             style={{ background: "hsl(var(--primary) / 0.5)" }}
           />
+          {/* Fluid wave shapes — inspired by abstract fluid backgrounds */}
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1440 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,300 C360,450 720,150 1080,350 C1260,450 1440,280 1440,280 L1440,0 L0,0 Z" fill="hsl(var(--violet) / 0.06)" />
+            <path d="M0,500 C200,350 500,550 800,400 C1100,250 1300,500 1440,450 L1440,900 L0,900 Z" fill="hsl(var(--primary) / 0.05)" />
+            <path d="M0,650 C300,550 600,750 900,600 C1200,450 1440,700 1440,700 L1440,900 L0,900 Z" fill="hsl(var(--violet) / 0.04)" />
+          </svg>
           {/* Geometric accents */}
-          <div
-            className="absolute top-[15%] right-[10%] w-24 h-24 rounded-full border border-primary/10 opacity-30"
-          />
-          <div
-            className="absolute bottom-[20%] left-[8%] w-16 h-16 rounded-lg border border-violet/10 opacity-25 rotate-45"
-          />
-          <div
-            className="absolute top-[40%] left-[5%] w-3 h-3 rounded-full bg-primary/20"
-          />
-          <div
-            className="absolute top-[25%] right-[25%] w-2 h-2 rounded-full bg-violet/30"
-          />
-          <div
-            className="absolute bottom-[35%] right-[15%] w-4 h-4 rounded-full bg-primary/15"
-          />
-          {/* Diagonal line accent */}
-          <div
-            className="absolute top-0 right-[30%] w-px h-40 opacity-10 rotate-[30deg]"
-            style={{ background: "linear-gradient(to bottom, hsl(var(--violet) / 0.5), transparent)" }}
-          />
+          <div className="absolute top-[15%] right-[10%] w-24 h-24 rounded-full border border-primary/10 opacity-30" />
+          <div className="absolute bottom-[20%] left-[8%] w-16 h-16 rounded-lg border border-violet/10 opacity-25 rotate-45" />
+          <div className="absolute top-[40%] left-[5%] w-3 h-3 rounded-full bg-primary/20" />
+          <div className="absolute top-[25%] right-[25%] w-2 h-2 rounded-full bg-violet/30" />
+          <div className="absolute bottom-[35%] right-[15%] w-4 h-4 rounded-full bg-primary/15" />
         </div>
 
         <div className="relative z-10 text-center max-w-xl animate-fade-in">
@@ -136,8 +127,8 @@ export default function Landing() {
         </div>
       </section>
 
-      <HowItWorks />
       <ExploreCategories />
+      <HowItWorks />
       <WhyPathfinder />
       <PopularSkills />
 
