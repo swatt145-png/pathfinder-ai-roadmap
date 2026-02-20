@@ -1,102 +1,129 @@
 
 
-## Premium UI Overhaul: Hover Effects, Selected States, and Visual Elegance
+## Landing Page Grand Overhaul
 
-### Problems Identified
-
-1. **Hover effects not working on glass-blue elements**: The `glass-blue` class uses `rounded-2xl` which creates a new stacking context, but the hover classes applied inline (like `hover:bg-primary/8`) use Tailwind opacity syntax that may not override the `background` CSS shorthand set by `.glass-blue`. The CSS `background` property in `.glass-blue` takes precedence over Tailwind's `hover:bg-*` utility classes.
-
-2. **Selected state is invisible**: Selected cards use `bg-primary/20` which blends into the glass background. There's no strong visual differentiation.
-
-3. **All sidebar buttons look identical**: Every action button in the Dashboard uses the same `gradient-primary` style with no visual hierarchy.
-
-4. **Overall flat appearance**: The site lacks depth, layering, and visual richness compared to the reference site (Civictry) which uses gradient hero sections, colored icon circles, card shadows, and visual variety.
+This plan covers 5 major changes to transform the landing page into a premium, visually rich experience.
 
 ---
 
-### Plan
+### 1. Remove Dog Animation, Redesign "What Will You Learn?" with AI-Generated Topic Cards
 
-#### 1. Fix Glass-Blue Hover and Selected States (Root Cause Fix)
+**What changes:**
+- Delete the entire `WalkingDog` component and the `walk-dog` CSS keyframe
+- Replace the 12 tech-only categories with ~12 broad categories spanning technology, business, finance, healthcare, design, etc.
+- Each topic becomes a **card with an AI-generated image** on top and the topic name below (inspired by the Udemy-style card layout)
+- Cards displayed in a horizontal scrollable carousel (using embla-carousel, already installed) with 4 visible on desktop, 2 on mobile
+- Clicking a card navigates to `/new?topic=TopicName`
 
-**File: `src/index.css`**
-- Add hover and selected variant classes directly in CSS so they properly override the `background` shorthand:
-  - `.glass-blue:hover` -- slightly brighter background, border color change to primary
-  - `.glass-blue-selected` -- a new class with `bg-primary/20` border-primary, ring, and shadow baked in
-- Add a subtle inner glow/shadow on hover for depth
+**AI Image Generation approach:**
+- Create a new edge function `generate-topic-images` that calls the Lovable AI gateway (`google/gemini-2.5-flash-image`) to generate creative, abstract illustrations for each topic
+- Store generated images in a Supabase storage bucket (`topic-images`)
+- Cache results: only generate once per topic, serve from storage thereafter
+- The landing page fetches image URLs from storage on load
+- Fallback: gradient placeholder with icon while images load or if generation fails
 
-#### 2. Enhance Landing Page (`src/pages/Landing.tsx`)
+**New broad categories:**
+Artificial Intelligence, Web Development, Data Science, Business Strategy, Finance & Investing, Digital Marketing, Healthcare & Medicine, Graphic Design, Cybersecurity, Cloud Computing, Project Management, Mobile Development
 
-- **Hero section**: Add a gradient overlay background (dark: subtle blue-to-transparent radial, light: warm blue tint) behind the hero content for visual depth
-- **Feature cards**: Add hover lift effect with shadow and border color transition
-- **"Get Started" button**: Add a subtle glow/shadow on hover
-- **"Continue as Guest"**: Make hover more visible by using the CSS-level glass-blue hover
-- **"Sign In" / "Sign Up" links**: Add underline animation on hover
+---
 
-#### 3. Fix NewRoadmap Page (`src/pages/NewRoadmap.tsx`)
+### 2. Enhanced Hero Background with Shapes and Violet/Purple Contrast
 
-- **Learning Goal & Skill Level cards**: Replace inline conditional classes with the new `.glass-blue-selected` CSS class for selected state. This ensures the background actually changes visually.
-- **Selected state**: Add a visible left-border accent bar (4px primary color) plus stronger background tint and a ring
-- **Timeline unit buttons**: Already have solid fill for selected -- verify these work. Add a transition effect.
-- **Quick start chips**: Add hover border + scale via CSS class
+**What changes in `src/index.css`:**
+- Add pastel violet/purple radial gradients alongside the existing blue ones for color contrast
+- Add decorative abstract SVG shapes (floating circles, lines, geometric patterns) as a background layer behind the hero section
+- Dark mode: mesh gradient with blue at top-left, violet/purple at bottom-right, subtle teal accent
+- Light mode: soft blue-to-lavender gradient with warm white base
 
-#### 4. Dashboard Visual Hierarchy (`src/pages/Dashboard.tsx`)
+**New CSS variables:**
+- `--violet: 260 60% 65%` (dark) / `--violet: 260 55% 55%` (light) for the purple accent
 
-- **Summary card**: Add a subtle gradient top border (primary to secondary) as a decorative accent
-- **Module list items**: Differentiate hover state with background tint and left-border accent. "Up Next" module gets a pulsing left border or gradient accent.
-- **Sidebar action buttons**: Create visual hierarchy -- primary action (Adapt My Plan) gets gradient, others get `variant="outline"` or `variant="secondary"` to differentiate
-- **Stats cards** (hours, day, streak): Add subtle icon background circles for visual interest
+**Hero section (`src/pages/Landing.tsx`):**
+- Add decorative SVG shapes (blurred circles, diagonal lines) positioned absolutely behind the hero content
+- These create the geometric background pattern seen in the Udemy reference
 
-#### 5. Background Enhancements (`src/index.css`)
+---
 
-- **Dark mode**: Add a very subtle mesh gradient using multiple radial gradients at different positions (top-left blue, bottom-right purple tint) for depth, plus the existing dot pattern
-- **Light mode**: Add a soft gradient from white-blue at top to slightly warmer tone at bottom, plus dot pattern
-- **AppBar**: Add a glass/frosted effect to the app bar (`backdrop-filter: blur`) for polish
+### 3. "How Pathfinder Builds Your Learning Path" Workflow Redesign
 
-#### 6. Global Polish
+**What changes in `src/components/HowItWorks.tsx`:**
+- Replace the small Lucide icons with AI-generated illustration images (same edge function, different prompts)
+- Each step gets a larger card (rounded-xl) with the illustration inside, connected by a horizontal line/arrow on desktop
+- Step cards get a subtle glass background with hover lift
+- Add "STEP 1", "STEP 2" labels above each card in bold
+- The connecting line becomes a gradient line with animated dots flowing left-to-right (CSS animation)
+- Mobile: vertical timeline with line on the left, cards stacked
 
-- **AppBar** (`src/components/AppBar.tsx`): Add `glass-strong` or backdrop-blur to the header for frosted glass nav bar effect
-- **HowItWorks** (`src/components/HowItWorks.tsx`): Add hover lift to step icon circles
-- **ExploreCategories** (`src/components/ExploreCategories.tsx`): Ensure hover works with glass-blue fix; add colored icon backgrounds (subtle primary tint circles behind icons)
-- **Card component** (`src/components/ui/card.tsx`): Already has hover styles -- keep as-is
+**Step illustrations (generated via AI):**
+1. "You Set the Direction" -- compass/map illustration
+2. "AI Architect Designs Curriculum" -- brain/blueprint illustration
+3. "Research Agents Find Resources" -- magnifying glass/books illustration
+4. "Adaptive Agent Evolves" -- refresh/growth illustration
+
+---
+
+### 4. New "Why PathFinder?" Characteristics Section
+
+**New component: `src/components/WhyPathfinder.tsx`**
+
+Layout inspired by the Udemy characteristics screenshot:
+- 3 alternating rows, each with text on one side and an AI-generated illustration on the other
+- Row 1: Image left, text right -- "Personalized to Your Learning Goal"
+- Row 2: Text left, image right -- "Customized to Your Proficiency Level"  
+- Row 3: Image left, text right -- "Fits Your Timeline"
+- Each row has a small label (e.g., "Personalized"), bold heading, and descriptive paragraph
+- Images are AI-generated abstract illustrations representing each concept
+- Placed in `Landing.tsx` after the ExploreCategories section
+
+---
+
+### 5. New "Popular Skills" Section with CTA
+
+**New component: `src/components/PopularSkills.tsx`**
+
+Inspired by the Udemy Popular Skills screenshot:
+- Section heading: "Popular Skills"
+- Grid layout with 3-4 columns showing skill categories
+- Each category (Development, Design, Business) lists 3-4 popular skills as clickable links with arrow icons
+- Left column highlights a trending skill with "X is a top skill" callout
+- Below the grid: large CTA text "What will you learn today?" with a prominent "Start Learning" button
+- Clicking any skill navigates to `/new?topic=SkillName`
+- Placed after the WhyPathfinder section
+
+---
+
+### 6. Distinct Section Boundaries
+
+**Changes across all landing sections:**
+- Each section gets its own subtle background variation (alternating between transparent and a very light glass tint)
+- Clear `border-t` or gradient dividers between sections
+- Consistent vertical padding (py-20 md:py-28) for breathing room
+- Section order: Hero -> HowItWorks -> ExploreCategories -> WhyPathfinder -> PopularSkills
 
 ---
 
 ### Technical Details
 
-**New CSS classes in `src/index.css`:**
-
-```css
-.glass-blue:hover {
-  background: hsl(var(--glass-bg) / 0.85);
-  border-color: hsl(var(--primary) / 0.4);
-  box-shadow: 0 4px 16px hsl(var(--primary) / 0.1);
-}
-
-.glass-blue-selected {
-  background: hsl(var(--primary) / 0.15) !important;
-  border: 2px solid hsl(var(--primary)) !important;
-  box-shadow: 0 4px 20px hsl(var(--primary) / 0.2), inset 0 1px 0 hsl(var(--primary) / 0.1);
-}
-```
-
-**Background mesh gradient (dark mode):**
-```css
-body {
-  background-image:
-    radial-gradient(ellipse at 20% 0%, hsl(210 40% 18% / 0.5) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 100%, hsl(250 30% 15% / 0.3) 0%, transparent 50%),
-    radial-gradient(circle, hsl(var(--primary) / 0.07) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 20px 20px;
-  background-color: hsl(var(--background));
-}
-```
+**Files to create:**
+- `supabase/functions/generate-topic-images/index.ts` -- Edge function to generate and store AI images
+- `src/components/WhyPathfinder.tsx` -- Characteristics section
+- `src/components/PopularSkills.tsx` -- Popular skills grid + CTA
 
 **Files to modify:**
-1. `src/index.css` -- Glass hover/selected fixes, background mesh gradients, AppBar glass
-2. `src/pages/Landing.tsx` -- Hero gradient overlay, consistent hover effects
-3. `src/pages/NewRoadmap.tsx` -- Use glass-blue-selected class, fix hover states
-4. `src/pages/Dashboard.tsx` -- Button hierarchy, module hover states, visual accents
-5. `src/components/AppBar.tsx` -- Frosted glass nav bar
-6. `src/components/HowItWorks.tsx` -- Hover effects on step circles
-7. `src/components/ExploreCategories.tsx` -- Enhanced card hover with icon tint circles
+- `src/index.css` -- Remove walk-dog animation, add violet CSS variables, enhanced mesh gradients with purple
+- `src/components/ExploreCategories.tsx` -- Complete rewrite: remove dog, new card carousel with images, broadened categories
+- `src/components/HowItWorks.tsx` -- Replace icons with AI-generated illustrations, animated workflow line
+- `src/pages/Landing.tsx` -- Add decorative SVG shapes to hero, import new sections, add section boundaries
+
+**Database migration:**
+- Create `topic-images` storage bucket for caching generated images
+- Create `topic_images` table to track which images have been generated (topic_name, image_url, created_at)
+
+**Edge function (`generate-topic-images`):**
+- Accepts a list of topic names
+- For each topic, checks if image already exists in storage
+- If not, calls Lovable AI gateway with `google/gemini-2.5-flash-image` to generate a creative abstract illustration
+- Uploads the base64 result to Supabase storage
+- Returns public URLs for all topics
+- Uses `LOVABLE_API_KEY` (already configured)
 
