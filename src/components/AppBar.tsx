@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen, Sun, Moon } from "lucide-react";
+import { LogOut, User, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.png";
@@ -49,6 +49,9 @@ export function AppBar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="glass-strong border-border">
+            <DropdownMenuItem onClick={() => navigate("/profile")} className="text-muted-foreground hover:text-foreground cursor-pointer">
+              <User className="mr-2 h-4 w-4" /> My Profile
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={signOut} className="text-muted-foreground hover:text-foreground cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" /> Sign Out
             </DropdownMenuItem>
