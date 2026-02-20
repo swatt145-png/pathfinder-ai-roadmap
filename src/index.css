@@ -257,3 +257,12 @@ textarea:focus-visible,
 select:focus-visible {
   @apply ring-2 ring-ring ring-offset-2 ring-offset-background outline-none;
 }
+
+/* Walking dog animation */
+@keyframes walk-dog {
+  0% { transform: translateX(-200px); }
+  100% { transform: translateX(calc(100vw + 100px)); }
+}
+.animate-walk-dog {
+  animation: walk-dog 12s linear infinite;
+}
