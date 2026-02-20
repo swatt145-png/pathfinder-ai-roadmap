@@ -15,10 +15,8 @@ interface AuthModalProps {
 
 const PASSWORD_RULES = [
   { test: (p: string) => p.length >= 8, label: "At least 8 characters" },
-  { test: (p: string) => /[A-Z]/.test(p), label: "At least 1 uppercase letter" },
-  { test: (p: string) => /[a-z]/.test(p), label: "At least 1 lowercase letter" },
-  { test: (p: string) => /[0-9]/.test(p), label: "At least 1 number" },
-  { test: (p: string) => /[^A-Za-z0-9]/.test(p), label: "At least 1 special character" },
+  { test: (p: string) => /[0-9]/.test(p), label: "Contains a number" },
+  { test: (p: string) => /[^A-Za-z0-9]/.test(p), label: "Contains a special character" },
 ];
 
 export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthModalProps) {
