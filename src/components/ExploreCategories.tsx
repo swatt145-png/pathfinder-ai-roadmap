@@ -80,7 +80,9 @@ export function ExploreCategories() {
                 transform: visible ? "translateY(0)" : "translateY(8px)"
               }}>
 
-              <Icon className="w-5 h-5 text-primary shrink-0" />
+              <div className="icon-circle shrink-0">
+                <Icon className="w-5 h-5 text-primary" />
+              </div>
               <span className="text-sm font-semibold text-foreground/90">{cat.label}</span>
             </button>);
 

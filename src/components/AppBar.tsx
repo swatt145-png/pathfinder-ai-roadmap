@@ -26,7 +26,7 @@ export function AppBar() {
   }, [user]);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 md:px-6 border-b border-border bg-background">
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between px-4 md:px-6 glass-nav">
       <Link
         to="/home"
         className="flex items-center gap-2 font-heading font-bold text-xl md:text-2xl gradient-text focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
