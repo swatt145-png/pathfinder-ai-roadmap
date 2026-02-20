@@ -13,16 +13,16 @@
     --popover: 220 22% 13%;
     --popover-foreground: 210 25% 95%;
 
-    --primary: 210 70% 65%;
+    --primary: 172 60% 50%;
     --primary-foreground: 220 30% 5%;
 
-    --secondary: 210 55% 50%;
+    --secondary: 190 55% 42%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 220 15% 18%;
     --muted-foreground: 215 15% 55%;
 
-    --accent: 210 60% 58%;
+    --accent: 172 50% 45%;
     --accent-foreground: 220 30% 5%;
 
     --destructive: 350 75% 55%;
@@ -36,7 +36,7 @@
 
     --border: 215 18% 28%;
     --input: 215 18% 25%;
-    --ring: 210 70% 65%;
+    --ring: 172 60% 50%;
 
     --radius: 0.75rem;
 
@@ -47,12 +47,12 @@
 
     --sidebar-background: 220 20% 8%;
     --sidebar-foreground: 210 25% 95%;
-    --sidebar-primary: 210 70% 65%;
+    --sidebar-primary: 172 60% 50%;
     --sidebar-primary-foreground: 210 25% 95%;
     --sidebar-accent: 220 15% 18%;
     --sidebar-accent-foreground: 210 25% 95%;
     --sidebar-border: 215 18% 28%;
-    --sidebar-ring: 210 70% 65%;
+    --sidebar-ring: 172 60% 50%;
   }
 
   .light {
@@ -65,16 +65,16 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 25% 12%;
 
-    --primary: 210 70% 48%;
+    --primary: 172 55% 38%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 55% 40%;
+    --secondary: 190 50% 32%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 210 15% 90%;
     --muted-foreground: 220 12% 38%;
 
-    --accent: 210 55% 42%;
+    --accent: 172 45% 35%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
@@ -88,7 +88,7 @@
 
     --border: 210 18% 78%;
     --input: 210 18% 80%;
-    --ring: 210 70% 48%;
+    --ring: 172 55% 38%;
 
     --violet: 260 55% 55%;
 
@@ -97,12 +97,12 @@
 
     --sidebar-background: 210 18% 94%;
     --sidebar-foreground: 220 25% 12%;
-    --sidebar-primary: 210 70% 48%;
+    --sidebar-primary: 172 55% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 210 15% 90%;
     --sidebar-accent-foreground: 220 25% 12%;
     --sidebar-border: 210 18% 78%;
-    --sidebar-ring: 210 70% 48%;
+    --sidebar-ring: 172 55% 38%;
   }
 }
 
@@ -117,7 +117,7 @@
     min-height: 100vh;
     transition: background-color 0.3s ease;
     background-image:
-      radial-gradient(ellipse at 20% 0%, hsl(210 40% 18% / 0.5) 0%, transparent 50%),
+      radial-gradient(ellipse at 20% 0%, hsl(172 40% 18% / 0.5) 0%, transparent 50%),
       radial-gradient(ellipse at 80% 100%, hsl(260 30% 18% / 0.35) 0%, transparent 50%),
       radial-gradient(circle, hsl(var(--primary) / 0.07) 1px, transparent 1px);
     background-size: 100% 100%, 100% 100%, 20px 20px;
@@ -126,7 +126,7 @@
 
   .light body {
     background-image:
-      radial-gradient(ellipse at 30% 0%, hsl(210 60% 92% / 0.6) 0%, transparent 50%),
+      radial-gradient(ellipse at 30% 0%, hsl(172 60% 92% / 0.6) 0%, transparent 50%),
       radial-gradient(ellipse at 70% 100%, hsl(260 50% 92% / 0.4) 0%, transparent 50%),
       radial-gradient(circle, hsl(var(--primary) / 0.06) 1px, transparent 1px);
     background-size: 100% 100%, 100% 100%, 20px 20px;
@@ -265,18 +265,18 @@ select:focus-visible {
 
 /* Hero wave fills — dark mode: lighter/more visible, light mode: darker for contrast */
 .hero-wave-1 { fill: hsl(260 60% 70% / 0.18); }
-.hero-wave-2 { fill: hsl(210 70% 70% / 0.14); }
+.hero-wave-2 { fill: hsl(172 60% 60% / 0.14); }
 .hero-wave-3 { fill: hsl(260 60% 70% / 0.11); }
 
 .light .hero-wave-1 { fill: hsl(260 55% 40% / 0.14); }
-.light .hero-wave-2 { fill: hsl(210 70% 35% / 0.12); }
+.light .hero-wave-2 { fill: hsl(172 55% 35% / 0.12); }
 .light .hero-wave-3 { fill: hsl(260 55% 40% / 0.09); }
 
 /* Mild wave fills for inner pages — subtle background decoration */
 .hero-wave-mild-1 { fill: hsl(260 60% 65% / 0.06); }
-.hero-wave-mild-2 { fill: hsl(210 70% 65% / 0.05); }
+.hero-wave-mild-2 { fill: hsl(172 60% 55% / 0.05); }
 .hero-wave-mild-3 { fill: hsl(260 60% 65% / 0.04); }
 
 .light .hero-wave-mild-1 { fill: hsl(260 55% 45% / 0.05); }
-.light .hero-wave-mild-2 { fill: hsl(210 70% 40% / 0.04); }
+.light .hero-wave-mild-2 { fill: hsl(172 55% 40% / 0.04); }
 .light .hero-wave-mild-3 { fill: hsl(260 55% 45% / 0.03); }

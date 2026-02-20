@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, BookOpen, Layers, BookOpenCheck, Code2, Zap, GraduationCap } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
-import bookKnowledgeImg from "@/assets/loading/book-knowledge.jpg";
+import bookKnowledgeImg from "@/assets/loading/book-knowledge-new.png";
 import stageGoalImg from "@/assets/loading/stage-goal.jpg";
 import stageCurriculumImg from "@/assets/loading/stage-curriculum.jpg";
 import stageResourcesImg from "@/assets/loading/stage-resources.jpg";
