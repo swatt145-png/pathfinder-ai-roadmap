@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 import type { QuizQuestion } from "@/lib/types";
 
 interface QuizModalProps {
@@ -83,7 +84,14 @@ export function QuizModal({ quiz, moduleTitle, onClose, onDone }: QuizModalProps
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative glass-strong max-w-md w-full p-6 animate-fade-in">
-        <h3 className="font-heading font-bold text-sm mb-1">{moduleTitle} Quiz</h3>
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          aria-label="Close quiz"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <h3 className="font-heading font-bold text-sm mb-1 pr-8">{moduleTitle} Quiz</h3>
         <div className="h-1 bg-muted/50 rounded-full mb-6 overflow-hidden">
           <div className="h-full gradient-primary transition-all" style={{ width: `${((currentQ + 1) / quiz.length) * 100}%` }} />
         </div>

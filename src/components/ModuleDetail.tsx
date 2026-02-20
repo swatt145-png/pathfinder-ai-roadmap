@@ -210,7 +210,7 @@ export function ModuleDetail({
               onClick={onGoToNextModule}
               aria-label="Go to next module"
               title={nextModuleTitle ? `Next module: ${nextModuleTitle}` : "Next module"}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-border hover:border-primary/40 hover:bg-muted/50"
+              className="p-2 text-muted-foreground hover:text-foreground transition-all rounded-lg border border-border hover:border-primary/40 hover:bg-primary/10 hover:scale-110 hover:shadow-md"
             >
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -220,7 +220,7 @@ export function ModuleDetail({
               onClick={onGoToPrevModule}
               aria-label="Go to previous module"
               title={prevModuleTitle ? `Previous module: ${prevModuleTitle}` : "Previous module"}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-border hover:border-primary/40 hover:bg-muted/50"
+              className="p-2 text-muted-foreground hover:text-foreground transition-all rounded-lg border border-border hover:border-primary/40 hover:bg-primary/10 hover:scale-110 hover:shadow-md"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
