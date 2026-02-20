@@ -77,7 +77,7 @@ serve(async (req) => {
     // Read roadmap from DB
     const { data: roadmapRow, error: readErr } = await supabaseAdmin
       .from("roadmaps")
-      .select("roadmap_data, user_id")
+      .select("roadmap_data, user_id, learning_goal")
       .eq("id", roadmap_id)
       .single();
 
@@ -97,14 +97,14 @@ serve(async (req) => {
 
     const topic = roadmapData.topic || "Learning Topic";
     const level = roadmapData.skill_level || "beginner";
-    const goal = roadmapData.learning_goal || "hands_on";
+    const goal = roadmapRow.learning_goal || roadmapData.learning_goal || "hands_on";
     const modules = roadmapData.modules;
     const totalHours = Number(roadmapData.total_hours || 10);
     const hoursPerDay = Number(roadmapData.hours_per_day || 2);
 
     // Read module progress to know which are completed
     const { data: progressRows } = await supabaseAdmin
-      .from("module_progress")
+      .from("progress")
       .select("module_id, status")
       .eq("roadmap_id", roadmap_id)
       .eq("status", "completed");

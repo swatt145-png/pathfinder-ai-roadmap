@@ -301,6 +301,35 @@ export default function Dashboard() {
       setAdaptationNotif(null);
       setCompletionActions(null);
       fetchData();
+
+      // If resources are pending, call populate-resources in background and poll
+      if (updatedRoadmap.resources_pending) {
+        supabase.functions.invoke("populate-resources", {
+          body: { roadmap_id: roadmap.id },
+        }).then(() => {
+          let polls = 0;
+          const maxPolls = 10;
+          const pollInterval = setInterval(async () => {
+            polls++;
+            const { data: freshRoadmap } = await supabase
+              .from("roadmaps")
+              .select("roadmap_data")
+              .eq("id", roadmap.id)
+              .single();
+            const freshData = freshRoadmap?.roadmap_data as RoadmapData | null;
+            if (freshData && !freshData.resources_pending) {
+              clearInterval(pollInterval);
+              fetchData();
+            } else if (polls >= maxPolls) {
+              clearInterval(pollInterval);
+              fetchData();
+            }
+          }, 3000);
+        }).catch((err) => {
+          console.error("populate-resources error:", err);
+          fetchData();
+        });
+      }
     } finally {
       setApplyingAdaptation(false);
     }
