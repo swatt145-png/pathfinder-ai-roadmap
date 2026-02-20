@@ -855,27 +855,31 @@ serve(async (req) => {
     const totalDaysCompleted = completedModulesData.length;
 
     const isCrashCourse = totalAvailableHours < remainingHours;
-    const isSplit = !isCrashCourse && hrsPerDay < remainingHours && displayDays > 1;
+    const isExpand = !isCrashCourse && totalAvailableHours > remainingHours * 1.3;
+    const isRedistribute = !isCrashCourse && !isExpand;
 
     let strategyInstruction: string;
     if (isCrashCourse) {
-      strategyInstruction = `STRATEGY: CRASH COURSE (user has ${totalAvailableHours}h but needs ${remainingHours}h — LESS time available).
+      strategyInstruction = `STRATEGY: CONDENSE (user has ${totalAvailableHours}h but needs ${remainingHours}h — LESS time available).
 You MUST condense all remaining modules to fit within exactly ${totalAvailableHours}h total.
 - Prefer FEWER, denser modules over many tiny modules for short deadlines. You MAY merge adjacent remaining modules if that improves clarity and quality.
 - The total estimated_hours of ALL remaining modules combined MUST equal ${totalAvailableHours}h (not more).
 - Each remaining module fits within ${displayDays} day(s) at ${hrsPerDay}h/day.
 - timeline_days in the response = ${totalDaysCompleted + displayDays}.`;
-    } else if (isSplit) {
-      const numChunks = Math.ceil(remainingHours / hrsPerDay);
-      strategyInstruction = `STRATEGY: SPLIT MODULES (user has ${totalAvailableHours}h across ${displayDays} days at ${hrsPerDay}h/day — enough time but fewer hours per day).
-- SPLIT each remaining module into daily chunks of ${hrsPerDay}h each.
-- A ${remainingHours}h module becomes ${numChunks} modules of ~${hrsPerDay}h each.
-- Give each split module a unique id (original_id + "_part1", "_part2", etc.) and its own subset of resources.
+    } else if (isExpand) {
+      strategyInstruction = `STRATEGY: EXPAND (user has ${totalAvailableHours}h available for ${remainingHours}h of content — MORE time available).
+- You have extra time to work with. Use your reasoning to decide which remaining modules cover difficult or broad topics and ONLY split those into two sub-modules for deeper coverage.
+- Do NOT split every module — only split modules where the topic genuinely benefits from more time (e.g., complex topics, topics with many subtopics).
+- Keep simpler or narrowly-focused modules as-is, just redistribute their hours proportionally to fill the available time.
+- Give each split module a unique id (original_id + "_part1", "_part2", etc.) and a descriptive title indicating the sub-topic focus.
+- The total estimated_hours of ALL remaining modules combined MUST equal ${totalAvailableHours}h.
 - Day numbering for adapted modules starts at day ${totalDaysCompleted + 1}.
-- timeline_days in the response = ${totalDaysCompleted + numChunks}.`;
+- timeline_days in the response = ${totalDaysCompleted + displayDays}.
+- hours_per_day = ${hrsPerDay}`;
     } else {
-      strategyInstruction = `STRATEGY: REDISTRIBUTE (user has enough time — ${totalAvailableHours}h available for ${remainingHours}h of content).
-- Keep existing modules and resources as-is, just update day_start/day_end/week fields.
+      strategyInstruction = `STRATEGY: REDISTRIBUTE (user has roughly the same time — ${totalAvailableHours}h available for ${remainingHours}h of content).
+- Keep existing modules and resources as-is, just update day_start/day_end/week fields to fit the new timeline.
+- Redistribute hours proportionally across the new timeline.
 - timeline_days in the response = ${totalDaysCompleted + displayDays}.`;
     }
 

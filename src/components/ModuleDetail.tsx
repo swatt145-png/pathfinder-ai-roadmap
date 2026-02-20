@@ -17,7 +17,9 @@ interface ModuleDetailProps {
   onUpdateCompletedModule?: (moduleId: string, selfReport: string, notes: string) => void;
   onMarkNotComplete?: (moduleId: string) => void;
   onGoToNextModule?: () => void;
+  onGoToPrevModule?: () => void;
   nextModuleTitle?: string;
+  prevModuleTitle?: string;
   roadmapId?: string;
   roadmapTopic?: string;
   onGenerateQuiz?: (moduleId: string) => Promise<void>;
@@ -53,7 +55,9 @@ export function ModuleDetail({
   onUpdateCompletedModule,
   onMarkNotComplete,
   onGoToNextModule,
+  onGoToPrevModule,
   nextModuleTitle,
+  prevModuleTitle,
   roadmapId,
   roadmapTopic,
   onGenerateQuiz,
@@ -191,19 +195,31 @@ export function ModuleDetail({
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h3 className="font-heading font-bold text-lg truncate">{module.title}</h3>
+          <h3 className="font-heading font-bold text-lg whitespace-normal break-words">{module.title}</h3>
           <p className="text-base text-muted-foreground">Day {module.day_start}-{module.day_end} · {module.estimated_hours}h study time</p>
         </div>
-        {onGoToNextModule && (
-          <button
-            onClick={onGoToNextModule}
-            aria-label="Go to next module"
-            title={nextModuleTitle ? `Next module: ${nextModuleTitle}` : "Next module"}
-            className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-white/10 hover:border-primary/40 hover:bg-white/5"
-          >
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex flex-col gap-1 shrink-0">
+          {onGoToNextModule && (
+            <button
+              onClick={onGoToNextModule}
+              aria-label="Go to next module"
+              title={nextModuleTitle ? `Next module: ${nextModuleTitle}` : "Next module"}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-white/10 hover:border-primary/40 hover:bg-white/5"
+            >
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+          {onGoToPrevModule && (
+            <button
+              onClick={onGoToPrevModule}
+              aria-label="Go to previous module"
+              title={prevModuleTitle ? `Previous module: ${prevModuleTitle}` : "Previous module"}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-white/10 hover:border-primary/40 hover:bg-white/5"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-8">
@@ -374,18 +390,6 @@ export function ModuleDetail({
               <Save className="mr-2 h-4 w-4" />
               {saved ? "Saved ✓" : "Save Changes"}
             </Button>
-            {onGoToNextModule && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onGoToNextModule}
-                className="w-full border-white/10 hover:bg-white/5 text-base"
-              >
-                {nextModuleTitle ? `Next Module: ${nextModuleTitle}` : "Go to Next Module"}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            )}
-
             <Button
               variant="outline"
               onClick={() => onMarkNotComplete?.(module.id)}
@@ -459,17 +463,6 @@ export function ModuleDetail({
             >
               Complete Module ✅
             </Button>
-            {onGoToNextModule && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onGoToNextModule}
-                className="w-full border-white/10 hover:bg-white/5 text-base"
-              >
-                {nextModuleTitle ? `Open Next Module: ${nextModuleTitle}` : "Open Next Module"}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            )}
           </div>
         )}
       </div>

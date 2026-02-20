@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [revertConfirmOpen, setRevertConfirmOpen] = useState(false);
   const [reverting, setReverting] = useState(false);
+  const [revertMessage, setRevertMessage] = useState<string | null>(null);
   const [reviseConfirmOpen, setReviseConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -363,9 +364,10 @@ export default function Dashboard() {
 
       if (!lastAdaptation?.previous_roadmap) {
         setReverting(false);
-        setRevertConfirmOpen(false);
+        setRevertMessage("This is the original roadmap — no previous plan to revert to.");
         return;
       }
+      setRevertMessage(null);
 
       const previousRoadmap = lastAdaptation.previous_roadmap as unknown as RoadmapData;
 
@@ -429,6 +431,21 @@ export default function Dashboard() {
     });
     const byTitle = ordered.findIndex((m) => m.title === current.title);
     if (byTitle >= 0) return ordered[byTitle + 1] ?? null;
+    return null;
+  };
+
+  const getPrevModule = (current: Module | null): Module | null => {
+    if (!current || !roadmapData?.modules?.length) return null;
+    const byId = roadmapData.modules.findIndex((m) => m.id === current.id);
+    if (byId > 0) return roadmapData.modules[byId - 1] ?? null;
+
+    const ordered = [...roadmapData.modules].sort((a, b) => {
+      const dayStartDiff = Number(a.day_start || 0) - Number(b.day_start || 0);
+      if (dayStartDiff !== 0) return dayStartDiff;
+      return a.title.localeCompare(b.title);
+    });
+    const byTitle = ordered.findIndex((m) => m.title === current.title);
+    if (byTitle > 0) return ordered[byTitle - 1] ?? null;
     return null;
   };
 
@@ -560,7 +577,7 @@ export default function Dashboard() {
                   {status === "completed" ? "✓" : i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-heading font-semibold text-base truncate">{mod.title}</p>
+                  <p className="font-heading font-semibold text-base break-words">{mod.title}</p>
                   <p className="text-sm text-muted-foreground">Day {mod.day_start}-{mod.day_end} · {mod.estimated_hours}h · {(mod.resources || []).length} resources</p>
                 </div>
                 <span className={`text-sm px-2 py-1 rounded-full shrink-0 font-heading font-semibold ${
@@ -662,10 +679,16 @@ export default function Dashboard() {
           module={selectedModule}
           progress={progressMap[selectedModule.id]}
           nextModuleTitle={getNextModule(selectedModule)?.title}
+          prevModuleTitle={getPrevModule(selectedModule)?.title}
           onGoToNextModule={(() => {
             const nextModule = getNextModule(selectedModule);
             if (!nextModule) return undefined;
             return () => setSelectedModule(nextModule);
+          })()}
+          onGoToPrevModule={(() => {
+            const prevModule = getPrevModule(selectedModule);
+            if (!prevModule) return undefined;
+            return () => setSelectedModule(prevModule);
           })()}
           roadmapId={roadmap?.id}
           roadmapTopic={roadmapData?.topic}
@@ -790,21 +813,29 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={revertConfirmOpen} onOpenChange={setRevertConfirmOpen}>
+      <Dialog open={revertConfirmOpen} onOpenChange={(open) => { setRevertConfirmOpen(open); if (!open) setRevertMessage(null); }}>
         <DialogContent className="glass-strong border-white/10">
           <DialogHeader>
-            <DialogTitle className="font-heading">Revert to previous plan?</DialogTitle>
+            <DialogTitle className="font-heading">{revertMessage ? "No previous plan" : "Revert to previous plan?"}</DialogTitle>
             <DialogDescription>
-              This will undo the last plan adaptation and restore your previous roadmap. Your progress on completed modules is kept.
+              {revertMessage || "This will undo the last plan adaptation and restore your previous roadmap. Your progress on completed modules is kept."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setRevertConfirmOpen(false)} className="border-white/10" disabled={reverting}>
-              Cancel
-            </Button>
-            <Button onClick={handleRevertToPreviousPlan} disabled={reverting} className="gradient-primary text-primary-foreground font-heading font-bold">
-              {reverting ? "Reverting..." : "Revert Plan"}
-            </Button>
+            {revertMessage ? (
+              <Button variant="outline" onClick={() => { setRevertConfirmOpen(false); setRevertMessage(null); }} className="border-white/10">
+                OK
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setRevertConfirmOpen(false)} className="border-white/10" disabled={reverting}>
+                  Cancel
+                </Button>
+                <Button onClick={handleRevertToPreviousPlan} disabled={reverting} className="gradient-primary text-primary-foreground font-heading font-bold">
+                  {reverting ? "Reverting..." : "Revert Plan"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -24,11 +24,11 @@ const LEARNING_GOALS = [
 ];
 
 const QUICK_STARTS = [
-  { label: "SQL in 2 weeks", topic: "SQL", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
-  { label: "Python in 1 month", topic: "Python", weeks: 4, hours: 1, skill: "beginner", goal: "hands_on" },
-  { label: "Cybersecurity in 3 weeks", topic: "Cybersecurity", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
-  { label: "React in 10 days", topic: "React", weeks: 1.5, hours: 1.5, skill: "intermediate", goal: "hands_on" },
-  { label: "Docker in 1 week", topic: "Docker", weeks: 1, hours: 1, skill: "beginner", goal: "quick_overview" },
+  { label: "SQL Basics in 2 weeks", topic: "SQL Basics", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "Python for Data Science in 1 month", topic: "Python for Data Science", weeks: 4, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "System Design Concepts in 3 weeks", topic: "System Design Concepts", weeks: 3, hours: 1, skill: "intermediate", goal: "conceptual" },
+  { label: "Machine Learning Models in 10 days", topic: "Machine Learning Models", weeks: 1.5, hours: 1.5, skill: "intermediate", goal: "hands_on" },
+  { label: "GRC in Cybersecurity in 1 week", topic: "GRC in Cybersecurity", weeks: 1, hours: 1, skill: "beginner", goal: "quick_overview" },
 ];
 
 const LOADING_STEPS = [
@@ -341,7 +341,7 @@ export default function NewRoadmap() {
     { icon: Target, label: "Analyzing goal" },
     { icon: LayoutDashboard, label: "Building curriculum" },
     { icon: Search, label: "Curating resources" },
-    { icon: ClipboardCheck, label: "Quiz setup (optional)" },
+    { icon: ClipboardCheck, label: "Quiz setup" },
     { icon: Sparkles, label: "Finalizing roadmap" },
   ];
 
@@ -503,7 +503,7 @@ export default function NewRoadmap() {
                 <Input
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g., SQL, Python, Cybersecurity, Docker, React..."
+                  placeholder="e.g., SQL Basics, Python for Data Science, GRC in Cybersecurity..."
                   className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
               </div>
@@ -550,7 +550,7 @@ export default function NewRoadmap() {
                     {timelineUnit === "hours" ? (
                       <>Total hours? <span className="text-primary font-heading font-bold">{totalHoursOnly}</span></>
                     ) : (
-                      <>How many {timelineUnit}? <span className="text-primary font-heading font-bold">{timelineValue}</span></>
+                      <>Target {timelineUnit}: <span className="text-primary font-heading font-bold">{timelineValue}</span></>
                     )}
                   </Label>
                   <div className="flex rounded-lg overflow-hidden border border-white/10">
@@ -572,7 +572,7 @@ export default function NewRoadmap() {
                   <input
                     type="range"
                     min={1}
-                    max={40}
+                    max={30}
                     step={0.5}
                     value={totalHoursOnly}
                     onChange={(e) => setTotalHoursOnly(Number(e.target.value))}
@@ -582,7 +582,7 @@ export default function NewRoadmap() {
                   <input
                     type="range"
                     min={1}
-                    max={timelineUnit === "days" ? 90 : 12}
+                    max={timelineUnit === "days" ? 50 : 12}
                     value={timelineValue}
                     onChange={(e) => setTimelineValue(Number(e.target.value))}
                     className="w-full accent-primary"
