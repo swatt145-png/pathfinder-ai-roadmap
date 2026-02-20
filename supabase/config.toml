@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.adapt-roadmap]
 verify_jwt = false
+
+[functions.populate-resources]
+verify_jwt = false
+
+[functions.generate-module-quiz]
+verify_jwt = false

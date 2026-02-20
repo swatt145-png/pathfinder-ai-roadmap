@@ -244,16 +244,16 @@ serve(async (req) => {
 
     const effectiveGoal = learning_goal || "hands_on";
     const goalContext = effectiveGoal === "conceptual"
-      ? "The student's learning goal is CONCEPTUAL — they want theory, concepts, and mental models. If adapting, add more explanatory/lecture resources, not coding exercises."
+      ? "Your learning goal is CONCEPTUAL — you want theory, concepts, and mental models. If adapting, add more explanatory/lecture resources, not coding exercises."
       : effectiveGoal === "hands_on"
-      ? "The student's learning goal is HANDS-ON — they want to build things and practice. If adapting, add more practice exercises and project-based resources, not lectures."
+      ? "Your learning goal is HANDS-ON — you want to build things and practice. If adapting, add more practice exercises and project-based resources, not lectures."
       : effectiveGoal === "quick_overview"
-      ? "The student's learning goal is QUICK OVERVIEW — they want fast, high-level understanding. If adapting, use crash courses and summary content, keep it short."
+      ? "Your learning goal is QUICK OVERVIEW — you want fast, high-level understanding. If adapting, use crash courses and summary content, keep it short."
       : effectiveGoal === "deep_mastery"
-      ? "The student's learning goal is DEEP MASTERY — they want comprehensive, in-depth expertise. If adapting, add thorough review modules with advanced content."
+      ? "Your learning goal is DEEP MASTERY — you want comprehensive, in-depth expertise. If adapting, add thorough review modules with advanced content."
       : "";
 
-    const systemPrompt = `You are Pathfinder's intelligent adaptation engine. A student is progressing through a learning roadmap and has just checked in on a module. Analyze their performance and determine if the remaining roadmap needs adjustment.
+    const systemPrompt = `You are Pathfinder's intelligent adaptation engine. Address the user directly using "you/your" — NEVER say "the user", "the student", or "the learner". Analyze their performance and determine if the remaining roadmap needs adjustment.
 
 ${goalContext}
 
@@ -263,7 +263,7 @@ ADAPTATION LOGIC:
 - If the module was EASY and quiz score > 90%: Check if next modules can be compressed.
 
 TIMELINE CALCULATION (CRITICAL - you MUST follow this):
-- The roadmap has a fixed hours_per_day the student can dedicate.
+- The roadmap has a fixed hours_per_day you can dedicate.
 - new_total_hours = sum of all module estimated_hours (including any added modules).
 - new_timeline_days = ceil(new_total_hours / hours_per_day).
 - new_timeline_weeks = ceil(new_timeline_days / 7).
@@ -276,9 +276,10 @@ OTHER RULES:
 - Never modify completed modules
 - Keep total hours realistic
 - Maintain the same JSON structure as the original roadmap
-- Do NOT pre-generate quizzes. Set every module's quiz to an empty array []`;
+- Do NOT pre-generate quizzes. Set every module's quiz to an empty array []
+- All user-facing text (reason, changes_summary, message_to_student) MUST use "you/your", never third-person`;
 
-    const userPrompt = `Student just completed module "${module_title}" (${module_id}).
+    const userPrompt = `You just completed module "${module_title}" (${module_id}).
 Self-report: ${self_report}
 Quiz score: ${quiz_score ?? "not taken"}
 ${quiz_answers ? `Wrong answers: ${JSON.stringify(quiz_answers)}` : ""}
@@ -322,6 +323,18 @@ Return ONLY valid JSON:
     if (result.updated_roadmap && YOUTUBE_API_KEY) {
       await enrichRoadmapYouTube(result.updated_roadmap, YOUTUBE_API_KEY);
     }
+
+    // Fix third-person language in user-facing text
+    const fixPerson = (s: string) => !s || typeof s !== "string" ? s : s
+      .replace(/\bthe user has\b/gi, "you have").replace(/\bthe user's\b/gi, "your")
+      .replace(/\bthe user is\b/gi, "you are").replace(/\bthe user\b/gi, "you")
+      .replace(/\bthe student has\b/gi, "you have").replace(/\bthe student's\b/gi, "your")
+      .replace(/\bthe student is\b/gi, "you are").replace(/\bthe student\b/gi, "you")
+      .replace(/\bthe learner has\b/gi, "you have").replace(/\bthe learner's\b/gi, "your")
+      .replace(/\bthe learner\b/gi, "you");
+    if (result.reason) result.reason = fixPerson(result.reason);
+    if (result.changes_summary) result.changes_summary = fixPerson(result.changes_summary);
+    if (result.message_to_student) result.message_to_student = fixPerson(result.message_to_student);
 
     return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {

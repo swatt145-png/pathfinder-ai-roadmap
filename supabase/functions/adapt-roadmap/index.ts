@@ -93,6 +93,24 @@ function sanitizeRoadmapPlaceholders(roadmap: any): void {
   }
 }
 
+function fixThirdPersonLanguage(text: string): string {
+  if (!text || typeof text !== "string") return text;
+  return text
+    .replace(/\bthe user has\b/gi, "you have")
+    .replace(/\bthe user's\b/gi, "your")
+    .replace(/\bthe user is\b/gi, "you are")
+    .replace(/\bthe user\b/gi, "you")
+    .replace(/\bthe student has\b/gi, "you have")
+    .replace(/\bthe student's\b/gi, "your")
+    .replace(/\bthe student is\b/gi, "you are")
+    .replace(/\bthe student\b/gi, "you")
+    .replace(/\bthe learner has\b/gi, "you have")
+    .replace(/\bthe learner's\b/gi, "your")
+    .replace(/\bthe learner\b/gi, "you")
+    .replace(/\bUser has\b/g, "You have")
+    .replace(/\bUser's\b/g, "Your");
+}
+
 function stripModuleQuizzes(roadmap: any): void {
   if (!roadmap || !Array.isArray(roadmap.modules)) return;
   for (const mod of roadmap.modules) {
@@ -488,6 +506,16 @@ Return ONLY valid JSON:
         if (opt.updated_roadmap) {
           opt.updated_roadmap.resources_pending = true;
         }
+      }
+    }
+
+    // Fix third-person language in all user-facing text
+    if (result.analysis) result.analysis = fixThirdPersonLanguage(result.analysis);
+    if (result.recommendation_reason) result.recommendation_reason = fixThirdPersonLanguage(result.recommendation_reason);
+    if (result.options) {
+      for (const opt of result.options) {
+        if (opt.description) opt.description = fixThirdPersonLanguage(opt.description);
+        if (opt.tradeoff) opt.tradeoff = fixThirdPersonLanguage(opt.tradeoff);
       }
     }
 
