@@ -64,7 +64,7 @@ export function ExploreCategories() {
         </div>
 
         <div
-          className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 transition-all duration-700 ${
+          className={`grid grid-cols-4 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4 md:gap-6 transition-all duration-700 ${
             visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
           style={{ transitionDelay: "300ms" }}
@@ -80,7 +80,7 @@ export function ExploreCategories() {
                 transform: visible ? "translateY(0)" : "translateY(12px)",
               }}
             >
-              <div className="aspect-[4/3] overflow-hidden">
+              <div className="aspect-square sm:aspect-[4/3] overflow-hidden">
                 <img
                   src={cat.image}
                   alt={cat.label}
@@ -88,8 +88,8 @@ export function ExploreCategories() {
                   loading="lazy"
                 />
               </div>
-              <div className="px-4 py-3">
-                <span className="text-sm md:text-base font-heading font-semibold text-foreground">
+              <div className="px-2 py-1.5 sm:px-4 sm:py-3">
+                <span className="text-[10px] leading-tight sm:text-sm md:text-base font-heading font-semibold text-foreground">
                   {cat.label}
                 </span>
               </div>
