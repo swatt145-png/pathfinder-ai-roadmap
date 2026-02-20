@@ -30,9 +30,9 @@ export function ModuleCompletionActionsModal({
             type="button"
             onClick={onProceedNext}
             disabled={!nextModule}
-            className="w-full gradient-primary text-primary-foreground font-heading font-bold truncate"
+            className="w-full gradient-primary text-primary-foreground font-heading font-bold h-auto min-h-[2.75rem] py-3 whitespace-normal text-left"
           >
-            {nextModule ? `Next: ${nextModule.title}` : "No Next Module"}
+            <span className="break-words leading-snug">{nextModule ? `Next: ${nextModule.title}` : "No Next Module"}</span>
           </Button>
           <Button
             type="button"
