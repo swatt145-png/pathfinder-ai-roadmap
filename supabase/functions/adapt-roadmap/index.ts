@@ -1,7 +1,39 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-// No resource pipeline imports needed — adapt-roadmap returns structure only;
-// resources are populated asynchronously by the populate-resources edge function.
+// ─── Import shared resource pipeline ─────────────────────────────────────────
+import {
+  type CandidateResource,
+  type Resource,
+  type YouTubeMetadata,
+  type ModuleContext,
+  PIPELINE_LIMITS,
+  TIMEOUTS_MS,
+  isAbortError,
+  fetchWithTimeout,
+  extractYouTubeVideoId,
+  normalizeResourceUrl,
+  extractResourceHost,
+  isExcludedResource,
+  isAllowedResourceUrl,
+  detectCertificationIntent,
+  getMaxResourcesForModule,
+  computeHybridSimilarity,
+  isGarbage,
+  generateModuleAnchors,
+  applyStage4Filter,
+  applyDiversityCaps,
+  looksLikeListingPage,
+  isDiscussionOrMetaResource,
+  fetchYouTubeMetadata,
+  fetchTopicAnchors,
+  fetchModuleResults,
+  computeLightAuthorityBump,
+  computeContextFitScoreFallback,
+  mergeAndDeduplicate,
+  enrichCandidatesWithYouTube,
+  clusterAndDiversify,
+} from "../_shared/resource-pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,6 +150,300 @@ function stripModuleQuizzes(roadmap: any): void {
   }
 }
 
+// ─── LLM Helpers (mirrored from generate-roadmap) ───────────────────────────
+
+const ROADMAP_MODEL_AGENT2 = "google/gemini-2.5-flash";
+
+function extractJsonObject(raw: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const unfenced = fenceMatch?.[1]?.trim() || trimmed;
+  const start = unfenced.indexOf("{");
+  const end = unfenced.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  return unfenced.slice(start, end + 1);
+}
+
+function parsePossiblyMalformedJson(value: unknown): any | null {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    const extracted = extractJsonObject(value);
+    if (!extracted) return null;
+    try {
+      return JSON.parse(extracted);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function normalizeTopicKey(raw: string): string {
+  return (raw || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s+#./-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function callLLM(
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  apiKey: string,
+  geminiKey: string | undefined,
+  timeoutMs: number,
+  jsonMode = true,
+): Promise<Response> {
+  const geminiModel = model.replace(/^google\//, "");
+
+  if (geminiKey) {
+    const directTimeout = Math.min(timeoutMs, TIMEOUTS_MS.geminiDirect);
+    try {
+      const res = await fetchWithTimeout(
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${geminiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: geminiModel,
+            messages,
+            ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+          }),
+        },
+        directTimeout,
+      );
+      if (res.ok) return res;
+      console.warn(`Direct Gemini returned ${res.status}, falling back to gateway...`);
+    } catch (e) {
+      console.warn(`Direct Gemini failed: ${isAbortError(e) ? "timeout" : e}, falling back to gateway...`);
+    }
+  }
+
+  return fetchWithTimeout(
+    "https://ai.gateway.lovable.dev/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    },
+    timeoutMs,
+  );
+}
+
+interface ModuleScoringResult {
+  moduleId: string;
+  success: boolean;
+  selections: string[];
+}
+
+async function scoreModuleResources(
+  mod: any,
+  candidates: CandidateResource[],
+  topic: string,
+  goal: string,
+  level: string,
+  apiKey: string
+): Promise<ModuleScoringResult> {
+  const moduleId = mod.id;
+  const emptyResult: ModuleScoringResult = { moduleId, success: false, selections: [] };
+
+  const sorted = [...candidates].sort((a, b) => b.context_fit_score - a.context_fit_score);
+  const top = applyDiversityCaps(sorted, PIPELINE_LIMITS.agent2CandidatesPerModule, goal, topic);
+  if (top.length === 0) return emptyResult;
+
+  const scoringInput = {
+    moduleId,
+    moduleTitle: mod.title,
+    moduleDescription: mod.description || "",
+    learningObjectives: mod.learning_objectives || [],
+    candidates: top.map((c, i) => ({
+      index: i,
+      title: c.title,
+      url: c.url,
+      type: c.type,
+      channel: c.channel || (() => { try { return new URL(c.url).hostname.replace("www.", ""); } catch { return "unknown"; } })(),
+      duration_minutes: c.estimated_minutes,
+      description: c.description,
+      authority_tier: c.authority_tier || "UNKNOWN",
+      authority_score_norm: c.authority_score_norm || 0,
+      authority_bump: c.authority_score,
+      content_type: c.type,
+      reason_flags: c.reason_flags || [],
+      view_count: c.view_count || 0,
+      appearances_count: c.appearances_count,
+    })),
+  };
+
+  const goalInstruction = goal === "hands_on"
+    ? "Prefer practical tutorials, code-alongs, project builds, labs, and implementation walkthroughs."
+    : goal === "conceptual"
+    ? "Prefer concept explainers: videos + study articles/docs focused on mental models and how/why."
+    : goal === "quick_overview"
+    ? "Prefer concise full-topic overviews: crash courses, start-to-finish guides, top takeaways."
+    : "Prefer deep and comprehensive resources: advanced articles, official docs, long-form explainers, and research papers when relevant.";
+
+  const prompt = `You are the Resource Evaluator for ONE module of a learning roadmap. Score and select the best resources.
+
+Learner profile:
+- Topic: ${topic}
+- Learning Goal: ${goal}
+- Proficiency Level: ${level}
+
+Module: "${mod.title}"
+Description: ${mod.description || ""}
+Learning Objectives: ${(mod.learning_objectives || []).join("; ")}
+Time Budget: ${mod.estimated_hours || 1} hours
+
+=== SCORING CRITERIA ===
+
+Score each candidate resource's FIT (0-100):
+1. SEMANTIC RELEVANCE (0-40): Does this resource actually teach what this module needs?
+2. LEVEL ALIGNMENT (0-20): Is this resource pitched at the right difficulty for a ${level} learner?
+3. GOAL ALIGNMENT (0-20): Does the format match the learning goal? ${goalInstruction}
+4. PEDAGOGICAL QUALITY (0-10): Quality educational content vs clickbait/listicle?
+5. TOOL/FRAMEWORK FIT (0-10): Does the tech stack match what this module teaches?
+
+authority_tier and authority_bump are informational only — do NOT let authority override content fit.
+Score STRICTLY. 80+ = excellent, 50-79 = acceptable, below 50 = poor.
+
+=== SELECTION RULES ===
+
+Select the best 1-5 resources. The number is VARIABLE.
+
+- A module CAN have just 1 resource if it's excellent and fits the time budget.
+- Do NOT add filler. Each resource must add unique value.
+- Use your scores as the PRIMARY signal.
+- Avoid low-view unknown creators unless uniquely valuable.
+- LOW-VIEW PENALTY: If a YouTube video has fewer than 1,000 views from an unknown channel, only select it if no better alternative exists.
+- Avoid redundancy — don't pick 3 similar videos.
+- DIVERSITY PREFERENCE: When quality is comparable, prefer a mix of resource types.
+- Time budget is a HARD CONSTRAINT: total selected minutes must not exceed ${Math.round((mod.estimated_hours || 1) * 60)} minutes.
+- Prefer one long high-quality resource over multiple short ones when it fits the budget.
+- Exclude discussion threads and search-result/listing pages.
+- If a candidate title contains "(Continue: X–Y min)", it's a continuation resource — ALWAYS select it.
+
+Candidates:
+${JSON.stringify(scoringInput.candidates, null, 1)}
+
+Return ONLY valid JSON:
+{
+  "candidate_scores": [
+    { "index": 0, "score": 75, "reason": "one short sentence" }
+  ],
+  "selected": [
+    { "url": "...", "why_selected": "one short sentence" }
+  ]
+}`;
+
+  try {
+    const response = await callLLM(
+      ROADMAP_MODEL_AGENT2,
+      [{ role: "user", content: prompt }],
+      apiKey,
+      Deno.env.get("GEMINI_API_KEY"),
+      TIMEOUTS_MS.agent2,
+    );
+
+    if (!response.ok) {
+      console.error(`Agent 2 (module "${mod.title}") error: ${response.status}`);
+      return emptyResult;
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return emptyResult;
+
+    const parsed = parsePossiblyMalformedJson(content);
+    if (!parsed) return emptyResult;
+
+    for (const cs of (parsed.candidate_scores || [])) {
+      if (cs.index >= 0 && cs.index < top.length) {
+        const candidate = top[cs.index];
+        const original = candidates.find(c => c.url === candidate.url);
+        if (original) {
+          original.context_fit_score = Math.max(0, Math.min(cs.score, 100));
+        }
+      }
+    }
+
+    const selectedUrls = (parsed.selected || []).map((s: any) => s.url).filter(Boolean);
+
+    for (const s of (parsed.selected || [])) {
+      if (!s.url || !s.why_selected) continue;
+      const match = candidates.find(c => c.url === s.url);
+      if (match) match.why_selected = s.why_selected;
+    }
+
+    console.log(`Agent 2 (module "${mod.title}"): scored ${parsed.candidate_scores?.length || 0} candidates, selected ${selectedUrls.length}`);
+    return { moduleId, success: true, selections: selectedUrls };
+  } catch (e) {
+    if (isAbortError(e)) {
+      console.warn(`Agent 2 (module "${mod.title}") timed out; using heuristic fallback.`);
+      return emptyResult;
+    }
+    console.error(`Agent 2 (module "${mod.title}") failed:`, e);
+    return emptyResult;
+  }
+}
+
+interface Agent2Result {
+  success: boolean;
+  selections: Map<string, string[]>;
+}
+
+async function parallelModuleAIScoring(
+  allModuleCandidates: Map<string, CandidateResource[]>,
+  modules: any[],
+  topic: string,
+  goal: string,
+  level: string,
+  apiKey: string
+): Promise<Agent2Result> {
+  const modulesWithCandidates = modules.filter(mod => {
+    const candidates = allModuleCandidates.get(mod.id) || [];
+    return candidates.length > 0;
+  });
+
+  if (modulesWithCandidates.length === 0) {
+    return { success: false, selections: new Map() };
+  }
+
+  console.log(`Agent 2: Launching ${modulesWithCandidates.length} parallel per-module scoring agents...`);
+  const tAgent2 = Date.now();
+
+  const results = await Promise.all(
+    modulesWithCandidates.map(mod =>
+      scoreModuleResources(mod, allModuleCandidates.get(mod.id) || [], topic, goal, level, apiKey)
+    )
+  );
+
+  const selections = new Map<string, string[]>();
+  let successCount = 0;
+  for (const result of results) {
+    if (result.success && result.selections.length > 0) {
+      selections.set(result.moduleId, result.selections);
+      successCount++;
+    }
+  }
+
+  console.log(`[TIMING] Agent 2 parallel scoring: ${Date.now() - tAgent2} ms (${successCount}/${modulesWithCandidates.length} modules succeeded)`);
+  return { success: successCount > 0, selections };
+}
+
 function enforceModuleTimeWindowConsistency(
   modules: any[],
   hoursPerDay: number,
@@ -220,8 +546,7 @@ serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const { createClient: createAuthClient } = await import("npm:@supabase/supabase-js@2");
-    const supabaseAuth = createAuthClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseAuth = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user: authUser }, error: authError } = await supabaseAuth.auth.getUser();
@@ -233,6 +558,12 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY");
+    const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAdmin = (Deno.env.get("SUPABASE_URL") && SUPABASE_SERVICE_ROLE_KEY)
+      ? createClient(Deno.env.get("SUPABASE_URL")!, SUPABASE_SERVICE_ROLE_KEY)
+      : null;
 
     const effectiveGoal = learning_goal || "hands_on";
 
@@ -481,13 +812,11 @@ Return ONLY valid JSON:
             ) / 10;
           }
 
-          // Clear stale/placeholder resources from non-completed modules
-          // Resources will be populated asynchronously by populate-resources edge function
+          // Ensure anchor_terms exist for new modules (needed for resource search)
           if (Array.isArray(opt.updated_roadmap.modules)) {
             for (const mod of opt.updated_roadmap.modules) {
               if (!completedModuleIdSet.has(mod.id)) {
                 mod.resources = [];
-                // Ensure anchor_terms exist so populate-resources can build good queries
                 if (!mod.anchor_terms || mod.anchor_terms.length === 0) {
                   const words = `${mod.title || ""} ${mod.description || ""}`.toLowerCase()
                     .replace(/[^a-z0-9\s-]/g, " ").split(/\s+/).filter((w: string) => w.length > 3);
@@ -500,11 +829,303 @@ Return ONLY valid JSON:
       }
     }
 
-    // Mark resources as pending — client will call populate-resources to fill them (skip for fallback)
-    if (result.options && !isFallback) {
+    // ════════════════════════════════════════════════════════════════════════
+    // RESOURCE PIPELINE: Populate resources for new modules inline
+    // ════════════════════════════════════════════════════════════════════════
+    if (result.options && !isFallback && SERPER_API_KEY && YOUTUBE_API_KEY) {
+      const topic = roadmap_data.title || roadmap_data.topic || "";
+      const skillLevel = roadmap_data.skill_level || "beginner";
+      const certificationIntent = detectCertificationIntent(topic);
+
+      // Load user feedback exclusions
+      const excludedUrls = new Set<string>();
+      const excludedDomains = new Set<string>();
+      if (supabaseAdmin && authUser?.id && topic) {
+        try {
+          const topicKey = normalizeTopicKey(topic);
+          const { data: feedbackRows } = await supabaseAdmin
+            .from("resource_feedback")
+            .select("resource_url")
+            .eq("user_id", authUser.id)
+            .eq("topic_key", topicKey)
+            .eq("relevant", false);
+          for (const row of (feedbackRows || [])) {
+            if (!row.resource_url) continue;
+            const normalized = normalizeResourceUrl(String(row.resource_url));
+            excludedUrls.add(normalized);
+            const host = extractResourceHost(String(row.resource_url));
+            if (host) {
+              const baseHost = host.replace(/^www\./, "");
+              if (/^google\./.test(baseHost)) excludedDomains.add(baseHost);
+              if (baseHost === "coursera.org" || baseHost.endsWith(".coursera.org")) excludedDomains.add("*.coursera.org");
+              if (baseHost === "coursera.com" || baseHost.endsWith(".coursera.com")) excludedDomains.add("*.coursera.com");
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to load resource feedback exclusions:", e);
+        }
+      }
+      const allowCacheWrite = excludedUrls.size === 0;
+
+      for (const opt of result.options) {
+        if (!opt.updated_roadmap || !Array.isArray(opt.updated_roadmap.modules)) continue;
+
+        const newModules = opt.updated_roadmap.modules.filter((m: any) => !completedModuleIdSet.has(m.id));
+        if (newModules.length === 0) continue;
+
+        console.log(`Resource pipeline: populating ${newModules.length} new modules for option "${opt.id || opt.label}"...`);
+        const tPipeline = Date.now();
+
+        try {
+          // ── Stage 2: Parallel Serper fetch ──
+          const topicAnchorPromise = fetchTopicAnchors(topic, skillLevel, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, true);
+          const moduleResultsPromises = newModules.map((mod: any) =>
+            fetchModuleResults(mod, topic, skillLevel, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, allowCacheWrite, true)
+          );
+
+          const [topicAnchors, ...allModuleResults] = await Promise.all([
+            topicAnchorPromise,
+            ...moduleResultsPromises,
+          ]);
+          console.log(`[TIMING] Stage 2 retrieval: ${Date.now() - tPipeline} ms`);
+
+          // ── Merge & deduplicate per module ──
+          const allModuleCandidates = new Map<string, CandidateResource[]>();
+          const totalAvailableMinutes = totalAvailableHours * 60;
+
+          for (let i = 0; i < newModules.length; i++) {
+            const mod = newModules[i];
+            const candidates = mergeAndDeduplicate(
+              topicAnchors,
+              allModuleResults[i],
+              mod.title,
+              totalAvailableMinutes,
+              excludedUrls,
+              excludedDomains,
+            );
+            allModuleCandidates.set(mod.id, candidates);
+          }
+
+          // ── Stage 3: YouTube enrichment ──
+          const allVideoIds = new Set<string>();
+          for (const candidates of allModuleCandidates.values()) {
+            for (const c of candidates) {
+              if (c.type === "video") {
+                const id = extractYouTubeVideoId(c.url);
+                if (id) allVideoIds.add(id);
+              }
+            }
+          }
+
+          let ytMap = new Map<string, YouTubeMetadata>();
+          if (allVideoIds.size > 0) {
+            const tYT = Date.now();
+            ytMap = await fetchYouTubeMetadata([...allVideoIds], YOUTUBE_API_KEY, supabaseAdmin);
+            console.log(`[TIMING] YouTube enrichment: ${Date.now() - tYT} ms (${ytMap.size} hits)`);
+          }
+
+          // ── Stages 4-5: Filtering + authority scoring ──
+          const moduleRescuePools = new Map<string, CandidateResource[]>();
+          for (const mod of newModules) {
+            const candidates = allModuleCandidates.get(mod.id) || [];
+            const anchorTerms = generateModuleAnchors(mod, topic);
+            const ctx: ModuleContext = {
+              topic,
+              moduleTitle: mod.title,
+              moduleDescription: mod.description || "",
+              learningObjectives: mod.learning_objectives || [],
+              goal: effectiveGoal,
+              level: skillLevel,
+              moduleMinutes: Math.floor((mod.estimated_hours || 1) * 60),
+              anchorTerms,
+            };
+
+            const enriched = enrichCandidatesWithYouTube(candidates, ytMap, ctx);
+            for (const c of enriched) {
+              if (c.type !== "video") {
+                computeLightAuthorityBump(c);
+                c.context_fit_score = computeContextFitScoreFallback(c, ctx);
+              }
+            }
+
+            const moduleText = `${ctx.topic} ${ctx.moduleTitle} ${ctx.moduleDescription} ${ctx.learningObjectives.join(" ")}`;
+            const rescuePool = [...enriched]
+              .filter(c => !isGarbage(c))
+              .filter(c => isAllowedResourceUrl(c.url))
+              .filter(c => !isExcludedResource(c.url, excludedUrls, excludedDomains))
+              .filter(c => !looksLikeListingPage(c.url, c.title, c.description))
+              .filter(c => !isDiscussionOrMetaResource(c.url, c.title, c.description))
+              .filter(c => computeHybridSimilarity(moduleText, `${c.title} ${c.description} ${c.channel || ""}`) >= 0.1)
+              .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+            moduleRescuePools.set(mod.id, rescuePool);
+
+            const stage4Filtered = applyStage4Filter(enriched, ctx);
+            let stage5Filtered = stage4Filtered.filter(c => !isGarbage(c));
+            if (stage5Filtered.length === 0 && rescuePool.length > 0) {
+              stage5Filtered = rescuePool.slice(0, 8);
+            }
+            stage5Filtered = [...stage5Filtered]
+              .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score))
+              .slice(0, 18);
+
+            allModuleCandidates.set(mod.id, stage5Filtered);
+          }
+
+          // ── Stage 6: Parallel Agent 2 scoring ──
+          const agent2Result = await parallelModuleAIScoring(
+            allModuleCandidates,
+            newModules,
+            topic,
+            effectiveGoal,
+            skillLevel,
+            LOVABLE_API_KEY,
+          );
+          const rerankerSelections = agent2Result.selections;
+
+          // ── Final Assembly ──
+          const usedResourceUrls = new Set<string>();
+          const usedVideoIds = new Set<string>();
+
+          for (const mod of newModules) {
+            const candidates = allModuleCandidates.get(mod.id) || [];
+            const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
+            const moduleBudgetCap = moduleMinutes * 1.05;
+            const maxResources = getMaxResourcesForModule(Number(mod.estimated_hours || 1));
+            const ctx: ModuleContext = {
+              topic,
+              moduleTitle: mod.title,
+              moduleDescription: mod.description || "",
+              learningObjectives: mod.learning_objectives || [],
+              goal: effectiveGoal,
+              level: skillLevel,
+              moduleMinutes,
+            };
+
+            const rerankedUrls = rerankerSelections.get(mod.id);
+            let finalResources: CandidateResource[];
+
+            if (rerankedUrls && rerankedUrls.length > 0) {
+              const reranked: CandidateResource[] = [];
+              for (const url of rerankedUrls) {
+                const match = candidates.find(c => c.url === url);
+                if (match) reranked.push(match);
+              }
+              finalResources = reranked.length > 0 ? reranked : clusterAndDiversify(candidates, ctx);
+            } else {
+              finalResources = clusterAndDiversify(candidates, ctx);
+            }
+
+            // Global uniqueness
+            const uniqueResources: CandidateResource[] = [];
+            for (const c of finalResources) {
+              const normalizedUrl = normalizeResourceUrl(c.url);
+              const videoId = extractYouTubeVideoId(normalizedUrl);
+              if (usedResourceUrls.has(normalizedUrl)) continue;
+              if (videoId && usedVideoIds.has(videoId)) continue;
+              uniqueResources.push(c);
+            }
+
+            // Time budget enforcement
+            const budgetedResources: CandidateResource[] = [];
+            let moduleTotal = 0;
+            for (const c of uniqueResources) {
+              if (moduleTotal + c.estimated_minutes > moduleBudgetCap) continue;
+              budgetedResources.push(c);
+              moduleTotal += c.estimated_minutes;
+            }
+
+            if (budgetedResources.length === 0 && uniqueResources.length > 0) {
+              const shortest = [...uniqueResources]
+                .filter(c => c.estimated_minutes <= moduleBudgetCap * 1.1)
+                .sort((a, b) => a.estimated_minutes - b.estimated_minutes)[0];
+              if (shortest) {
+                budgetedResources.push(shortest);
+                moduleTotal = shortest.estimated_minutes;
+              }
+            }
+
+            // Coverage recovery from rescue pool
+            const coverageTarget = moduleMinutes * 0.6;
+            if (moduleTotal < coverageTarget) {
+              const rescuePool = moduleRescuePools.get(mod.id) || [];
+              for (const c of rescuePool) {
+                if (budgetedResources.length >= maxResources) break;
+                if (budgetedResources.some(b => b.url === c.url)) continue;
+                const normalized = normalizeResourceUrl(c.url);
+                const videoId = extractYouTubeVideoId(normalized);
+                if (usedResourceUrls.has(normalized)) continue;
+                if (videoId && usedVideoIds.has(videoId)) continue;
+                if (moduleTotal + c.estimated_minutes > moduleBudgetCap) continue;
+                budgetedResources.push(c);
+                moduleTotal += c.estimated_minutes;
+                if (moduleTotal >= coverageTarget) break;
+              }
+            }
+
+            // Clean and apply
+            const cleanedResources = budgetedResources.filter(c =>
+              !isExcludedResource(c.url, excludedUrls, excludedDomains) &&
+              isAllowedResourceUrl(c.url) &&
+              !looksLikeListingPage(c.url, c.title, c.description) &&
+              !isDiscussionOrMetaResource(c.url, c.title, c.description)
+            );
+
+            // Video diversity cap
+            let finalizedResources = [...cleanedResources];
+            if (finalizedResources.length >= 2) {
+              const maxModuleVideos = Math.max(1, Math.floor(finalizedResources.length * 0.60));
+              const modVideos = finalizedResources.filter(r => r.type === "video");
+              if (modVideos.length > maxModuleVideos) {
+                const sortedVideos = [...modVideos].sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+                const videosToRemove = new Set(sortedVideos.slice(maxModuleVideos).map(v => v.url));
+                finalizedResources = finalizedResources.filter(r => r.type !== "video" || !videosToRemove.has(r.url));
+              }
+            }
+
+            if (finalizedResources.length > maxResources) {
+              finalizedResources.sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+              finalizedResources = finalizedResources.slice(0, maxResources);
+            }
+
+            // Track used URLs
+            for (const c of finalizedResources) {
+              usedResourceUrls.add(normalizeResourceUrl(c.url));
+              const videoId = extractYouTubeVideoId(c.url);
+              if (videoId) usedVideoIds.add(videoId);
+            }
+
+            // Write resources into module
+            mod.resources = finalizedResources.map(c => ({
+              title: c.title,
+              url: c.url,
+              type: c.type,
+              estimated_minutes: c.estimated_minutes,
+              description: c.description,
+              source: c.source,
+              channel: c.channel,
+              view_count: c.view_count,
+              like_count: c.like_count,
+              quality_signal: c.quality_signal,
+            } as Resource));
+
+            console.log(`Module "${mod.title}": ${mod.resources.length} resources assigned`);
+          }
+
+          console.log(`[TIMING] Full resource pipeline: ${Date.now() - tPipeline} ms`);
+        } catch (e) {
+          console.error("Resource pipeline error (adapt-roadmap):", e);
+          // Non-fatal: modules will have empty resources, but structure is intact
+        }
+
+        // Resources are populated (or failed gracefully) — not pending
+        opt.updated_roadmap.resources_pending = false;
+      }
+    } else if (result.options && !isFallback) {
+      // Missing API keys — mark as not pending (resources will be empty but no async call needed)
+      console.warn("Resource pipeline skipped: SERPER_API_KEY or YOUTUBE_API_KEY not configured");
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
-          opt.updated_roadmap.resources_pending = true;
+          opt.updated_roadmap.resources_pending = false;
         }
       }
     }
