@@ -15,9 +15,18 @@ interface Props {
 }
 
 export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGoal, onClose, onApply }: Props) {
-  const completedCount = Object.values(progressMap).filter((p) => p.status === "completed").length;
+  const completedModules = Object.values(progressMap).filter((p) => p.status === "completed");
+  const completedCount = completedModules.length;
+  const completedModuleIds = new Set(completedModules.map((p) => p.module_id));
+  const completedModulesData = roadmapData.modules.filter((m) => completedModuleIds.has(m.id));
+
+  // Days completed = max day_end of completed modules
+  const totalRoadmapDays = roadmapData.timeline_days || roadmapData.timeline_weeks * 7;
+  const daysCompleted = completedModulesData.reduce((max, m) => Math.max(max, Number(m.day_end || 0)), 0);
+  const daysRemaining = Math.max(1, totalRoadmapDays - daysCompleted);
+
   const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
-  const [newValue, setNewValue] = useState(roadmapData.timeline_weeks * 7);
+  const [newValue, setNewValue] = useState(daysRemaining);
   const [newHours, setNewHours] = useState(roadmapData.hours_per_day);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AdaptResult | null>(null);
@@ -83,7 +92,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
         </div>
 
         <p className="text-sm text-muted-foreground mb-6">
-          You've completed {completedCount} of {roadmapData.modules.length} modules.
+          You've completed {completedCount} of {roadmapData.modules.length} modules ({daysCompleted} {daysCompleted === 1 ? "day" : "days"} done, {daysRemaining} {daysRemaining === 1 ? "day" : "days"} remaining).
         </p>
 
         {!result ? (

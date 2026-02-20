@@ -233,107 +233,107 @@ serve(async (req) => {
     const completedModuleIds = completedModules.map((p: any) => p.module_id);
     const completedModulesData = roadmap_data.modules.filter((m: any) => completedModuleIds.includes(m.id));
     const totalCompletedHours = completedModulesData.reduce((sum: number, m: any) => sum + (m.estimated_hours || 0), 0);
-    const totalDaysCompleted = completedModulesData.length;
 
-    const isCrashCourse = totalAvailableHours < remainingHours;
-    const isExpand = !isCrashCourse && totalAvailableHours > remainingHours * 1.3;
-    const isRedistribute = !isCrashCourse && !isExpand;
+    // Calculate days completed based on actual day_end values of completed modules
+    const daysCompleted = completedModulesData.reduce((max: number, m: any) => Math.max(max, Number(m.day_end || 0)), 0);
 
-    let strategyInstruction: string;
-    if (isCrashCourse) {
-      strategyInstruction = `STRATEGY: CONDENSE (user has ${totalAvailableHours}h but needs ${remainingHours}h — LESS time available).
-You MUST condense all remaining modules to fit within exactly ${totalAvailableHours}h total.
-- Prefer FEWER, denser modules over many tiny modules for short deadlines. You MAY merge adjacent remaining modules if that improves clarity and quality.
-- The total estimated_hours of ALL remaining modules combined MUST equal ${totalAvailableHours}h (not more).
-- Each remaining module fits within ${displayDays} day(s) at ${hrsPerDay}h/day.
-- timeline_days in the response = ${totalDaysCompleted + displayDays}.`;
-    } else if (isExpand) {
-      strategyInstruction = `STRATEGY: EXPAND (user has ${totalAvailableHours}h available for ${remainingHours}h of content — MORE time available).
-- You have extra time to work with. Use your reasoning to decide which remaining modules cover difficult or broad topics and ONLY split those into two sub-modules for deeper coverage.
-- Do NOT split every module — only split modules where the topic genuinely benefits from more time (e.g., complex topics, topics with many subtopics).
-- Keep simpler or narrowly-focused modules as-is, just redistribute their hours proportionally to fill the available time.
-- Give each split module a unique id (original_id + "_part1", "_part2", etc.) and a descriptive title indicating the sub-topic focus.
-- The total estimated_hours of ALL remaining modules combined MUST equal ${totalAvailableHours}h.
-- CRITICAL DAY RANGE RULE: Each module's day_start/day_end must span enough days to accommodate its estimated_hours at ${hrsPerDay}h/day. For example, a module with 6h at ${hrsPerDay}h/day must span at least ${Math.ceil(6 / hrsPerDay)} days, NOT 1 day.
-- Distribute all remaining modules sequentially across days ${totalDaysCompleted + 1} to ${totalDaysCompleted + displayDays} with no gaps. Do NOT assign all modules to day 1 or single-day spans.
-- Day numbering for adapted modules starts at day ${totalDaysCompleted + 1}.
-- timeline_days in the response = ${totalDaysCompleted + displayDays}.
-- hours_per_day = ${hrsPerDay}`;
-    } else {
-      strategyInstruction = `STRATEGY: REDISTRIBUTE (user has roughly the same time — ${totalAvailableHours}h available for ${remainingHours}h of content).
-- Keep existing modules and resources as-is, just update day_start/day_end/week fields to fit the new timeline.
-- Redistribute hours proportionally across the new timeline.
-- timeline_days in the response = ${totalDaysCompleted + displayDays}.`;
-    }
+    // Build summary of what was already covered
+    const completedTopicsSummary = completedModulesData.map((m: any) =>
+      `- "${m.title}": ${m.description || ""}${m.learning_objectives?.length ? ` (covered: ${m.learning_objectives.join(", ")})` : ""}`
+    ).join("\n");
+
+    // Build summary of remaining/uncovered topics from original modules
+    const remainingTopicsSummary = remainingModules.map((m: any) =>
+      `- "${m.title}": ${m.description || ""}${m.anchor_terms?.length ? ` [terms: ${m.anchor_terms.join(", ")}]` : ""}`
+    ).join("\n");
 
     const goalContext = effectiveGoal === "conceptual"
-      ? "The student's learning goal is CONCEPTUAL. When replacing or adding resources, prefer lectures, explainer videos, and theory articles."
+      ? "Learning goal: CONCEPTUAL — prefer lectures, explainer videos, and theory."
       : effectiveGoal === "hands_on"
-      ? "The student's learning goal is HANDS-ON. When replacing or adding resources, prefer coding tutorials, exercises, and project-based content."
+      ? "Learning goal: HANDS-ON — prefer coding tutorials, exercises, and project-based content."
       : effectiveGoal === "quick_overview"
-      ? "The student's learning goal is QUICK OVERVIEW. When replacing or adding resources, prefer crash courses, cheat sheets, and summary content."
+      ? "Learning goal: QUICK OVERVIEW — prefer crash courses, cheat sheets, and summaries."
       : effectiveGoal === "deep_mastery"
-      ? "The student's learning goal is DEEP MASTERY. When replacing or adding resources, prefer comprehensive courses, official docs, and advanced tutorials."
+      ? "Learning goal: DEEP MASTERY — prefer comprehensive courses, official docs, and advanced tutorials."
       : "";
 
-    const systemPrompt = `You are a concise learning-plan optimizer. Address the user directly ("you/your"). Keep all text crisp — no filler.
+    const systemPrompt = `You are an expert learning-plan designer. Address the user directly ("you/your"). Keep all text crisp — no filler.
+
+Your job: generate a FRESH set of modules to cover topics the user hasn't completed yet, fitted to their new time budget. Do NOT restructure or redistribute old modules — design new ones from scratch based on what still needs to be learned.
 
 ${goalContext}
 
 RULES:
-- The updated_roadmap MUST include ALL modules: both completed and adapted. Do NOT omit completed modules.
-- Completed modules (IDs: ${JSON.stringify(completedModuleIds)}) MUST appear first in the modules array, completely unchanged — same id, title, resources, estimated_hours, day_start, day_end, week.
-- For adapted modules, focus on structure and timing correctness; resources will be re-curated by the pipeline after adaptation.
-${strategyInstruction}
-- total_hours in updated_roadmap = ${totalCompletedHours} (completed) + adapted remaining hours
-- timeline_weeks = ceil(total_days / 7)
-- hours_per_day = ${hrsPerDay}
-- modules_kept = total number of modules in the final roadmap (completed + adapted)
-- MODULE COUNT LIMIT: The total number of remaining (non-completed) modules must follow this formula based on remaining hours (R = total remaining hours):
-  - If R ≤ 12: max remaining modules = floor(R / 2)
-  - If 12 < R ≤ 50: max remaining modules = floor(R / 3)
-  - If R > 50: max remaining modules = floor(R / 4)
-  - Do NOT create more modules than this allows. Each adapted module must have meaningful content and enough hours for resources to be assigned.
-  - Minimum module duration: 1 hour. Never create modules shorter than 1 hour.
-- Keep analysis to 1-2 sentences`;
+1. The updated_roadmap MUST include completed modules FIRST (unchanged), then your NEW modules.
+2. Completed modules (IDs: ${JSON.stringify(completedModuleIds)}) MUST appear exactly as provided — same id, title, description, resources, estimated_hours, day_start, day_end, week. Do NOT modify them.
+3. For NEW modules, generate fresh content covering topics NOT yet completed. Each module needs:
+   - id: "mod_N" format (sequential after completed modules)
+   - title: clear, specific module title
+   - description: 2-3 sentences explaining what this module covers
+   - estimated_hours: realistic hours for the content
+   - day_start / day_end: sequential within the remaining timeline (days ${daysCompleted + 1} to ${daysCompleted + displayDays})
+   - week: ceil(day_start / 7)
+   - prerequisites: array of module ids this depends on
+   - learning_objectives: 2-4 specific, measurable objectives
+   - anchor_terms: 3-8 concrete technical terms specific to this module (e.g., "closure", "event-loop", "promise") — NOT generic words
+   - resources: [] (leave empty — resources are populated separately)
+   - quiz: []
+4. Time budget: ${displayDays} day(s) at ${hrsPerDay}h/day = ${totalAvailableHours}h total for new modules. The sum of all new modules' estimated_hours MUST equal ${totalAvailableHours}h.
+5. Day numbering for new modules starts at day ${daysCompleted + 1}.
+6. MODULE COUNT LIMIT based on remaining hours (R = ${totalAvailableHours}):
+   ${totalAvailableHours <= 12 ? `- R ≤ 12: max ${Math.max(1, Math.floor(totalAvailableHours / 2))} modules` : totalAvailableHours <= 50 ? `- 12 < R ≤ 50: max ${Math.max(4, Math.floor(totalAvailableHours / 3))} modules` : `- R > 50: max ${Math.max(6, Math.floor(totalAvailableHours / 4))} modules`}
+   - Minimum module duration: 1 hour.
+7. timeline_days = ${daysCompleted + displayDays}
+8. timeline_weeks = ${Math.ceil((daysCompleted + displayDays) / 7)}
+9. hours_per_day = ${hrsPerDay}
+10. total_hours = ${totalCompletedHours} (completed) + new module hours
+11. Keep analysis to 1-2 sentences`;
 
-    const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules (${remainingModules.length} remaining, ~${remainingHours}h of content).
-Available: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours}h total).
-Learning Goal: ${effectiveGoal}
+    const userPrompt = `The user is learning: "${roadmap_data.title || roadmap_data.topic || "this subject"}"
 
-Current roadmap: ${JSON.stringify({
-      ...roadmap_data,
-      modules: (roadmap_data.modules || []).map((m: any) => ({
-        id: m.id,
-        title: m.title,
-        description: m.description,
-        estimated_hours: m.estimated_hours,
-        day_start: m.day_start,
-        day_end: m.day_end,
-        week: m.week,
-        prerequisites: m.prerequisites,
-        learning_objectives: m.learning_objectives,
-        anchor_terms: m.anchor_terms,
-      })),
-    })}
-Progress: ${JSON.stringify(all_progress)}
+COMPLETED TOPICS (${completedModules.length} modules, ${totalCompletedHours}h):
+${completedTopicsSummary || "(none)"}
+
+REMAINING/UNCOVERED TOPICS from original plan (${remainingModules.length} modules):
+${remainingTopicsSummary || "(none)"}
+
+NEW TIME BUDGET: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours}h total)
+
+Generate a fresh module plan covering the uncovered topics above, fitted to the new time budget. Prioritize the most important uncovered topics if time is tight.
+
+Completed modules to include unchanged: ${JSON.stringify(completedModulesData.map((m: any) => ({
+      id: m.id, title: m.title, description: m.description,
+      estimated_hours: m.estimated_hours, day_start: m.day_start, day_end: m.day_end,
+      week: m.week, prerequisites: m.prerequisites, learning_objectives: m.learning_objectives,
+      anchor_terms: m.anchor_terms, resources: m.resources, quiz: m.quiz || [],
+    })))}
 
 Return ONLY valid JSON:
 {
-  "analysis": "1-2 sentence summary of the situation and what the adapted plan does",
+  "analysis": "1-2 sentence summary of what your adapted plan covers",
   "options": [
     {
       "id": "adapted_plan",
       "label": "Adapted Plan",
-      "description": "1 sentence describing how the plan was adapted",
-      "timeline_days": number,
-      "hours_per_day": number,
-      "total_remaining_hours": number,
-      "modules_kept": number,
+      "description": "1 sentence describing the new module plan",
+      "timeline_days": ${daysCompleted + displayDays},
+      "hours_per_day": ${hrsPerDay},
+      "total_remaining_hours": ${totalAvailableHours},
+      "modules_kept": number (completed + new),
       "modules_removed": [],
-      "modules_added": [],
+      "modules_added": ["list of new module titles"],
       "tradeoff": "1 sentence about what changed",
-      "updated_roadmap": { full roadmap JSON with same structure, with adapted remaining modules and REPLACED/SPLIT resources as needed }
+      "updated_roadmap": {
+        "title": "${roadmap_data.title || ""}",
+        "topic": "${roadmap_data.topic || ""}",
+        "summary": "updated 1-2 sentence summary",
+        "tips": "1-2 practical tips",
+        "timeline_days": ${daysCompleted + displayDays},
+        "timeline_weeks": ${Math.ceil((daysCompleted + displayDays) / 7)},
+        "hours_per_day": ${hrsPerDay},
+        "total_hours": number,
+        "modules": [ ...completed modules unchanged, ...new fresh modules ]
+      }
     }
   ],
   "recommendation": "adapted_plan",
@@ -371,29 +371,33 @@ Return ONLY valid JSON:
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
     let result: any;
+    let isFallback = false;
     try {
       result = parseAiJson(content);
     } catch {
+      isFallback = true;
       result = {
-        analysis: "Couldn't generate options automatically. Your current plan is preserved.",
+        analysis: "Couldn't generate a new plan automatically. Your current plan is preserved with all resources intact.",
         options: [{
-          id: "option_a", label: "Keep Current Plan",
-          description: "Continue with your current roadmap.",
-          timeline_days: displayDays, hours_per_day: Number(new_hours_per_day),
-          total_remaining_hours: totalAvailableHours,
+          id: "keep_current", label: "Keep Current Plan",
+          description: "Continue with your current roadmap — no changes applied.",
+          timeline_days: roadmap_data.timeline_days || (roadmap_data.timeline_weeks * 7),
+          hours_per_day: roadmap_data.hours_per_day || Number(new_hours_per_day),
+          total_remaining_hours: remainingHours,
           modules_kept: Array.isArray(roadmap_data?.modules) ? roadmap_data.modules.length : 0,
           modules_removed: [], modules_added: [],
-          tradeoff: "No changes applied.", updated_roadmap: roadmap_data,
+          tradeoff: "No changes — your existing plan and resources are preserved.",
+          updated_roadmap: { ...roadmap_data, resources_pending: false },
         }],
-        recommendation: "option_a",
-        recommendation_reason: "Fallback to avoid interruption.",
+        recommendation: "keep_current",
+        recommendation_reason: "Your current plan is preserved because the AI couldn't generate a new one.",
       };
     }
 
-    // Post-process adapted roadmap structure
+    // Post-process adapted roadmap structure (skip for fallback — original data is already correct)
     const completedModuleIdSet = new Set<string>(completedModuleIds);
 
-    if (result.options) {
+    if (result.options && !isFallback) {
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
           stripModuleQuizzes(opt.updated_roadmap);
@@ -478,8 +482,8 @@ Return ONLY valid JSON:
       }
     }
 
-    // Mark resources as pending — client will call populate-resources to fill them
-    if (result.options) {
+    // Mark resources as pending — client will call populate-resources to fill them (skip for fallback)
+    if (result.options && !isFallback) {
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
           opt.updated_roadmap.resources_pending = true;
