@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import WavyBackground from "@/components/WavyBackground";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +73,7 @@ export default function Flashcards() {
     return (
       <>
         <AppBar />
+        <WavyBackground />
         <div className="flex min-h-screen items-center justify-center pt-14">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
         </div>
@@ -91,6 +93,7 @@ export default function Flashcards() {
     return (
       <>
         <AppBar />
+        <WavyBackground />
         <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
           <div className="flex items-center gap-3 mb-6">
             <Button variant="ghost" size="sm" onClick={() => { setSelectedCard(null); setFlipped(false); }}>
@@ -131,6 +134,7 @@ export default function Flashcards() {
     return (
       <>
         <AppBar />
+        <WavyBackground />
         <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-6xl mx-auto animate-fade-in">
           <div className="flex items-center gap-3 mb-8">
             <Button variant="ghost" size="icon" onClick={() => setSelectedRoadmap(null)}>
@@ -174,6 +178,7 @@ export default function Flashcards() {
   return (
     <>
       <AppBar />
+      <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-6xl mx-auto animate-fade-in">
         <div className="flex items-center gap-3 mb-8">
           <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>

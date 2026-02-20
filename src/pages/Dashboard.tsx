@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import WavyBackground from "@/components/WavyBackground";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -516,6 +517,7 @@ export default function Dashboard() {
   return (
     <>
       <AppBar />
+      <WavyBackground />
       <div className="min-h-screen pt-16 pb-24 px-4 md:px-12">
         <div className="max-w-4xl mx-auto">
         {/* Main content */}
@@ -655,8 +657,8 @@ export default function Dashboard() {
         </div>
 
         </div> {/* end main content */}
-        {/* Fixed top-right action buttons */}
-        <div className="fixed top-16 right-4 md:right-8 z-40 flex flex-wrap gap-2 max-w-[calc(100vw-2rem)] md:max-w-md justify-end">
+        {/* Fixed right-side action buttons — vertical stack */}
+        <div className="fixed top-20 right-4 md:right-8 z-40 flex flex-col gap-2 w-auto">
           {roadmap?.status === "archived" ? (
             <>
               <Button onClick={async () => {
