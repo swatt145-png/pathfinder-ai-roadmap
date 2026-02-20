@@ -113,16 +113,16 @@
     min-height: 100vh;
     transition: background-color 0.3s ease;
     background-image:
-      radial-gradient(ellipse at 50% 0%, hsl(210 25% 14%) 0%, hsl(220 20% 10%) 70%),
-      radial-gradient(circle, hsl(var(--primary) / 0.03) 1px, transparent 1px);
-    background-size: 100% 100%, 24px 24px;
+      radial-gradient(ellipse at 50% 0%, hsl(210 25% 16%) 0%, hsl(220 20% 10%) 70%),
+      radial-gradient(circle, hsl(var(--primary) / 0.07) 1px, transparent 1px);
+    background-size: 100% 100%, 20px 20px;
   }
 
   .light body {
     background-image:
-      radial-gradient(ellipse at 50% 0%, hsl(210 30% 98%) 0%, hsl(210 20% 96%) 70%),
-      radial-gradient(circle, hsl(var(--primary) / 0.02) 1px, transparent 1px);
-    background-size: 100% 100%, 24px 24px;
+      radial-gradient(ellipse at 50% 0%, hsl(210 40% 97%) 0%, hsl(210 20% 93%) 70%),
+      radial-gradient(circle, hsl(var(--primary) / 0.06) 1px, transparent 1px);
+    background-size: 100% 100%, 20px 20px;
   }
 }
 
