@@ -565,6 +565,7 @@ serve(async (req) => {
       ? createClient(Deno.env.get("SUPABASE_URL")!, SUPABASE_SERVICE_ROLE_KEY)
       : null;
 
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const effectiveGoal = learning_goal || "hands_on";
 
     // Support both days and weeks input; prefer days
@@ -688,28 +689,57 @@ Return ONLY valid JSON:
   "recommendation": "adapted_plan",
   "recommendation_reason": "1 sentence"
 }`;
-    const aiController = new AbortController();
+    // ── Kick off topic anchors + feedback exclusions in parallel with AI call ──
+    const topic = roadmap_data.title || roadmap_data.topic || "";
+    const skillLevel = roadmap_data.skill_level || "beginner";
+    const certificationIntent = detectCertificationIntent(topic);
+
+    // Start topic anchor Serper search (only needs topic name, not AI output)
+    const earlyTopicAnchorsPromise = (SERPER_API_KEY)
+      ? fetchTopicAnchors(topic, skillLevel, effectiveGoal, certificationIntent, SERPER_API_KEY, supabaseAdmin, true, true)
+      : Promise.resolve({ web: [], videos: [] });
+
+    // Start feedback exclusions DB query
+    const earlyFeedbackPromise = (async () => {
+      const excludedUrls = new Set<string>();
+      const excludedDomains = new Set<string>();
+      if (supabaseAdmin && authUser?.id && topic) {
+        try {
+          const topicKey = normalizeTopicKey(topic);
+          const { data: feedbackRows } = await supabaseAdmin
+            .from("resource_feedback")
+            .select("resource_url")
+            .eq("user_id", authUser.id)
+            .eq("topic_key", topicKey)
+            .eq("relevant", false);
+          for (const row of (feedbackRows || [])) {
+            if (!row.resource_url) continue;
+            const normalized = normalizeResourceUrl(String(row.resource_url));
+            excludedUrls.add(normalized);
+            const host = extractResourceHost(String(row.resource_url));
+            if (host) {
+              const baseHost = host.replace(/^www\./, "");
+              if (/^google\./.test(baseHost)) excludedDomains.add(baseHost);
+              if (baseHost === "coursera.org" || baseHost.endsWith(".coursera.org")) excludedDomains.add("*.coursera.org");
+              if (baseHost === "coursera.com" || baseHost.endsWith(".coursera.com")) excludedDomains.add("*.coursera.com");
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to load resource feedback exclusions:", e);
+        }
+      }
+      return { excludedUrls, excludedDomains };
+    })();
+
     const moduleCount = roadmap_data.modules?.length || 0;
     const aiTimeoutMs = Math.min(120000, 45000 + Math.max(0, moduleCount - 6) * 8000);
-    const aiTimeout = setTimeout(() => aiController.abort(), aiTimeoutMs);
-    let response: Response;
-    try {
-      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-3-pro-preview",
-          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          response_format: { type: "json_object" },
-        }),
-        signal: aiController.signal,
-      });
-    } catch (e: any) {
-      clearTimeout(aiTimeout);
-      if (e.name === "AbortError") throw new Error(`AI call timed out after ${Math.round(aiTimeoutMs / 1000)}s`);
-      throw e;
-    }
-    clearTimeout(aiTimeout);
+    const response = await callLLM(
+      "google/gemini-3-pro-preview",
+      [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+      LOVABLE_API_KEY,
+      GEMINI_API_KEY,
+      aiTimeoutMs,
+    );
 
     if (!response.ok) {
       if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -832,80 +862,33 @@ Return ONLY valid JSON:
     // ════════════════════════════════════════════════════════════════════════
     // RESOURCE PIPELINE: Populate resources for new modules inline
     // ════════════════════════════════════════════════════════════════════════
-    const _pipelineDebug: Record<string, any> = {
-      hasOptions: !!result.options,
-      isFallback,
-      hasSerperKey: !!SERPER_API_KEY,
-      hasYoutubeKey: !!YOUTUBE_API_KEY,
-      hasSupabaseAdmin: !!supabaseAdmin,
-    };
 
     if (result.options && !isFallback && SERPER_API_KEY && YOUTUBE_API_KEY) {
-      const topic = roadmap_data.title || roadmap_data.topic || "";
-      const skillLevel = roadmap_data.skill_level || "beginner";
-      const certificationIntent = detectCertificationIntent(topic);
-      _pipelineDebug.topic = topic;
-      _pipelineDebug.skillLevel = skillLevel;
-      _pipelineDebug.effectiveGoal = effectiveGoal;
-
-      // Load user feedback exclusions
-      const excludedUrls = new Set<string>();
-      const excludedDomains = new Set<string>();
-      if (supabaseAdmin && authUser?.id && topic) {
-        try {
-          const topicKey = normalizeTopicKey(topic);
-          const { data: feedbackRows } = await supabaseAdmin
-            .from("resource_feedback")
-            .select("resource_url")
-            .eq("user_id", authUser.id)
-            .eq("topic_key", topicKey)
-            .eq("relevant", false);
-          for (const row of (feedbackRows || [])) {
-            if (!row.resource_url) continue;
-            const normalized = normalizeResourceUrl(String(row.resource_url));
-            excludedUrls.add(normalized);
-            const host = extractResourceHost(String(row.resource_url));
-            if (host) {
-              const baseHost = host.replace(/^www\./, "");
-              if (/^google\./.test(baseHost)) excludedDomains.add(baseHost);
-              if (baseHost === "coursera.org" || baseHost.endsWith(".coursera.org")) excludedDomains.add("*.coursera.org");
-              if (baseHost === "coursera.com" || baseHost.endsWith(".coursera.com")) excludedDomains.add("*.coursera.com");
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to load resource feedback exclusions:", e);
-        }
-      }
+      // Await the early promises (topic anchors + feedback) — they ran during the AI call
+      const [earlyTopicAnchors, earlyFeedback] = await Promise.all([
+        earlyTopicAnchorsPromise,
+        earlyFeedbackPromise,
+      ]);
+      const { excludedUrls, excludedDomains } = earlyFeedback;
       const allowCacheWrite = excludedUrls.size === 0;
 
       for (const opt of result.options) {
         if (!opt.updated_roadmap || !Array.isArray(opt.updated_roadmap.modules)) continue;
 
         const newModules = opt.updated_roadmap.modules.filter((m: any) => !completedModuleIdSet.has(m.id));
-        _pipelineDebug.newModuleCount = newModules.length;
-        _pipelineDebug.completedModuleIds = [...completedModuleIdSet];
-        _pipelineDebug.allModuleIds = opt.updated_roadmap.modules.map((m: any) => m.id);
-        if (newModules.length === 0) { _pipelineDebug.skipped = "no new modules"; continue; }
+        if (newModules.length === 0) continue;
 
         console.log(`Resource pipeline: populating ${newModules.length} new modules for option "${opt.id || opt.label}"...`);
         const tPipeline = Date.now();
 
         try {
-          // ── Stage 2: Parallel Serper fetch ──
-          _pipelineDebug.stage2Start = true;
-          const topicAnchorPromise = fetchTopicAnchors(topic, skillLevel, effectiveGoal, certificationIntent, SERPER_API_KEY!, supabaseAdmin, allowCacheWrite, true);
-          const moduleResultsPromises = newModules.map((mod: any) =>
-            fetchModuleResults(mod, topic, skillLevel, effectiveGoal, certificationIntent, SERPER_API_KEY!, supabaseAdmin, allowCacheWrite, true)
+          // ── Stage 2: Parallel Serper fetch (topic anchors already done) ──
+          const topicAnchors = earlyTopicAnchors;
+          const allModuleResults = await Promise.all(
+            newModules.map((mod: any) =>
+              fetchModuleResults(mod, topic, skillLevel, effectiveGoal, certificationIntent, SERPER_API_KEY!, supabaseAdmin, allowCacheWrite, true)
+            )
           );
-
-          const [topicAnchors, ...allModuleResults] = await Promise.all([
-            topicAnchorPromise,
-            ...moduleResultsPromises,
-          ]);
-          _pipelineDebug.stage2Ms = Date.now() - tPipeline;
-          _pipelineDebug.topicAnchorVideos = topicAnchors.videos?.length || 0;
-          _pipelineDebug.topicAnchorWeb = topicAnchors.web?.length || 0;
-          _pipelineDebug.moduleResultCounts = allModuleResults.map((r: any) => ({ v: r.videos?.length || 0, w: r.web?.length || 0 }));
           console.log(`[TIMING] Stage 2 retrieval: ${Date.now() - tPipeline} ms`);
 
           // ── Merge & deduplicate per module ──
@@ -1130,13 +1113,8 @@ Return ONLY valid JSON:
             console.log(`Module "${mod.title}": ${mod.resources.length} resources assigned`);
           }
 
-          _pipelineDebug.pipelineMs = Date.now() - tPipeline;
-          _pipelineDebug.success = true;
-          _pipelineDebug.moduleResourceCounts = newModules.map((m: any) => ({ id: m.id, title: m.title, resources: m.resources?.length || 0 }));
           console.log(`[TIMING] Full resource pipeline: ${Date.now() - tPipeline} ms`);
         } catch (e) {
-          _pipelineDebug.error = e instanceof Error ? e.message : String(e);
-          _pipelineDebug.errorStack = e instanceof Error ? e.stack : undefined;
           console.error("Resource pipeline error (adapt-roadmap):", e);
           // Non-fatal: modules will have empty resources, but structure is intact
         }
@@ -1146,18 +1124,13 @@ Return ONLY valid JSON:
       }
     } else if (result.options && !isFallback) {
       // Missing API keys — mark as not pending (resources will be empty but no async call needed)
-      _pipelineDebug.skipped = "missing_api_keys";
       console.warn("Resource pipeline skipped: SERPER_API_KEY or YOUTUBE_API_KEY not configured");
       for (const opt of result.options) {
         if (opt.updated_roadmap) {
           opt.updated_roadmap.resources_pending = false;
         }
       }
-    } else {
-      _pipelineDebug.skipped = `no_options=${!result.options}, isFallback=${isFallback}`;
     }
-
-    result._pipeline_debug = _pipelineDebug;
 
     // Fix third-person language in all user-facing text
     if (result.analysis) result.analysis = fixThirdPersonLanguage(result.analysis);
