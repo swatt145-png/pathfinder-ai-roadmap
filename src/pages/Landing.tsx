@@ -59,10 +59,10 @@ export default function Landing() {
             style={{ background: "hsl(var(--primary) / 0.5)" }}
           />
           {/* Fluid wave shapes — inspired by abstract fluid backgrounds */}
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1440 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,300 C360,450 720,150 1080,350 C1260,450 1440,280 1440,280 L1440,0 L0,0 Z" fill="hsl(var(--violet) / 0.06)" />
-            <path d="M0,500 C200,350 500,550 800,400 C1100,250 1300,500 1440,450 L1440,900 L0,900 Z" fill="hsl(var(--primary) / 0.05)" />
-            <path d="M0,650 C300,550 600,750 900,600 C1200,450 1440,700 1440,700 L1440,900 L0,900 Z" fill="hsl(var(--violet) / 0.04)" />
+          <svg className="absolute inset-0 w-full h-full hero-waves" viewBox="0 0 1440 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,300 C360,450 720,150 1080,350 C1260,450 1440,280 1440,280 L1440,0 L0,0 Z" className="hero-wave-1" />
+            <path d="M0,500 C200,350 500,550 800,400 C1100,250 1300,500 1440,450 L1440,900 L0,900 Z" className="hero-wave-2" />
+            <path d="M0,650 C300,550 600,750 900,600 C1200,450 1440,700 1440,700 L1440,900 L0,900 Z" className="hero-wave-3" />
           </svg>
           {/* Geometric accents */}
           <div className="absolute top-[15%] right-[10%] w-24 h-24 rounded-full border border-primary/10 opacity-30" />
