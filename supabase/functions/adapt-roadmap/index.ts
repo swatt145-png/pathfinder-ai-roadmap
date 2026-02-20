@@ -33,6 +33,14 @@ function sanitizeControlCharsInJson(raw: string): string {
   return out;
 }
 
+function getMaxResourcesForModule(moduleHours: number): number {
+  if (moduleHours <= 1.5) return 3;
+  if (moduleHours <= 3) return 4;
+  if (moduleHours <= 5) return 5;
+  if (moduleHours <= 10) return 6;
+  return 6;
+}
+
 function extractJsonCandidate(content: string): string {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fenced?.[1]) return fenced[1].trim();
@@ -604,6 +612,7 @@ async function refreshResourcesForAdaptedRoadmap(
     const dayEnd = Number(mod.day_end || dayStart);
     const moduleDays = Math.max(1, dayEnd - dayStart + 1);
     const moduleBudgetCap = Math.min(moduleMinutes * 1.05, moduleDays * hoursPerDay * 60 * 1.1);
+    const maxResources = getMaxResourcesForModule(Number(mod.estimated_hours || 1));
     const anchors = generateModuleAnchors(mod, topic);
     const candidates = mergeAndDeduplicate(topicAnchors, moduleResults[i], mod.title || "");
 
@@ -615,7 +624,7 @@ async function refreshResourcesForAdaptedRoadmap(
     const selected: CandidateResource[] = [];
     let moduleTotal = 0;
     for (const c of scored) {
-      if (selected.length >= 4) break;
+      if (selected.length >= maxResources) break;
       const normalized = c.url.split("&")[0];
       const videoId = extractYouTubeVideoId(normalized);
       if (usedUrls.has(normalized)) continue;
@@ -682,6 +691,7 @@ async function refreshResourcesForAdaptedRoadmap(
 
     if (finalizedMinutes < hardCoverageTarget) {
       for (const c of scored) {
+        if (finalized.length >= maxResources) break;
         if (finalized.some(r => r.url === c.url)) continue;
         const normalized = c.url.split("&")[0];
         const videoId = extractYouTubeVideoId(normalized);
@@ -696,6 +706,13 @@ async function refreshResourcesForAdaptedRoadmap(
         finalizedMinutes += c.estimated_minutes;
         if (finalizedMinutes >= hardCoverageTarget) break;
       }
+    }
+
+    // Hard cap: enforce duration-based max resources per module
+    if (finalized.length > maxResources) {
+      finalized.sort((a, b) => (b.score || 0) - (a.score || 0));
+      finalized = finalized.slice(0, maxResources);
+      finalizedMinutes = finalized.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
     }
 
     for (const c of finalized) {
@@ -885,13 +902,33 @@ ${strategyInstruction}
 - timeline_weeks = ceil(total_days / 7)
 - hours_per_day = ${hrsPerDay}
 - modules_kept = total number of modules in the final roadmap (completed + adapted)
+- MODULE COUNT LIMIT: The total number of remaining (non-completed) modules must follow this formula based on remaining hours (R = total remaining hours):
+  - If R ≤ 12: max remaining modules = floor(R / 2)
+  - If 12 < R ≤ 50: max remaining modules = floor(R / 3)
+  - If R > 50: max remaining modules = floor(R / 4)
+  - Do NOT create more modules than this allows. Each adapted module must have meaningful content and enough hours for resources to be assigned.
+  - Minimum module duration: 1 hour. Never create modules shorter than 1 hour.
 - Keep analysis to 1-2 sentences`;
 
     const userPrompt = `Completed: ${completedModules.length}/${roadmap_data.modules.length} modules (${remainingModules.length} remaining, ~${remainingHours}h of content).
 Available: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours}h total).
 Learning Goal: ${effectiveGoal}
 
-Current roadmap: ${JSON.stringify(roadmap_data)}
+Current roadmap: ${JSON.stringify({
+      ...roadmap_data,
+      modules: (roadmap_data.modules || []).map((m: any) => ({
+        id: m.id,
+        title: m.title,
+        description: m.description,
+        estimated_hours: m.estimated_hours,
+        day_start: m.day_start,
+        day_end: m.day_end,
+        week: m.week,
+        prerequisites: m.prerequisites,
+        learning_objectives: m.learning_objectives,
+        anchor_terms: m.anchor_terms,
+      })),
+    })}
 Progress: ${JSON.stringify(all_progress)}
 
 Return ONLY valid JSON:
@@ -916,7 +953,9 @@ Return ONLY valid JSON:
   "recommendation_reason": "1 sentence"
 }`;
     const aiController = new AbortController();
-    const aiTimeout = setTimeout(() => aiController.abort(), 45000);
+    const moduleCount = roadmap_data.modules?.length || 0;
+    const aiTimeoutMs = Math.min(120000, 45000 + Math.max(0, moduleCount - 6) * 8000);
+    const aiTimeout = setTimeout(() => aiController.abort(), aiTimeoutMs);
     let response: Response;
     try {
       response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -931,7 +970,7 @@ Return ONLY valid JSON:
       });
     } catch (e: any) {
       clearTimeout(aiTimeout);
-      if (e.name === "AbortError") throw new Error("AI call timed out after 45s");
+      if (e.name === "AbortError") throw new Error(`AI call timed out after ${Math.round(aiTimeoutMs / 1000)}s`);
       throw e;
     }
     clearTimeout(aiTimeout);
@@ -984,6 +1023,53 @@ Return ONLY valid JSON:
               opt.updated_roadmap.modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10
             ) / 10;
           }
+          // Enforce module count limit on remaining modules before resource refresh
+          if (Array.isArray(opt.updated_roadmap.modules)) {
+            const remainingMods = opt.updated_roadmap.modules.filter((m: any) => !completedModuleIdSet.has(m.id));
+            const remainingHrs = remainingMods.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0);
+            let maxRemaining: number;
+            if (remainingHrs <= 12) maxRemaining = Math.max(1, Math.floor(remainingHrs / 2));
+            else if (remainingHrs <= 50) maxRemaining = Math.max(4, Math.floor(remainingHrs / 3));
+            else maxRemaining = Math.max(6, Math.floor(remainingHrs / 4));
+
+            if (remainingMods.length > maxRemaining) {
+              // Merge excess trailing modules into the last kept module
+              const completedMods = opt.updated_roadmap.modules.filter((m: any) => completedModuleIdSet.has(m.id));
+              const keptRemaining = remainingMods.slice(0, maxRemaining);
+              const excessMods = remainingMods.slice(maxRemaining);
+              if (keptRemaining.length > 0 && excessMods.length > 0) {
+                const lastKept = keptRemaining[keptRemaining.length - 1];
+                for (const ex of excessMods) {
+                  lastKept.estimated_hours = Number(lastKept.estimated_hours || 0) + Number(ex.estimated_hours || 0);
+                  lastKept.day_end = Math.max(Number(lastKept.day_end || 1), Number(ex.day_end || 1));
+                  lastKept.learning_objectives = [...new Set([...(lastKept.learning_objectives || []), ...(ex.learning_objectives || [])])].slice(0, 8);
+                  lastKept.anchor_terms = [...new Set([...(lastKept.anchor_terms || []), ...(ex.anchor_terms || [])])].slice(0, 8);
+                }
+              }
+              opt.updated_roadmap.modules = [...completedMods, ...keptRemaining];
+            }
+
+            // Enforce minimum 1h per remaining module — merge tiny modules into neighbors
+            const finalRemaining = opt.updated_roadmap.modules.filter((m: any) => !completedModuleIdSet.has(m.id));
+            for (let ri = finalRemaining.length - 1; ri >= 0; ri--) {
+              if (Number(finalRemaining[ri].estimated_hours || 0) < 1 && finalRemaining.length > 1) {
+                const mergeTarget = ri > 0 ? finalRemaining[ri - 1] : finalRemaining[ri + 1];
+                mergeTarget.estimated_hours = Number(mergeTarget.estimated_hours || 0) + Number(finalRemaining[ri].estimated_hours || 0);
+                mergeTarget.day_end = Math.max(Number(mergeTarget.day_end || 1), Number(finalRemaining[ri].day_end || 1));
+                mergeTarget.learning_objectives = [...new Set([...(mergeTarget.learning_objectives || []), ...(finalRemaining[ri].learning_objectives || [])])].slice(0, 8);
+                mergeTarget.anchor_terms = [...new Set([...(mergeTarget.anchor_terms || []), ...(finalRemaining[ri].anchor_terms || [])])].slice(0, 8);
+                const modIdx = opt.updated_roadmap.modules.indexOf(finalRemaining[ri]);
+                if (modIdx >= 0) opt.updated_roadmap.modules.splice(modIdx, 1);
+                finalRemaining.splice(ri, 1);
+              }
+            }
+
+            // Recalculate total_hours after merging
+            opt.updated_roadmap.total_hours = Math.round(
+              opt.updated_roadmap.modules.reduce((sum: number, m: any) => sum + Number(m.estimated_hours || 0), 0) * 10
+            ) / 10;
+          }
+
           await refreshResourcesForAdaptedRoadmap(
             opt.updated_roadmap,
             completedModuleIdSet,
@@ -994,6 +1080,22 @@ Return ONLY valid JSON:
             totalCompletedHours + Number(opt.total_remaining_hours || totalAvailableHours),
             SERPER_API_KEY
           );
+
+          // Safety net: if any non-completed module still has 0 resources, log a warning
+          // and ensure the module at least has anchor_terms for future resource fetching
+          if (Array.isArray(opt.updated_roadmap.modules)) {
+            for (const mod of opt.updated_roadmap.modules) {
+              if (completedModuleIdSet.has(mod.id)) continue;
+              if (!mod.resources || mod.resources.length === 0) {
+                console.warn(`[adapt] Module "${mod.title}" (${mod.id}) has 0 resources after refresh — ensuring anchor_terms exist`);
+                if (!mod.anchor_terms || mod.anchor_terms.length === 0) {
+                  const words = `${mod.title || ""} ${mod.description || ""}`.toLowerCase()
+                    .replace(/[^a-z0-9\s-]/g, " ").split(/\s+/).filter((w: string) => w.length > 3);
+                  mod.anchor_terms = [...new Set(words)].slice(0, 6);
+                }
+              }
+            }
+          }
         }
       }
     }

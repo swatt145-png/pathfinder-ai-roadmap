@@ -251,7 +251,8 @@ function buildFallbackRoadmap(
   daysInTimeline: number,
 ): any {
   const total = Math.max(1, Number(totalHours || 1));
-  const moduleCount = total <= 2 ? 1 : total <= 6 ? 2 : total <= 12 ? 3 : 4;
+  const bounds = getModuleBounds(total, daysInTimeline);
+  const moduleCount = Math.min(bounds.max, Math.max(1, total <= 2 ? 1 : total <= 6 ? 2 : Math.floor(total / 2)));
   const moduleHours = Math.max(0.5, Math.round((total / moduleCount) * 10) / 10);
   const modules = Array.from({ length: moduleCount }).map((_, i) => {
     const dayStart = Math.max(1, Math.floor((i * daysInTimeline) / moduleCount) + 1);
@@ -914,12 +915,22 @@ function isDiscussionOrMetaResource(url: string, title: string, snippet: string)
   return false;
 }
 
-function getModuleBounds(totalHours: number, daysInTimeline: number): { min: number; max: number } {
-  const timelineWeeks = daysInTimeline / 7;
-  if (timelineWeeks > 3) return { min: 4, max: 8 };
-  if (timelineWeeks >= 2) return { min: 4, max: totalHours >= 30 ? 7 : 6 };
-  if (totalHours <= 3) return { min: 1, max: 2 };
-  return { min: 1, max: 4 };
+function getMaxResourcesForModule(moduleHours: number): number {
+  if (moduleHours <= 1.5) return 3;
+  if (moduleHours <= 3) return 4;
+  if (moduleHours <= 5) return 5;
+  if (moduleHours <= 10) return 6;
+  return 6;
+}
+
+function getModuleBounds(totalHours: number, _daysInTimeline: number): { min: number; max: number } {
+  const N = Math.max(1, totalHours);
+  let max: number;
+  if (N <= 12) max = Math.max(1, Math.floor(N / 2));
+  else if (N <= 50) max = Math.max(4, Math.floor(N / 3));
+  else if (N <= 70) max = Math.max(6, Math.floor(N / 4));
+  else max = Math.max(8, Math.floor(N / 4));
+  return { min: 1, max };
 }
 
 function normalizeModulePlan(roadmap: any, totalHours: number, daysInTimeline: number): void {
@@ -2112,15 +2123,15 @@ PRIORITY 4 — TIME CONSTRAINTS:
 
 === FLEXIBLE STRUCTURE RULES (MANDATORY) ===
 
-1. MODULE COUNT IS VARIABLE — adapt to total time and topic complexity:
-   - If total time ≤ 2 hours: default to 1 module, unless 2 coherent chunks naturally emerge.
-   - If total time is small, do NOT split into many modules just for structure.
-   - For longer timelines, modules can be "day chunks" aligned to daily study budget.
+1. MODULE COUNT IS BASED ON TOTAL HOURS (N = total available hours):
+   - If N ≤ 12: maximum modules = floor(N / 2) (e.g., 6 hours → max 3 modules, 12 hours → max 6)
+   - If 12 < N ≤ 50: maximum modules = floor(N / 3) (e.g., 24 hours → max 8 modules)
+   - If N > 50: maximum modules = floor(N / 4) (e.g., 60 hours → max 15 modules)
+   - Never create more modules than this formula allows. Fewer is fine if the topic doesn't need that many.
+   - If total time ≤ 2 hours: default to 1 module.
 
-2. RESOURCES PER MODULE IS VARIABLE (1-5):
-   - A module can have 1 resource if that single resource is excellent and fits the time budget.
+2. RESOURCES PER MODULE — leave resources as empty arrays (fetched separately), but plan module duration accordingly:
    - Do NOT add extra resources as filler. Each must add unique value.
-   - Resources will be fetched separately — leave resources as empty arrays.
    - If a module would require more than 4 hours, split it into focused sub-modules of 2-4 hours each.
 
 3. SHORT TIMELINE COMPRESSION: If total time < 5 hours, reduce module count, increase density, avoid over-fragmentation and repeated introductory content. Prefer fewer, stronger anchors.
@@ -2685,6 +2696,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       const moduleDays = Math.max(1, dayEnd - dayStart + 1);
       const windowBudgetCap = moduleDays * dailyCapMinutes;
       const moduleBudgetCap = Math.min(moduleMinutes * 1.05, windowBudgetCap);
+      const maxResources = getMaxResourcesForModule(Number(mod.estimated_hours || 1));
       const ctx: ModuleContext = {
         topic,
         moduleTitle: mod.title,
@@ -2787,7 +2799,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
           .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
 
         for (const c of recoveryPool) {
-          if (budgetedResources.length >= 5) break;
+          if (budgetedResources.length >= maxResources) break;
           const normalized = normalizeResourceUrl(c.url);
           const videoId = extractYouTubeVideoId(normalized);
           if (usedResourceUrls.has(normalized)) continue;
@@ -2842,7 +2854,7 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         const topUpPools = [...candidates, ...(moduleRescuePools.get(mod.id) || [])]
           .sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
         for (const c of topUpPools) {
-          if (finalizedResources.length >= 5) break;
+          if (finalizedResources.length >= maxResources) break;
           if (finalizedMinutes >= hardCoverageTarget) break;
           if (finalizedResources.some(r => r.url === c.url)) continue;
 
@@ -2874,10 +2886,10 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
         }
       }
 
-      // Hard cap: never exceed 5 resources per module
-      if (finalizedResources.length > 5) {
+      // Hard cap: never exceed duration-based max resources per module
+      if (finalizedResources.length > maxResources) {
         finalizedResources.sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
-        finalizedResources = finalizedResources.slice(0, 5);
+        finalizedResources = finalizedResources.slice(0, maxResources);
         finalizedMinutes = finalizedResources.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
       }
 
@@ -2948,7 +2960,8 @@ IMPORTANT: Do NOT write placeholder tasks like "Google this", "search YouTube", 
       const newModules: any[] = [];
       for (const mod of roadmap.modules || []) {
         const resources = mod.resources || [];
-        if (resources.length >= 5 && (mod.estimated_hours || 0) > 4) {
+        const modMaxRes = getMaxResourcesForModule(Number(mod.estimated_hours || 1));
+        if (resources.length >= modMaxRes && (mod.estimated_hours || 0) > 4) {
           const mid = Math.ceil(resources.length / 2);
           const part1Resources = resources.slice(0, mid);
           const part2Resources = resources.slice(mid);
