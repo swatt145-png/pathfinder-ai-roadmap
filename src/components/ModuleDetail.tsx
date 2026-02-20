@@ -23,6 +23,7 @@ interface ModuleDetailProps {
   roadmapId?: string;
   roadmapTopic?: string;
   onGenerateQuiz?: (moduleId: string) => Promise<void>;
+  resourcesPending?: boolean;
 }
 
 const RESOURCE_ICONS: Record<string, React.ElementType> = {
@@ -61,6 +62,7 @@ export function ModuleDetail({
   roadmapId,
   roadmapTopic,
   onGenerateQuiz,
+  resourcesPending,
 }: ModuleDetailProps) {
   const { user } = useAuth();
   const [selfReport, setSelfReport] = useState<string | null>(progress?.self_report ?? null);
@@ -268,7 +270,14 @@ export function ModuleDetail({
           <div className="space-y-3">
             {visibleResources.length === 0 && (
               <div className="glass p-4 text-center">
-                <p className="text-muted-foreground text-sm">No resources were found for this module. Try revising your roadmap or adapting the plan to refresh resources.</p>
+                {resourcesPending ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    <p className="text-muted-foreground text-sm">Loading resources...</p>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No resources were found for this module. Try revising your roadmap or adapting the plan to refresh resources.</p>
+                )}
               </div>
             )}
             {visibleResources.map((r, i) => {

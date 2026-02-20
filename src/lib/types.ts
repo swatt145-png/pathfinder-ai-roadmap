@@ -47,6 +47,7 @@ export interface RoadmapData {
   summary: string;
   modules: Module[];
   tips: string;
+  resources_pending?: boolean;
 }
 
 export interface ModuleProgress {
