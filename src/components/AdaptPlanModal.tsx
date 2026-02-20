@@ -56,6 +56,12 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
       });
       if (fnErr) throw new Error(fnErr.message);
       if (data?.error) throw new Error(data.error);
+      console.log("[adapt-roadmap] Full response:", JSON.stringify(data, null, 2));
+      console.log("[adapt-roadmap] Pipeline debug:", data?._pipeline_debug);
+      if (data?.options?.[0]?.updated_roadmap?.modules) {
+        const mods = data.options[0].updated_roadmap.modules;
+        console.log("[adapt-roadmap] Module resource counts:", mods.map((m: any) => `${m.id}: ${m.resources?.length || 0} resources`));
+      }
       setResult(data as AdaptResult);
       if (data?.recommendation) setSelectedOption(data.recommendation);
     } catch (e: any) {
