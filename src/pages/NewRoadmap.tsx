@@ -95,7 +95,7 @@ async function generateAllQuizzesInBackground(
       .single();
 
     if (!current?.roadmap_data) continue;
-    const updatedData = current.roadmap_data as RoadmapData;
+    const updatedData = current.roadmap_data as unknown as RoadmapData;
 
     for (let j = 0; j < batch.length; j++) {
       const result = results[j];

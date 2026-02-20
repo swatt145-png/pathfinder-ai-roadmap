@@ -251,7 +251,7 @@ export default function Dashboard() {
             .select("roadmap_data")
             .eq("id", roadmap.id)
             .single();
-          const freshData = freshRoadmap?.roadmap_data as RoadmapData | null;
+          const freshData = freshRoadmap?.roadmap_data as unknown as RoadmapData | null;
           if (freshData && !freshData.resources_pending) {
             clearInterval(pollInterval);
             fetchData();
@@ -316,7 +316,7 @@ export default function Dashboard() {
               .select("roadmap_data")
               .eq("id", roadmap.id)
               .single();
-            const freshData = freshRoadmap?.roadmap_data as RoadmapData | null;
+            const freshData = freshRoadmap?.roadmap_data as unknown as RoadmapData | null;
             if (freshData && !freshData.resources_pending) {
               clearInterval(pollInterval);
               fetchData();

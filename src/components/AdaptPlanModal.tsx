@@ -21,7 +21,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
   const completedModulesData = roadmapData.modules.filter((m) => completedModuleIds.has(m.id));
 
   // Days completed = max day_end of completed modules, with fallback
-  const totalRoadmapDays = roadmapData.timeline_days || roadmapData.timeline_weeks * 7;
+  const totalRoadmapDays = (roadmapData as any).timeline_days || roadmapData.timeline_weeks * 7;
   const dayEndMax = completedModulesData.reduce((max, m) => Math.max(max, Number(m.day_end || 0)), 0);
   const daysCompleted = dayEndMax > 0
     ? dayEndMax
