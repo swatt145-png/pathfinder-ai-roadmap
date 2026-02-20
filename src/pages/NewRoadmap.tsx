@@ -516,7 +516,7 @@ export default function NewRoadmap() {
                     <button
                       key={g.value}
                       onClick={() => setLearningGoal(g.value)}
-                      className={`glass-blue p-3 text-center transition-all ${learningGoal === g.value ? "border-primary bg-primary/10 shadow-md shadow-primary/20" : "hover:bg-accent/10"}`}
+                      className={`glass-blue p-3 text-center transition-all ${learningGoal === g.value ? "border-2 border-primary bg-primary/20 shadow-lg shadow-primary/15 scale-[1.02]" : "hover:border-primary/40 hover:bg-primary/8 hover:shadow-md hover:scale-[1.02]"}`}
                     >
                       <g.icon className={`w-5 h-5 mx-auto mb-1 ${learningGoal === g.value ? "text-primary" : "text-muted-foreground"}`} />
                       <span className="block text-xs sm:text-sm font-heading font-semibold">{g.label}</span>
@@ -535,7 +535,7 @@ export default function NewRoadmap() {
                     <button
                       key={s.value}
                       onClick={() => setSkillLevel(s.value)}
-                      className={`glass-blue p-3 text-center transition-all ${skillLevel === s.value ? "border-primary bg-primary/10 shadow-md shadow-primary/20" : "hover:bg-accent/10"}`}
+                      className={`glass-blue p-3 text-center transition-all ${skillLevel === s.value ? "border-2 border-primary bg-primary/20 shadow-lg shadow-primary/15 scale-[1.02]" : "hover:border-primary/40 hover:bg-primary/8 hover:shadow-md hover:scale-[1.02]"}`}
                     >
                       <span className="block text-xs sm:text-base font-heading font-semibold truncate">{s.label}</span>
                       {skillLevel === s.value && <span className="block text-xs sm:text-sm text-muted-foreground mt-1">{s.desc}</span>}
@@ -556,15 +556,15 @@ export default function NewRoadmap() {
                   <div className="flex rounded-lg overflow-hidden border border-border">
                     <button
                       onClick={() => { setTimelineUnit("hours"); setTotalHoursOnly(3); }}
-                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "hours" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-all ${timelineUnit === "hours" ? "bg-primary text-primary-foreground font-bold" : "text-muted-foreground hover:bg-primary/15"}`}
                     >Hours</button>
                     <button
                       onClick={() => { setTimelineUnit("days"); setTimelineValue(7); }}
-                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "days" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-all ${timelineUnit === "days" ? "bg-primary text-primary-foreground font-bold" : "text-muted-foreground hover:bg-primary/15"}`}
                     >Days</button>
                     <button
                       onClick={() => { setTimelineUnit("weeks"); setTimelineValue(4); }}
-                      className={`px-3 py-1 text-sm font-heading transition-colors ${timelineUnit === "weeks" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}`}
+                      className={`px-3 py-1 text-sm font-heading transition-all ${timelineUnit === "weeks" ? "bg-primary text-primary-foreground font-bold" : "text-muted-foreground hover:bg-primary/15"}`}
                     >Weeks</button>
                   </div>
                 </div>
@@ -646,7 +646,7 @@ export default function NewRoadmap() {
                     <button
                       key={qs.label}
                       onClick={() => applyQuickStart(qs)}
-                      className="glass-blue px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-all"
+                      className="glass-blue px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:shadow-sm hover:scale-[1.02] transition-all"
                     >
                       {qs.label}
                     </button>
