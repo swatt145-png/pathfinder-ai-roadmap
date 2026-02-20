@@ -3,13 +3,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen } from "lucide-react";
+import { LogOut, BookOpen, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.png";
 
 export function AppBar() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const initial = (profile?.display_name?.[0] ?? "U").toUpperCase();
   const [activeCount, setActiveCount] = useState(0);
 
@@ -33,6 +35,13 @@ export function AppBar() {
         PathFinder
       </Link>
       <div className="flex items-center gap-3">
+        <button
+          onClick={toggleTheme}
+          className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-sm font-heading font-bold text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary">

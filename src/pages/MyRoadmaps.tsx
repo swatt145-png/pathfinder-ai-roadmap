@@ -30,6 +30,7 @@ export default function MyRoadmaps() {
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [unarchiveConfirmId, setUnarchiveConfirmId] = useState<string | null>(null);
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
 
   const fetchRoadmaps = async () => {
     if (!user) return;
@@ -55,9 +56,8 @@ export default function MyRoadmaps() {
   useEffect(() => { fetchRoadmaps(); }, [user]);
 
   const handleArchive = async (id: string) => {
-    const confirmed = window.confirm("Archive this roadmap? You can still access it from the Archived section.");
-    if (!confirmed) return;
     await supabase.from("roadmaps").update({ status: "archived" }).eq("id", id);
+    setArchiveConfirmId(null);
     fetchRoadmaps();
   };
 
@@ -187,7 +187,7 @@ export default function MyRoadmaps() {
                         </Button>
                         <Button
                           variant="outline"
-                          onClick={() => handleArchive(rm.id)}
+                          onClick={() => setArchiveConfirmId(rm.id)}
                           className="border-white/10 hover:bg-destructive/10 hover:text-destructive"
                         >
                           <Archive className="h-4 w-4" />
@@ -207,6 +207,25 @@ export default function MyRoadmaps() {
           </p>
         )}
       </div>
+
+      <Dialog open={!!archiveConfirmId} onOpenChange={() => setArchiveConfirmId(null)}>
+        <DialogContent className="glass-strong border-white/10">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Archive this roadmap?</DialogTitle>
+            <DialogDescription>
+              You can still access it from the Archived section and restore it anytime.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setArchiveConfirmId(null)} className="border-white/10">
+              Cancel
+            </Button>
+            <Button onClick={() => archiveConfirmId && handleArchive(archiveConfirmId)} className="gradient-primary text-primary-foreground font-heading font-bold">
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!unarchiveConfirmId} onOpenChange={() => setUnarchiveConfirmId(null)}>
         <DialogContent className="glass-strong border-white/10">

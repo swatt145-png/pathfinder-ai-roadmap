@@ -52,6 +52,54 @@
     --sidebar-border: 230 20% 18%;
     --sidebar-ring: 152 100% 50%;
   }
+
+  .light {
+    --background: 270 30% 97%;
+    --foreground: 260 40% 12%;
+
+    --card: 270 25% 95%;
+    --card-foreground: 260 40% 12%;
+
+    --popover: 270 25% 95%;
+    --popover-foreground: 260 40% 12%;
+
+    --primary: 275 80% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 325 80% 52%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 270 20% 90%;
+    --muted-foreground: 260 20% 45%;
+
+    --accent: 290 65% 48%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 350 90% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 70% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 45 100% 45%;
+    --warning-foreground: 260 40% 12%;
+
+    --border: 270 20% 85%;
+    --input: 270 20% 85%;
+    --ring: 275 80% 50%;
+
+    --glass-bg: 270 30% 94%;
+    --glass-border: 270 30% 80%;
+
+    --sidebar-background: 270 25% 95%;
+    --sidebar-foreground: 260 40% 12%;
+    --sidebar-primary: 275 80% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 270 20% 90%;
+    --sidebar-accent-foreground: 260 40% 12%;
+    --sidebar-border: 270 20% 85%;
+    --sidebar-ring: 275 80% 50%;
+  }
 }
 
 @layer base {
@@ -64,6 +112,11 @@
     font-size: 18px;
     background: linear-gradient(135deg, hsl(230 50% 5%) 0%, hsl(240 45% 8%) 100%);
     min-height: 100vh;
+  }
+
+  .light body,
+  .light {
+    background: linear-gradient(135deg, hsl(270 30% 96%) 0%, hsl(280 25% 92%) 100%);
   }
 }
 
@@ -81,6 +134,21 @@
     @apply backdrop-blur-xl border border-accent/15 rounded-2xl;
   }
 
+  .light .glass {
+    background: hsl(270 40% 96% / 0.5);
+    @apply backdrop-blur-lg border border-purple-300/30 rounded-2xl;
+  }
+
+  .light .glass-strong {
+    background: hsl(270 40% 95% / 0.6);
+    @apply backdrop-blur-xl border border-purple-300/40 rounded-2xl;
+  }
+
+  .light .glass-blue {
+    background: hsl(275 40% 94% / 0.55);
+    @apply backdrop-blur-xl border border-purple-400/20 rounded-2xl;
+  }
+
   .gradient-text {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary;
   }
@@ -90,15 +158,15 @@
   }
 
   .glow-primary {
-    box-shadow: 0 0 20px hsl(152 100% 50% / 0.6), 0 0 60px hsl(152 100% 50% / 0.3), 0 0 120px hsl(152 100% 50% / 0.1);
+    box-shadow: 0 0 20px hsl(var(--ring) / 0.6), 0 0 60px hsl(var(--ring) / 0.3), 0 0 120px hsl(var(--ring) / 0.1);
   }
 
   .hover\:glow-primary:hover {
-    box-shadow: 0 0 20px hsl(152 100% 50% / 0.6), 0 0 60px hsl(152 100% 50% / 0.3), 0 0 120px hsl(152 100% 50% / 0.1);
+    box-shadow: 0 0 20px hsl(var(--ring) / 0.6), 0 0 60px hsl(var(--ring) / 0.3), 0 0 120px hsl(var(--ring) / 0.1);
   }
 
   .glow-success {
-    box-shadow: 0 0 20px hsl(152 100% 50% / 0.6), 0 0 60px hsl(152 100% 50% / 0.2);
+    box-shadow: 0 0 20px hsl(var(--success) / 0.6), 0 0 60px hsl(var(--success) / 0.2);
   }
 
   .pulse-dot {
@@ -150,7 +218,7 @@ select:hover,
 [role="radio"]:hover,
 [role="checkbox"]:hover,
 [data-slot="control"]:hover {
-  box-shadow: 0 0 20px hsl(152 100% 50% / 0.4), 0 0 40px hsl(152 100% 50% / 0.15);
+  box-shadow: 0 0 20px hsl(var(--ring) / 0.4), 0 0 40px hsl(var(--ring) / 0.15);
 }
 
 button:not([disabled]):focus,
@@ -171,6 +239,6 @@ select:focus-visible,
 [role="tab"][data-state="active"],
 [role="option"][data-state="checked"],
 [data-slot="control"]:focus-within {
-  box-shadow: 0 0 8px 3px hsl(152 100% 50% / 0.85), 0 0 20px 6px hsl(152 100% 50% / 0.4);
+  box-shadow: 0 0 8px 3px hsl(var(--ring) / 0.85), 0 0 20px 6px hsl(var(--ring) / 0.4);
   outline: none;
 }

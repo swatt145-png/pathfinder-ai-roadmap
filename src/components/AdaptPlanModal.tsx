@@ -20,9 +20,14 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
   const completedModuleIds = new Set(completedModules.map((p) => p.module_id));
   const completedModulesData = roadmapData.modules.filter((m) => completedModuleIds.has(m.id));
 
-  // Days completed = max day_end of completed modules
+  // Days completed = max day_end of completed modules, with fallback
   const totalRoadmapDays = roadmapData.timeline_days || roadmapData.timeline_weeks * 7;
-  const daysCompleted = completedModulesData.reduce((max, m) => Math.max(max, Number(m.day_end || 0)), 0);
+  const dayEndMax = completedModulesData.reduce((max, m) => Math.max(max, Number(m.day_end || 0)), 0);
+  const daysCompleted = dayEndMax > 0
+    ? dayEndMax
+    : completedCount > 0
+      ? Math.round((completedCount / roadmapData.modules.length) * totalRoadmapDays)
+      : 0;
   const daysRemaining = Math.max(1, totalRoadmapDays - daysCompleted);
 
   const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
