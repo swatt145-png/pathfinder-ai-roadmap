@@ -57,40 +57,40 @@ export function WhyPathfinder() {
           </p>
         </div>
 
-        <div className="space-y-16 md:space-y-24">
+        <div className="space-y-8 md:space-y-24">
           {features.map((feature, i) => {
             const imageFirst = i % 2 === 0;
             return (
               <div
                 key={feature.label}
-                className={`flex flex-col ${
+                className={`flex flex-row ${
                   imageFirst ? "md:flex-row" : "md:flex-row-reverse"
-                } items-center gap-8 md:gap-16 transition-all duration-700 ${
+                } items-center gap-4 md:gap-16 transition-all duration-700 ${
                   visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
                 }`}
                 style={{ transitionDelay: `${300 + i * 200}ms` }}
               >
                 {/* Image */}
-                <div className="w-full md:w-1/2">
-                  <div className="rounded-2xl overflow-hidden shadow-2xl shadow-primary/10 border border-border/40">
+                <div className="w-1/3 md:w-1/2 shrink-0">
+                  <div className="rounded-xl md:rounded-2xl overflow-hidden shadow-2xl shadow-primary/10 border border-border/40">
                     <img
                       src={feature.image}
                       alt={feature.title}
-                      className="w-full h-56 md:h-80 object-cover"
+                      className="w-full h-24 sm:h-32 md:h-80 object-cover"
                       loading="lazy"
                     />
                   </div>
                 </div>
 
                 {/* Text */}
-                <div className="w-full md:w-1/2 space-y-4">
-                  <span className="inline-block text-xs font-heading font-bold text-primary tracking-widest uppercase bg-primary/10 px-3 py-1 rounded-full">
+                <div className="w-2/3 md:w-1/2 space-y-1 md:space-y-4">
+                  <span className="inline-block text-[10px] md:text-xs font-heading font-bold text-primary tracking-widest uppercase bg-primary/10 px-2 py-0.5 md:px-3 md:py-1 rounded-full">
                     {feature.label}
                   </span>
-                  <h3 className="font-heading text-2xl md:text-3xl font-bold text-foreground">
+                  <h3 className="font-heading text-sm sm:text-lg md:text-3xl font-bold text-foreground leading-tight">
                     {feature.title}
                   </h3>
-                  <p className="text-muted-foreground text-base md:text-lg leading-relaxed">
+                  <p className="text-muted-foreground text-xs sm:text-sm md:text-lg leading-relaxed line-clamp-3 md:line-clamp-none">
                     {feature.description}
                   </p>
                 </div>

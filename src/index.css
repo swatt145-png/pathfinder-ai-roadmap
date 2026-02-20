@@ -262,3 +262,12 @@ select:focus-visible {
   0% { left: 0%; }
   100% { left: 100%; }
 }
+
+/* Hero wave fills — dark mode: lighter/more visible, light mode: darker for contrast */
+.hero-wave-1 { fill: hsl(260 60% 65% / 0.15); }
+.hero-wave-2 { fill: hsl(210 70% 65% / 0.12); }
+.hero-wave-3 { fill: hsl(260 60% 65% / 0.10); }
+
+.light .hero-wave-1 { fill: hsl(260 55% 45% / 0.12); }
+.light .hero-wave-2 { fill: hsl(210 70% 40% / 0.10); }
+.light .hero-wave-3 { fill: hsl(260 55% 45% / 0.08); }
