@@ -33,10 +33,8 @@ const QUICK_STARTS = [
   { label: "Python in 2 weeks", topic: "Python", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
   { label: "Machine Learning in 1 month", topic: "Machine Learning", weeks: 4, hours: 1.5, skill: "intermediate", goal: "hands_on" },
   { label: "Product Management in 3 weeks", topic: "Product Management", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
-  { label: "UI/UX Design in 2 weeks", topic: "UI/UX Design", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
   { label: "Finance & Investing in 3 weeks", topic: "Finance & Investing", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
   { label: "Digital Marketing in 2 weeks", topic: "Digital Marketing", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
-  { label: "Leadership in 1 week", topic: "Leadership", weeks: 1, hours: 1, skill: "intermediate", goal: "quick_overview" },
   { label: "Cybersecurity in 3 weeks", topic: "Cybersecurity", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
 ];
 
@@ -355,7 +353,7 @@ export default function NewRoadmap() {
   ];
 
   if (loading) {
-    const radius = 190;
+    const radius = 240;
     const startAngle = -90;
 
     return (
@@ -364,14 +362,14 @@ export default function NewRoadmap() {
         <WavyBackground />
         <div className="flex min-h-screen items-center justify-center px-4 pt-14 overflow-hidden">
           <div className="flex flex-col items-center animate-fade-in">
-            <div className="relative" style={{ width: 520, height: 520 }}>
+            <div className="relative" style={{ width: 620, height: 620 }}>
             {/* Center book image */}
             <div className="absolute inset-0 flex items-center justify-center z-10">
-              <img src={bookKnowledgeImg} alt="Knowledge book" className="w-40 h-40 md:w-48 md:h-48 rounded-full object-cover shadow-2xl shadow-primary/20 border-2 border-primary/20" />
+              <img src={bookKnowledgeImg} alt="Knowledge book" className="w-52 h-52 md:w-64 md:h-64 rounded-full object-cover shadow-2xl shadow-primary/20 border-2 border-primary/20" />
             </div>
 
             {/* Connecting circle track + arrows */}
-            <svg className="absolute inset-0 w-full h-full" viewBox="-240 -240 480 480">
+            <svg className="absolute inset-0 w-full h-full" viewBox="-300 -300 600 600">
               <circle cx="0" cy="0" r={radius} fill="none" stroke="hsl(var(--primary) / 0.1)" strokeWidth="1.5" strokeDasharray="6 6" />
               {CIRCULAR_STEPS.map((_, i) => {
                 const angle1 = (startAngle + (i * 360) / 5) * (Math.PI / 180);
@@ -425,7 +423,7 @@ export default function NewRoadmap() {
                   }}
                 >
                   <div
-                    className={`w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden transition-all duration-700 ${
+                    className={`w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden transition-all duration-700 ${
                       isDone
                         ? "border-2 border-primary shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
                         : isActive
@@ -436,7 +434,7 @@ export default function NewRoadmap() {
                     <img src={step.image} alt={step.label} className="w-full h-full object-cover" />
                   </div>
                   <span
-                    className={`text-xs font-heading font-semibold text-center whitespace-nowrap transition-all duration-700 ${
+                    className={`text-sm font-heading font-semibold text-center whitespace-nowrap transition-all duration-700 ${
                       isDone ? "text-primary/70" : isActive ? "text-primary" : "text-muted-foreground/25"
                     }`}
                   >
@@ -448,11 +446,11 @@ export default function NewRoadmap() {
 
             </div>
             {/* Messages below the circular loader */}
-            <div className="mt-6 text-center">
-              <p className="text-primary font-heading font-semibold text-sm animate-pulse">
+            <div className="mt-8 text-center">
+              <p className="text-primary font-heading font-semibold text-base animate-pulse">
                 {LOADING_MESSAGES[Math.min(loadingStep, LOADING_MESSAGES.length - 1)]}
               </p>
-              <p className="text-muted-foreground text-xs mt-2">This may take a minute</p>
+              <p className="text-muted-foreground text-sm mt-2">This may take a minute</p>
             </div>
           </div>
         </div>
@@ -510,7 +508,7 @@ export default function NewRoadmap() {
                 <Input
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g., SQL Basics, Python for Data Science, GRC in Cybersecurity..."
+                  placeholder="Python for data science in 2 weeks, Product Management in 3 weeks, UI/UX Design in 1 week"
                   className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
               </div>

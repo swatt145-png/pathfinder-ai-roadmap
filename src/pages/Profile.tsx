@@ -5,13 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X } from "lucide-react";
+import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import WavyBackground from "@/components/WavyBackground";
 import { toast } from "@/hooks/use-toast";
 
+const PASSWORD_RULES = [
+  { test: (p: string) => p.length >= 8, label: "At least 8 characters" },
+  { test: (p: string) => /[A-Z]/.test(p), label: "At least 1 uppercase letter" },
+  { test: (p: string) => /[a-z]/.test(p), label: "At least 1 lowercase letter" },
+  { test: (p: string) => /[0-9]/.test(p), label: "At least 1 number" },
+  { test: (p: string) => /[^A-Za-z0-9]/.test(p), label: "At least 1 special character" },
+];
+
 export default function Profile() {
-  const { user, profile } = useAuth();
+  const { user, profile, isGuest } = useAuth();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -20,6 +28,9 @@ export default function Profile() {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [linkingAccount, setLinkingAccount] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -107,13 +118,75 @@ export default function Profile() {
               />
             </div>
 
-            {/* Email (read-only) */}
-            <div>
-              <label className="text-sm font-heading font-semibold text-foreground flex items-center gap-2 mb-1.5">
-                <Mail className="w-4 h-4 text-primary" /> Email
-              </label>
-              <Input value={email} disabled className="bg-muted/50 border-border text-muted-foreground" />
-            </div>
+            {/* Email */}
+            {isGuest ? (
+              <div className="space-y-3 glass p-4 border border-primary/20">
+                <p className="text-sm text-muted-foreground">You're signed in as a guest. Add your email and password to create a full account.</p>
+                <div>
+                  <label className="text-sm font-heading font-semibold text-foreground flex items-center gap-2 mb-1.5">
+                    <Mail className="w-4 h-4 text-primary" /> Email
+                  </label>
+                  <Input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="bg-background/50 border-border"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-heading font-semibold text-foreground flex items-center gap-2 mb-1.5">
+                    <Lock className="w-4 h-4 text-primary" /> Password
+                  </label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Create a password"
+                    className="bg-background/50 border-border"
+                  />
+                  <ul className="mt-2 space-y-1">
+                    {PASSWORD_RULES.map((rule) => (
+                      <li key={rule.label} className={`text-xs flex items-center gap-1.5 ${newPassword && rule.test(newPassword) ? "text-success" : "text-muted-foreground"}`}>
+                        <span>{rule.test(newPassword) ? "✓" : "○"}</span> {rule.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <Button
+                  onClick={async () => {
+                    if (!newEmail || !newPassword) return;
+                    const allPass = PASSWORD_RULES.every((r) => r.test(newPassword));
+                    if (!allPass) {
+                      toast({ title: "Weak password", description: "Please meet all password requirements.", variant: "destructive" });
+                      return;
+                    }
+                    setLinkingAccount(true);
+                    const { error } = await supabase.auth.updateUser({ email: newEmail, password: newPassword });
+                    setLinkingAccount(false);
+                    if (error) {
+                      toast({ title: "Error", description: error.message, variant: "destructive" });
+                    } else {
+                      toast({ title: "Account linked!", description: "Check your email to confirm, then sign in with your new credentials." });
+                      setNewEmail("");
+                      setNewPassword("");
+                    }
+                  }}
+                  disabled={linkingAccount || !newEmail || !newPassword}
+                  className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+                >
+                  {linkingAccount ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
+                  {linkingAccount ? "Linking..." : "Link Email & Password"}
+                </Button>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-heading font-semibold text-foreground flex items-center gap-2 mb-1.5">
+                  <Mail className="w-4 h-4 text-primary" /> Email
+                </label>
+                <Input value={email} disabled className="bg-muted/50 border-border text-muted-foreground" />
+              </div>
+            )}
 
             {/* Bio */}
             <div>

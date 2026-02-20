@@ -13,6 +13,14 @@ interface AuthModalProps {
   defaultTab?: "signin" | "signup";
 }
 
+const PASSWORD_RULES = [
+  { test: (p: string) => p.length >= 8, label: "At least 8 characters" },
+  { test: (p: string) => /[A-Z]/.test(p), label: "At least 1 uppercase letter" },
+  { test: (p: string) => /[a-z]/.test(p), label: "At least 1 lowercase letter" },
+  { test: (p: string) => /[0-9]/.test(p), label: "At least 1 number" },
+  { test: (p: string) => /[^A-Za-z0-9]/.test(p), label: "At least 1 special character" },
+];
+
 export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthModalProps) {
   const [tab, setTab] = useState<"signin" | "signup">(defaultTab);
   const [email, setEmail] = useState("");
@@ -39,8 +47,9 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
     setLoading(true);
 
     if (tab === "signup") {
-      if (password.length < 6) {
-        setError("Password must be at least 6 characters");
+      const allPass = PASSWORD_RULES.every((r) => r.test(password));
+      if (!allPass) {
+        setError("Password does not meet all requirements");
         setLoading(false);
         return;
       }
@@ -127,11 +136,20 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 6 characters"
+                  placeholder={tab === "signup" ? "Create a strong password" : "Your password"}
                   required
-                  minLength={6}
+                  minLength={tab === "signup" ? 8 : 6}
                   className="bg-muted/50 border-border focus:border-primary"
                 />
+                {tab === "signup" && (
+                  <ul className="mt-1 space-y-0.5">
+                    {PASSWORD_RULES.map((rule) => (
+                      <li key={rule.label} className={`text-xs flex items-center gap-1.5 ${password && rule.test(password) ? "text-success" : "text-muted-foreground"}`}>
+                        <span>{rule.test(password) ? "✓" : "○"}</span> {rule.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               {tab === "signin" && (
                 <div className="flex items-center gap-2">
