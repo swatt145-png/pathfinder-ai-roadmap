@@ -47,7 +47,7 @@ export function ExploreCategories() {
   return (
     <section
       ref={sectionRef}
-      className="w-full py-20 md:py-28"
+      className="w-full py-10 md:py-16"
       style={{ background: "hsl(var(--muted) / 0.3)" }}>
 
       <div className="max-w-6xl mx-auto px-4">
@@ -110,7 +110,11 @@ export function ExploreCategories() {
             <span className="gradient-text">today</span>?
           </h3>
           <Button
-            onClick={() => navigate("/new")}
+            onClick={() => {
+              const hero = document.getElementById("hero-auth");
+              if (hero) hero.scrollIntoView({ behavior: "smooth", block: "center" });
+              else navigate("/new");
+            }}
             className="px-12 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 glow-primary"
           >
             Start Learning

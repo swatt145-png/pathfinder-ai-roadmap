@@ -90,40 +90,42 @@ export default function Landing() {
             ))}
           </div>
 
-          <Button
-            onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-            className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 glow-primary"
-          >
-            Get Started
-          </Button>
-
-          <div className="mt-5 flex items-center justify-center gap-5 text-base">
-            <button
-              onClick={() => { setAuthTab("signin"); setAuthOpen(true); }}
-              className="text-primary hover:underline font-semibold text-base"
-            >
-              Sign In
-            </button>
-            <span className="text-border">|</span>
-            <button
+          <div id="hero-auth">
+            <Button
               onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-              className="text-primary hover:underline font-semibold text-base"
+              className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 glow-primary"
             >
-              Sign Up
+              Get Started
+            </Button>
+
+            <div className="mt-5 flex items-center justify-center gap-5 text-base">
+              <button
+                onClick={() => { setAuthTab("signin"); setAuthOpen(true); }}
+                className="text-primary hover:underline font-semibold text-base"
+              >
+                Sign In
+              </button>
+              <span className="text-border">|</span>
+              <button
+                onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
+                className="text-primary hover:underline font-semibold text-base"
+              >
+                Sign Up
+              </button>
+            </div>
+
+            <button
+              onClick={handleGuestLogin}
+              disabled={guestLoading}
+              className="mt-5 glass-blue px-8 py-3 rounded-xl text-base font-semibold text-foreground/80"
+            >
+              {guestLoading ? (
+                <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Entering as guest…</span>
+              ) : (
+                "Continue as Guest"
+              )}
             </button>
           </div>
-
-          <button
-            onClick={handleGuestLogin}
-            disabled={guestLoading}
-            className="mt-5 glass-blue px-8 py-3 rounded-xl text-base font-semibold text-foreground/80"
-          >
-            {guestLoading ? (
-              <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Entering as guest…</span>
-            ) : (
-              "Continue as Guest"
-            )}
-          </button>
         </div>
       </section>
 

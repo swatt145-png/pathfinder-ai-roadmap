@@ -458,7 +458,7 @@ export default function Dashboard() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-16 pb-24 px-4 md:px-12">
-        <div className="max-w-3xl mx-auto md:mr-[180px]">
+        <div className="max-w-3xl mx-auto">
         {/* Main content */}
         <div className="w-full">
         {/* Summary Card */}
@@ -621,7 +621,7 @@ export default function Dashboard() {
         </div> {/* end main content */}
         {/* Desktop: fixed right column */}
         {!selectedModule && (
-        <div className="hidden md:flex fixed top-20 right-8 z-40 flex-col gap-2 w-[160px]">
+        <div className="hidden md:flex fixed top-20 right-6 z-40 flex-col gap-2 w-[160px]">
           {roadmap?.status === "archived" ? (
             <>
               <Button onClick={async () => { await supabase.from("roadmaps").update({ status: "active" }).eq("id", roadmap.id); navigate("/my-roadmaps"); }} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all glow-primary w-full">

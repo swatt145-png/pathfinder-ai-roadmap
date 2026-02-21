@@ -45,7 +45,7 @@ export function HowItWorks() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="w-full py-20 md:py-28 border-t border-border/40">
+    <section ref={sectionRef} className="w-full py-10 md:py-16 border-t border-border/40">
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div
@@ -127,7 +127,11 @@ export function HowItWorks() {
           style={{ transitionDelay: "900ms" }}
         >
           <Button
-            onClick={() => navigate("/new")}
+            onClick={() => {
+              const hero = document.getElementById("hero-auth");
+              if (hero) hero.scrollIntoView({ behavior: "smooth", block: "center" });
+              else navigate("/new");
+            }}
             className="px-10 h-13 text-base font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 glow-primary"
           >
             Build Your Roadmap

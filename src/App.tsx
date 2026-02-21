@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import MyRoadmaps from "./pages/MyRoadmaps";
 import Flashcards from "./pages/Flashcards";
 import Profile from "./pages/Profile";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/dashboard/:roadmapId" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
