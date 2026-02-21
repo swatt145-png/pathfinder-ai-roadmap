@@ -180,8 +180,8 @@ export const GOAL_RESOURCES: Record<string, GoalResources> = {
     siteFilters: ["site:edx.org", "site:ocw.mit.edu", "site:freecodecamp.org"],
   },
   deep_mastery: {
-    youtubeChannels: ["freecodecamp", "sentdex", "the coding train"],
-    siteFilters: ["site:realpython.com", "site:digitalocean.com/community/tutorials"],
+    youtubeChannels: ["freecodecamp", "sentdex", "the coding train", "mit opencourseware"],
+    siteFilters: ["site:realpython.com", "site:digitalocean.com/community/tutorials", "site:arxiv.org", "site:developer.mozilla.org"],
   },
 };
 
@@ -727,9 +727,9 @@ export function getGoalSearchConfig(goal: string, _topic = ""): GoalSearchConfig
   switch (goal) {
     case "conceptual":
       return {
-        queryModifiers: ["explained", "concepts", "theory", "visual explanation", "lecture", "guide"],
-        videoCount: 8, webCount: 8,
-        semanticHint: "mental model and concept explanation with examples",
+        queryModifiers: ["explained", "concepts", "theory", "visual explanation", "article", "guide"],
+        videoCount: 6, webCount: 10,
+        semanticHint: "mental model and concept explanation with examples and articles",
         intentTokens: ["mental model", "concept explanation", "tradeoffs"],
         outcomeTokens: ["deep explanation", "why this works", "design intuition"],
       };
@@ -751,10 +751,10 @@ export function getGoalSearchConfig(goal: string, _topic = ""): GoalSearchConfig
       };
     case "deep_mastery":
       return {
-        queryModifiers: ["comprehensive", "advanced", "in depth", "research paper", "full course", "masterclass"],
-        videoCount: 6, webCount: 10,
-        semanticHint: "deep dive with advanced tradeoffs and references",
-        intentTokens: ["advanced patterns", "production scale", "optimization"],
+        queryModifiers: ["comprehensive", "advanced", "in depth", "research paper", "official documentation", "technical deep dive"],
+        videoCount: 4, webCount: 12,
+        semanticHint: "deep dive with advanced tradeoffs references and official documentation",
+        intentTokens: ["advanced patterns", "production scale", "architecture"],
         outcomeTokens: ["expert level", "edge cases", "system tradeoffs"],
       };
     default:
@@ -1025,7 +1025,7 @@ export async function fetchTopicAnchors(
   const goalConfig = getGoalSearchConfig(goal, topic);
   const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
   const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 4) : Math.min(goalConfig.videoCount, 5);
-  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 3) : Math.min(goalConfig.webCount, 5);
+  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 5) : Math.min(goalConfig.webCount, 8);
   const precisionQueries = plan.precision.slice(0, 1);
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
@@ -1061,11 +1061,9 @@ export async function fetchModuleResults(
   const config = getGoalSearchConfig(goal, `${topic} ${module?.title || ""}`);
   const plan = buildModuleQueryPlan(module, topic, level, goal, certificationIntent);
   const effectiveVideoCount = fastMode ? Math.min(config.videoCount, 4) : Math.min(config.videoCount, 5);
-  const effectiveWebCount = fastMode ? Math.min(config.webCount, 2) : Math.min(config.webCount, 3);
-  const moduleHours = Number(module?.estimated_hours || 1);
-  const shortModule = moduleHours <= PIPELINE_LIMITS.shortModuleHours;
+  const effectiveWebCount = fastMode ? Math.min(config.webCount, 4) : Math.min(config.webCount, 6);
   const precisionQueries = plan.precision.slice(0, 1);
-  const expansionQueries = (fastMode || shortModule) ? [] : plan.expansion.slice(0, 1);
+  const expansionQueries = fastMode ? [] : plan.expansion.slice(0, 1);
 
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
@@ -1151,11 +1149,23 @@ export function computeContextFitScoreFallback(candidate: CandidateResource, ctx
   const resourceText = `${candidate.title} ${candidate.description} ${candidate.channel || ""}`;
   const topicFit = Math.round(computeHybridSimilarity(moduleText, resourceText) * 35);
   let goalFit = 0;
-  if (ctx.goal === "conceptual" && (candidate.type === "video" || candidate.type === "documentation" || candidate.type === "article")) goalFit = 20;
-  else if (ctx.goal === "hands_on" && (candidate.type === "tutorial" || candidate.type === "practice" || candidate.type === "video")) goalFit = 20;
-  else if (ctx.goal === "quick_overview" && candidate.estimated_minutes <= 45 && (candidate.type === "video" || candidate.type === "article" || candidate.type === "tutorial" || candidate.type === "documentation")) goalFit = 20;
-  else if (ctx.goal === "deep_mastery" && candidate.estimated_minutes >= 25 && (candidate.type === "video" || candidate.type === "documentation" || candidate.type === "article")) goalFit = 20;
-  else goalFit = 10;
+  if (ctx.goal === "conceptual") {
+    if (candidate.type === "documentation" || candidate.type === "article") goalFit = 20;
+    else if (candidate.type === "video") goalFit = 16;
+    else goalFit = 10;
+  } else if (ctx.goal === "hands_on") {
+    if (candidate.type === "tutorial" || candidate.type === "practice" || candidate.type === "video") goalFit = 20;
+    else goalFit = 10;
+  } else if (ctx.goal === "quick_overview") {
+    if (candidate.estimated_minutes <= 45 && (candidate.type === "video" || candidate.type === "article" || candidate.type === "tutorial" || candidate.type === "documentation")) goalFit = 20;
+    else goalFit = 10;
+  } else if (ctx.goal === "deep_mastery") {
+    if (candidate.estimated_minutes >= 25 && (candidate.type === "documentation" || candidate.type === "article")) goalFit = 20;
+    else if (candidate.estimated_minutes >= 25 && candidate.type === "video") goalFit = 14;
+    else goalFit = 10;
+  } else {
+    goalFit = 10;
+  }
 
   let levelFit = 8;
   const titleLower = candidate.title.toLowerCase();
@@ -1180,6 +1190,18 @@ export function computeContextFitScoreFallback(candidate: CandidateResource, ctx
     else if (ytMeta.viewCount >= 100_000) qualityFit = Math.min(qualityFit + 1, 15);
     if (ytMeta.viewCount < 1_000 && !goalChannels.some(ch => ytMeta.channel.toLowerCase().includes(ch))) qualityFit = Math.max(qualityFit - 4, 0);
     else if (ytMeta.viewCount < 5_000 && !goalChannels.some(ch => ytMeta.channel.toLowerCase().includes(ch))) qualityFit = Math.max(qualityFit - 2, 0);
+  }
+
+  // Article/doc authority bonuses — parallel to YouTube view-count bonuses
+  if (candidate.type !== "video") {
+    const tier = candidate.authority_tier || "UNKNOWN";
+    if (tier === "OFFICIAL_DOCS" || tier === "UNIVERSITY_DIRECT") qualityFit = Math.min(qualityFit + 3, 15);
+    else if (tier === "VENDOR_DOCS" || tier === "EDUCATION_DOMAIN") qualityFit = Math.min(qualityFit + 2, 15);
+    else if (tier === "BLOG") qualityFit = Math.min(qualityFit + 1, 15);
+    // Deep mastery extra bonus for research-quality articles
+    if (ctx.goal === "deep_mastery" && (tier === "OFFICIAL_DOCS" || tier === "UNIVERSITY_DIRECT" || tier === "VENDOR_DOCS")) {
+      qualityFit = Math.min(qualityFit + 2, 15);
+    }
   }
 
   const topicOrModuleCert = detectCertificationIntent(`${ctx.topic} ${ctx.moduleTitle}`);
@@ -1331,18 +1353,78 @@ export function clusterAndDiversify(candidates: CandidateResource[], ctx: Module
     selectionPool = deduplicated.filter(c => !lowViewToRemove.has(c.url));
   }
 
-  const maxResources = 5;
+  const moduleHours = ctx.moduleMinutes / 60;
+  const maxResources = getMaxResourcesForModule(moduleHours);
+  const dailyCapMinutes = ctx.moduleMinutes * 1.2;
+
+  // Goal-aware video caps: limit how many slots videos can take
+  const isHandsOn = ctx.goal === "hands_on";
+  const maxVideoSlots = isHandsOn
+    ? Math.max(2, Math.ceil(maxResources * 0.6))
+    : Math.max(1, Math.floor(maxResources * 0.4));
+
+  // Split pool by type
+  const videoPool = selectionPool.filter(c => c.type === "video");
+  const nonVideoPool = selectionPool.filter(c => c.type !== "video");
+
+  // Interleave: pick best non-video and best video alternating, respecting caps
   const selected: CandidateResource[] = [];
   let totalMinutes = 0;
-  const dailyCapMinutes = ctx.moduleMinutes * 1.1;
+  let videoCount = 0;
+  let nonVideoCount = 0;
 
-  for (const c of selectionPool) {
+  // For non-hands-on goals, lead with non-video resources
+  const primaryPool = isHandsOn ? videoPool : nonVideoPool;
+  const secondaryPool = isHandsOn ? nonVideoPool : videoPool;
+  const primaryIsVideo = isHandsOn;
+  let pi = 0, si = 0;
+
+  while (selected.length < maxResources && (pi < primaryPool.length || si < secondaryPool.length)) {
+    // Try primary pool first
+    let added = false;
+    while (pi < primaryPool.length && !added) {
+      const c = primaryPool[pi];
+      pi++;
+      if (totalMinutes + c.estimated_minutes > dailyCapMinutes) continue;
+      const isVid = primaryIsVideo;
+      if (isVid && videoCount >= maxVideoSlots) continue;
+      selected.push(c);
+      totalMinutes += c.estimated_minutes;
+      if (isVid) videoCount++; else nonVideoCount++;
+      added = true;
+    }
+
     if (selected.length >= maxResources) break;
-    if (totalMinutes + c.estimated_minutes > dailyCapMinutes) continue;
-    selected.push(c);
-    totalMinutes += c.estimated_minutes;
+
+    // Then secondary pool
+    added = false;
+    while (si < secondaryPool.length && !added) {
+      const c = secondaryPool[si];
+      si++;
+      if (totalMinutes + c.estimated_minutes > dailyCapMinutes) continue;
+      const isVid = !primaryIsVideo;
+      if (isVid && videoCount >= maxVideoSlots) continue;
+      selected.push(c);
+      totalMinutes += c.estimated_minutes;
+      if (isVid) videoCount++; else nonVideoCount++;
+      added = true;
+    }
   }
 
+  // Coverage enforcement: if total minutes < 50% of module budget, try to add more
+  const coverageFloor = ctx.moduleMinutes * 0.5;
+  if (totalMinutes < coverageFloor && selected.length < maxResources) {
+    for (const c of selectionPool) {
+      if (selected.length >= maxResources) break;
+      if (selected.some(s => s.url === c.url)) continue;
+      if (totalMinutes + c.estimated_minutes > dailyCapMinutes) continue;
+      selected.push(c);
+      totalMinutes += c.estimated_minutes;
+      if (totalMinutes >= coverageFloor) break;
+    }
+  }
+
+  // Fallback: if nothing was selected at all, pick at least one resource
   if (selected.length === 0 && selectionPool.length > 0) {
     const fitting = selectionPool.filter(c => c.estimated_minutes <= dailyCapMinutes);
     if (fitting.length > 0) {
