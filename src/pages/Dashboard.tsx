@@ -236,6 +236,18 @@ export default function Dashboard() {
 
     setAdaptOpen(false);
     fetchData();
+
+    // Populate resources in the background (modules are already visible)
+    if (updatedRoadmap.resources_pending) {
+      supabase.functions.invoke("populate-resources", {
+        body: { roadmap_id: roadmap.id },
+      }).then(() => {
+        fetchData();
+      }).catch((err) => {
+        console.error("populate-resources error:", err);
+        fetchData();
+      });
+    }
   };
 
   const handleAcceptCheckInAdaptation = async (preserveSchedule = false) => {

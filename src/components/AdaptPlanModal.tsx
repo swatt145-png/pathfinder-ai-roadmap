@@ -52,6 +52,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
           new_hours_per_day: newHours,
           adjustment_type: "manual",
           learning_goal: learningGoal || "hands_on",
+          skip_resources: true,
         },
       });
       if (fnErr) throw new Error(fnErr.message);

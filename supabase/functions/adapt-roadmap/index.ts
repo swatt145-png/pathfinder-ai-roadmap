@@ -554,7 +554,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day, learning_goal } = await req.json();
+    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day, learning_goal, skip_resources } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -861,9 +861,19 @@ Return ONLY valid JSON:
 
     // ════════════════════════════════════════════════════════════════════════
     // RESOURCE PIPELINE: Populate resources for new modules inline
+    // (skipped when skip_resources=true — frontend will call separately)
     // ════════════════════════════════════════════════════════════════════════
 
-    if (result.options && !isFallback && SERPER_API_KEY && YOUTUBE_API_KEY) {
+    if (skip_resources) {
+      // Mark resources as pending — frontend will populate them separately
+      if (result.options) {
+        for (const opt of result.options) {
+          if (opt.updated_roadmap) {
+            opt.updated_roadmap.resources_pending = true;
+          }
+        }
+      }
+    } else if (result.options && !isFallback && SERPER_API_KEY && YOUTUBE_API_KEY) {
       // Await the early promises (topic anchors + feedback) — they ran during the AI call
       const [earlyTopicAnchors, earlyFeedback] = await Promise.all([
         earlyTopicAnchorsPromise,
