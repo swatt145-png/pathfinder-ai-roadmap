@@ -223,6 +223,7 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_API_KEY") || "";
 
     // Determine if adaptation needed
@@ -279,13 +280,24 @@ OTHER RULES:
 - Do NOT pre-generate quizzes. Set every module's quiz to an empty array []
 - All user-facing text (reason, changes_summary, message_to_student) MUST use "you/your", never third-person`;
 
+    // Strip resources and quiz from roadmap to reduce token count — AI doesn't need them
+    const strippedRoadmap = {
+      ...roadmap_data,
+      modules: (roadmap_data.modules || []).map((m: any) => ({
+        id: m.id, title: m.title, description: m.description,
+        estimated_hours: m.estimated_hours, day_start: m.day_start, day_end: m.day_end,
+        week: m.week, prerequisites: m.prerequisites, learning_objectives: m.learning_objectives,
+        anchor_terms: m.anchor_terms,
+      })),
+    };
+
     const userPrompt = `You just completed module "${module_title}" (${module_id}).
 Self-report: ${self_report}
 Quiz score: ${quiz_score ?? "not taken"}
 ${quiz_answers ? `Wrong answers: ${JSON.stringify(quiz_answers)}` : ""}
 Learning Goal: ${effectiveGoal}
 
-Current roadmap: ${JSON.stringify(roadmap_data)}
+Current roadmap (resources/quiz omitted — they are restored automatically): ${JSON.stringify(strippedRoadmap)}
 All progress: ${JSON.stringify(all_progress)}
 
 Return ONLY valid JSON:
@@ -295,18 +307,69 @@ Return ONLY valid JSON:
   "reason": "explanation",
   "changes_summary": "human-readable summary of changes",
   "message_to_student": "encouraging personalized message",
-  "updated_roadmap": { full roadmap JSON with same structure } or null
+  "updated_roadmap": { full roadmap JSON with same structure, resources: [] and quiz: [] for all modules } or null
 }`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-preview",
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-        response_format: { type: "json_object" },
-      }),
-    });
+    const aiMessages = [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }];
+    const aiBody = {
+      model: "google/gemini-3-pro-preview",
+      messages: aiMessages,
+      response_format: { type: "json_object" },
+    };
+
+    let response: Response;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      // Try direct Gemini first (faster, no proxy hop)
+      if (GEMINI_API_KEY) {
+        try {
+          const directController = new AbortController();
+          const directTimeout = setTimeout(() => directController.abort(), 15000);
+          const directRes = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ ...aiBody, model: "gemini-3-pro-preview" }),
+            signal: directController.signal,
+          });
+          clearTimeout(directTimeout);
+          if (directRes.ok) {
+            response = directRes;
+            clearTimeout(timeoutId);
+          } else {
+            console.warn(`Direct Gemini returned ${directRes.status}, falling back to gateway...`);
+            response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify(aiBody),
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+          }
+        } catch (directErr) {
+          console.warn(`Direct Gemini failed: ${directErr}, falling back to gateway...`);
+          response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify(aiBody),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+        }
+      } else {
+        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify(aiBody),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      }
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      throw fetchErr;
+    }
 
     if (!response.ok) {
       if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });

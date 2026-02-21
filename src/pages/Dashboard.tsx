@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [adaptationNotif, setAdaptationNotif] = useState<AdaptationResult | null>(null);
   const [applyingAdaptation, setApplyingAdaptation] = useState(false);
   const [completionActions, setCompletionActions] = useState<CompletionActionState | null>(null);
+  const [checkInLoading, setCheckInLoading] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [revertConfirmOpen, setRevertConfirmOpen] = useState(false);
@@ -178,6 +179,7 @@ export default function Dashboard() {
     await fetchData();
 
     // Call check-in in background
+    setCheckInLoading(true);
     const allProg = Object.values(progressMap);
     allProg.push({
       id: "", roadmap_id: roadmap.id, user_id: user.id,
@@ -213,6 +215,8 @@ export default function Dashboard() {
       }
     } catch (e) {
       console.error("Check-in error:", e);
+    } finally {
+      setCheckInLoading(false);
     }
   };
 
@@ -762,8 +766,19 @@ export default function Dashboard() {
         <ModuleCompletionActionsModal
           completedModuleTitle={completionActions.completedModuleTitle}
           nextModule={completionActions.nextModule}
+          suggestedAdaptation={completionActions.suggestedAdaptation}
+          checkInLoading={checkInLoading}
           onProceedNext={handleProceedToNextModule}
           onReturnToRoadmap={() => { setCompletionActions(null); setSelectedModule(null); }}
+          onAcceptAdaptation={() => handleAdaptFromCompletion()}
+          onAcceptNoScheduleChange={() => {
+            const suggested = completionActions.suggestedAdaptation;
+            setCompletionActions(null);
+            if (suggested?.updated_roadmap) {
+              setAdaptationNotif(suggested);
+              handleAcceptCheckInAdaptation(true);
+            }
+          }}
           onClose={() => setCompletionActions(null)}
         />
       )}
