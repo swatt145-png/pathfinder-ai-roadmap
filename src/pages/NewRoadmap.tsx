@@ -34,8 +34,8 @@ const QUICK_STARTS = [
   { label: "Machine Learning in 1 month", topic: "Machine Learning", weeks: 4, hours: 1.5, skill: "intermediate", goal: "hands_on" },
   { label: "Product Management in 3 weeks", topic: "Product Management", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
   { label: "Finance & Investing in 3 weeks", topic: "Finance & Investing", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
-  { label: "Digital Marketing in 2 weeks", topic: "Digital Marketing", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
-  { label: "Cybersecurity in 3 weeks", topic: "Cybersecurity", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
+  { label: "Digital Marketing in 14 days", topic: "Digital Marketing", days: 14, hours: 1, skill: "beginner", goal: "hands_on" },
+  { label: "Creating AI Agents in 5 days", topic: "Creating AI Agents", days: 5, hours: 1, skill: "beginner", goal: "hands_on" },
 ];
 
 const LOADING_STEPS = [
@@ -175,8 +175,8 @@ export default function NewRoadmap() {
   const [topic, setTopic] = useState(reviseState?.topic ?? "");
   const [skillLevel, setSkillLevel] = useState(reviseState?.skill_level ?? "beginner");
   const [learningGoal, setLearningGoal] = useState(reviseState?.learning_goal ?? "hands_on");
-  const [timelineUnit, setTimelineUnit] = useState<"weeks" | "days" | "hours">("weeks");
-  const [timelineValue, setTimelineValue] = useState(reviseState?.timeline_weeks ?? 4);
+  const [timelineUnit, setTimelineUnit] = useState<"weeks" | "days" | "hours">("days");
+  const [timelineValue, setTimelineValue] = useState(reviseState?.timeline_weeks ? reviseState.timeline_weeks : 14);
   const [hoursPerDay, setHoursPerDay] = useState(reviseState?.hours_per_day ?? 1);
   const [totalHoursOnly, setTotalHoursOnly] = useState(3);
   const [loading, setLoading] = useState(false);
@@ -206,8 +206,13 @@ export default function NewRoadmap() {
 
   const applyQuickStart = (qs: typeof QUICK_STARTS[0]) => {
     setTopic(qs.topic);
-    setTimelineUnit("weeks");
-    setTimelineValue(qs.weeks);
+    if ('days' in qs) {
+      setTimelineUnit("days");
+      setTimelineValue((qs as any).days);
+    } else {
+      setTimelineUnit("weeks");
+      setTimelineValue(qs.weeks);
+    }
     setHoursPerDay(qs.hours);
     setSkillLevel(qs.skill);
     setLearningGoal(qs.goal);

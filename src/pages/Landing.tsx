@@ -148,9 +148,9 @@ export default function Landing() {
           <div className="flex flex-col items-center gap-2">
             <p className="text-xs opacity-70">Scan to access on mobile</p>
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent("https://pathfinderairoadmap.lovable.app")}&bgcolor=transparent&color=ffffff`}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent("https://wayvion.lovable.app")}&bgcolor=transparent&color=ffffff`}
               alt="QR Code"
-              className="w-24 h-24 rounded-lg bg-white/10 p-1" />
+              className="w-32 h-32 rounded-lg bg-white/10 p-1" />
 
           </div>
         </div>
