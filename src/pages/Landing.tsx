@@ -151,7 +151,7 @@ export default function Landing() {
             <img
                src={qrCode}
                alt="QR Code to WayVion"
-               className="w-36 h-36 rounded-lg bg-white p-2" />
+               className="w-44 h-44 rounded-lg bg-white p-2" />
 
           </div>
         </div>
