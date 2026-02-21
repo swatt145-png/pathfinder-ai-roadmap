@@ -11,7 +11,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("pathfinder-theme");
+    const stored = localStorage.getItem("wayvion-theme");
     return stored === "dark" ? "dark" : "light";
   });
 
@@ -19,7 +19,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.classList.remove("dark", "light");
     root.classList.add(theme);
-    localStorage.setItem("pathfinder-theme", theme);
+    localStorage.setItem("wayvion-theme", theme);
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));

@@ -445,7 +445,7 @@ export function ModuleDetail({
                   {quizScore != null ? `Quiz Score: ${quizScore}% — Retake` : "Take Quiz"}
                 </Button>
                 <p className="text-base text-muted-foreground mt-1 text-center">
-                  Taking the quiz helps Pathfinder adapt better to your needs
+                  Taking the quiz helps WayVion adapt better to your needs
                 </p>
               </div>
             )}

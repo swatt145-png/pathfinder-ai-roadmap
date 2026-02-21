@@ -253,7 +253,7 @@ serve(async (req) => {
       ? "Your learning goal is DEEP MASTERY — you want comprehensive, in-depth expertise. If adapting, add thorough review modules with advanced content."
       : "";
 
-    const systemPrompt = `You are Pathfinder's intelligent adaptation engine. Address the user directly using "you/your" — NEVER say "the user", "the student", or "the learner". Analyze their performance and determine if the remaining roadmap needs adjustment.
+    const systemPrompt = `You are WayVion's intelligent adaptation engine. Address the user directly using "you/your" — NEVER say "the user", "the student", or "the learner". Analyze their performance and determine if the remaining roadmap needs adjustment.
 
 ${goalContext}
 

@@ -28,7 +28,7 @@ const features = [
   },
 ];
 
-export function WhyPathfinder() {
+export function WhyWayVion() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 

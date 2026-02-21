@@ -711,7 +711,7 @@ function buildSystemPrompt(totalHours: number, learningGoal: string, skillLevel:
   const totalMinutes = totalHours * 60;
   const usableMinutes = Math.floor(totalMinutes * 0.85);
 
-  return `You are Pathfinder, an expert learning curriculum designer. You create personalized, structured, and realistic learning roadmaps.
+  return `You are WayVion, an expert learning curriculum designer. You create personalized, structured, and realistic learning roadmaps.
 
 PRIORITY 1 — TOPIC UNDERSTANDING (do this FIRST):
 Before creating the roadmap, analyze the topic:

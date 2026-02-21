@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { HowItWorks } from "@/components/HowItWorks";
 import { ExploreCategories } from "@/components/ExploreCategories";
-import { WhyPathfinder } from "@/components/WhyPathfinder";
+import { WhyWayVion } from "@/components/WhyPathfinder";
 
 import logo from "@/assets/logo.png";
 
@@ -130,7 +130,7 @@ export default function Landing() {
       </section>
 
       <HowItWorks />
-      <WhyPathfinder />
+      <WhyWayVion />
       <ExploreCategories />
 
       {/* Footer */}
