@@ -133,6 +133,29 @@ export default function Landing() {
       <WhyPathfinder />
       <ExploreCategories />
 
+      {/* Footer */}
+      <footer className="relative bg-gradient-to-r from-[hsl(var(--primary)/0.9)] to-[hsl(var(--primary-dark,var(--primary))/0.95)] text-primary-foreground py-10 px-4">
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-center md:text-left space-y-2">
+            <p className="font-heading font-bold text-lg">PathFinder AI</p>
+            <p className="text-sm opacity-80">© {new Date().getFullYear()} PathFinder AI. All rights reserved.</p>
+            <p className="text-sm opacity-70">Built with ❤️ for lifelong learners.</p>
+            <div className="flex gap-4 justify-center md:justify-start text-sm opacity-80">
+              <a href="#" className="hover:underline">Terms & Conditions</a>
+              <a href="#" className="hover:underline">Privacy Policy</a>
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs opacity-70">Scan to access on mobile</p>
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent("https://pathfinderairoadmap.lovable.app")}&bgcolor=transparent&color=ffffff`}
+              alt="QR Code"
+              className="w-24 h-24 rounded-lg bg-white/10 p-1"
+            />
+          </div>
+        </div>
+      </footer>
+
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
     </>
   );
