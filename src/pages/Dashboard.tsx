@@ -39,7 +39,7 @@ export default function Dashboard() {
   const [revertConfirmOpen, setRevertConfirmOpen] = useState(false);
   const [reverting, setReverting] = useState(false);
   const [revertMessage, setRevertMessage] = useState<string | null>(null);
-  const [reviseConfirmOpen, setReviseConfirmOpen] = useState(false);
+  
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -561,7 +561,7 @@ export default function Dashboard() {
             <>
               <Button onClick={() => setAdaptOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]"><Settings2 className="mr-1 h-3.5 w-3.5" /> Adapt Plan</Button>
               <Button onClick={() => setRevertConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Revert to Previous</Button>
-              <Button onClick={() => setReviseConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Revise Roadmap</Button>
+              
               <Button onClick={() => setArchiveConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Archive Roadmap</Button>
               <Button onClick={() => navigate("/new")} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Create New Roadmap</Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Delete</Button>
@@ -649,7 +649,7 @@ export default function Dashboard() {
             <>
               <Button onClick={() => setAdaptOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all glow-primary w-full"><Settings2 className="mr-1.5 h-3.5 w-3.5" /> Adapt Plan</Button>
               <Button onClick={() => setRevertConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Revert to Previous</Button>
-              <Button onClick={() => setReviseConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Revise Roadmap</Button>
+              
               <Button onClick={() => setArchiveConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Archive Roadmap</Button>
               <Button onClick={() => navigate("/new")} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Create New Roadmap</Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 font-heading font-bold text-xs h-9 w-full">Delete</Button>
@@ -839,41 +839,6 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={reviseConfirmOpen} onOpenChange={setReviseConfirmOpen}>
-        <DialogContent className="glass-strong border-border">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Revise this roadmap?</DialogTitle>
-            <DialogDescription>
-              We'll pre-fill a new roadmap form with these details. Your current roadmap will only be replaced after the new one is successfully generated.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setReviseConfirmOpen(false)} className="border-border">
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (!roadmap || !roadmapData) return;
-                const reviseState = {
-                  replaceRoadmapId: roadmap.id,
-                  topic: roadmapData.topic,
-                  skill_level: roadmapData.skill_level,
-                  learning_goal: roadmap.learning_goal ?? "hands_on",
-                  timeline_weeks: roadmapData.timeline_weeks,
-                  hours_per_day: roadmapData.hours_per_day,
-                  hard_deadline: roadmap.hard_deadline ?? false,
-                  deadline_date: roadmap.deadline_date ?? "",
-                };
-                setReviseConfirmOpen(false);
-                navigate("/new", { state: reviseState });
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Continue to Revise
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="glass-strong border-border">
