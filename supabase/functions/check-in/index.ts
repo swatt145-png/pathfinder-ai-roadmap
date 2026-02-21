@@ -311,64 +311,37 @@ Return ONLY valid JSON:
 }`;
 
     const aiMessages = [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }];
-    const aiBody = {
-      model: "google/gemini-3-pro-preview",
-      messages: aiMessages,
-      response_format: { type: "json_object" },
-    };
 
-    let response: Response;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      // Try direct Gemini first (faster, no proxy hop)
-      if (GEMINI_API_KEY) {
-        try {
-          const directController = new AbortController();
-          const directTimeout = setTimeout(() => directController.abort(), 15000);
-          const directRes = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ ...aiBody, model: "gemini-3-pro-preview" }),
-            signal: directController.signal,
-          });
-          clearTimeout(directTimeout);
-          if (directRes.ok) {
-            response = directRes;
-            clearTimeout(timeoutId);
-          } else {
-            console.warn(`Direct Gemini returned ${directRes.status}, falling back to gateway...`);
-            response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify(aiBody),
-              signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
-          }
-        } catch (directErr) {
-          console.warn(`Direct Gemini failed: ${directErr}, falling back to gateway...`);
-          response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify(aiBody),
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-        }
-      } else {
-        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Try direct Gemini first (faster), fall back to gateway
+    let response: Response | null = null;
+    if (GEMINI_API_KEY) {
+      try {
+        const directRes = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify(aiBody),
-          signal: controller.signal,
+          headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "gemini-3-pro-preview",
+            messages: aiMessages,
+            response_format: { type: "json_object" },
+          }),
         });
-        clearTimeout(timeoutId);
+        if (directRes.ok) response = directRes;
+        else console.warn(`Direct Gemini returned ${directRes.status}, falling back to gateway...`);
+      } catch (e) {
+        console.warn(`Direct Gemini failed: ${e}, falling back to gateway...`);
       }
-    } catch (fetchErr) {
-      clearTimeout(timeoutId);
-      throw fetchErr;
+    }
+
+    if (!response) {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "google/gemini-3-pro-preview",
+          messages: aiMessages,
+          response_format: { type: "json_object" },
+        }),
+      });
     }
 
     if (!response.ok) {
