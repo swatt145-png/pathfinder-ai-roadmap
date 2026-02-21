@@ -458,7 +458,7 @@ export default function Dashboard() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-16 pb-24 px-4 md:px-12">
-        <div className="max-w-3xl md:mr-[200px]">
+        <div className="md:mr-[220px]">
         {/* Main content */}
         <div className="w-full">
         {/* Summary Card */}
