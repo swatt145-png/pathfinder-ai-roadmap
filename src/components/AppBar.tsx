@@ -31,8 +31,8 @@ export function AppBar() {
         to="/home"
         className="flex items-center gap-2 font-heading font-bold text-xl md:text-2xl gradient-text focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
       >
-        <img src={logo} alt="PathFinder logo" className="h-9 w-9 object-contain" />
-        PathFinder
+        <img src={logo} alt="WayVion logo" className="h-9 w-9 object-contain" />
+        WayVion
       </Link>
       <div className="flex items-center gap-3">
         <button

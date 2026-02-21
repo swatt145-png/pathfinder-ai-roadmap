@@ -54,7 +54,7 @@ export function HowItWorks() {
           }`}
         >
           <h2 className="font-heading text-3xl md:text-5xl font-bold gradient-text mb-3">
-            How Pathfinder Builds Your Learning Path
+            How WayVion Builds Your Learning Path
           </h2>
           <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">
             AI agents work together to create a personalized, optimized curriculum
