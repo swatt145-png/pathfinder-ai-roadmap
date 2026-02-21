@@ -279,7 +279,9 @@ OTHER RULES:
 - Maintain the same JSON structure as the original roadmap
 - Do NOT pre-generate quizzes. Set every module's quiz to an empty array []
 - Set every module's resources to an empty array [] — resources are populated separately
-- All user-facing text (reason, changes_summary, message_to_student) MUST use "you/your", never third-person`;
+- All user-facing text (reason, changes_summary, message_to_student) MUST use "you/your", never third-person
+- Keep message_to_student to MAX 2 sentences. Be concise and encouraging, no long paragraphs.
+- Keep changes_summary to MAX 2 sentences describing what changed.`;
 
     // Strip resources and quiz from roadmap to reduce token count — AI doesn't need them
     const strippedRoadmap = {

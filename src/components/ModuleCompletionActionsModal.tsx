@@ -46,8 +46,8 @@ export function ModuleCompletionActionsModal({
           <div className="mb-4 animate-fade-in">
             <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 mb-3">
               <p className="text-sm font-heading font-semibold text-primary mb-1">Suggested Adjustment</p>
-              <p className="text-sm text-muted-foreground mb-2">{suggestedAdaptation.message_to_student}</p>
-              <p className="text-xs text-muted-foreground">{suggestedAdaptation.changes_summary}</p>
+              <p className="text-sm text-muted-foreground mb-2 line-clamp-3">{suggestedAdaptation.message_to_student}</p>
+              <p className="text-xs text-muted-foreground line-clamp-2">{suggestedAdaptation.changes_summary}</p>
             </div>
             <div className="space-y-2 mb-3">
               <Button

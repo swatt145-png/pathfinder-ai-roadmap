@@ -176,10 +176,12 @@ export default function Dashboard() {
       suggestedAdaptation: null,
     });
 
-    // Start check-in loading indicator immediately (visible in completion popup)
-    setCheckInLoading(true);
-
     await fetchData();
+
+    // Only trigger check-in if user provided difficulty feedback
+    if (!selfReport || selfReport === "not_rated") return;
+
+    setCheckInLoading(true);
 
     // Call check-in in background
     const allProg = Object.values(progressMap);
@@ -261,10 +263,11 @@ export default function Dashboard() {
     }
   };
 
-  const handleAcceptCheckInAdaptation = async (preserveSchedule = false) => {
-    if (!adaptationNotif?.updated_roadmap || !roadmap || !user || !roadmapData) return;
+  const handleAcceptCheckInAdaptation = async (preserveSchedule = false, directAdaptation?: AdaptationResult | null) => {
+    const adaptation = directAdaptation ?? adaptationNotif;
+    if (!adaptation?.updated_roadmap || !roadmap || !user || !roadmapData) return;
     setApplyingAdaptation(true);
-    const suggestedRoadmap = adaptationNotif.updated_roadmap;
+    const suggestedRoadmap = adaptation.updated_roadmap;
 
     // Merge: preserve original modules' resources/quiz so we don't wipe existing data
     const originalModulesMap = new Map(
@@ -299,8 +302,8 @@ export default function Dashboard() {
         user_id: user.id,
         trigger_reason: preserveSchedule ? "self_report_adaptation_no_schedule_change" : "self_report_adaptation",
         changes_summary: preserveSchedule
-          ? `${adaptationNotif.changes_summary} (Accepted with no schedule change)`
-          : adaptationNotif.changes_summary,
+          ? `${adaptation.changes_summary} (Accepted with no schedule change)`
+          : adaptation.changes_summary,
         previous_roadmap: roadmapData as any,
         new_roadmap: updatedRoadmap as any,
       });
@@ -811,13 +814,18 @@ export default function Dashboard() {
           checkInLoading={checkInLoading}
           onProceedNext={handleProceedToNextModule}
           onReturnToRoadmap={() => { setCompletionActions(null); setSelectedModule(null); }}
-          onAcceptAdaptation={() => handleAdaptFromCompletion()}
+          onAcceptAdaptation={() => {
+            const suggested = completionActions.suggestedAdaptation;
+            setCompletionActions(null);
+            if (suggested?.updated_roadmap) {
+              handleAcceptCheckInAdaptation(false, suggested);
+            }
+          }}
           onAcceptNoScheduleChange={() => {
             const suggested = completionActions.suggestedAdaptation;
             setCompletionActions(null);
             if (suggested?.updated_roadmap) {
-              setAdaptationNotif(suggested);
-              handleAcceptCheckInAdaptation(true);
+              handleAcceptCheckInAdaptation(true, suggested);
             }
           }}
           onClose={() => setCompletionActions(null)}
