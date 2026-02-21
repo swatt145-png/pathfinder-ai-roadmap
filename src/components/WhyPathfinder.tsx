@@ -16,7 +16,7 @@ const features = [
     label: "Adaptive",
     title: "Customized to Your Proficiency Level",
     description:
-      "Beginner or expert, Pathfinder meets you where you are. The AI adjusts difficulty, depth, and pacing so you're always challenged but never overwhelmed.",
+      "Beginner or expert, WayVion meets you where you are. The AI adjusts difficulty, depth, and pacing so you're always challenged but never overwhelmed.",
     image: imgProficiency,
   },
   {
@@ -50,7 +50,7 @@ export function WhyPathfinder() {
           }`}
         >
           <h2 className="font-heading text-3xl md:text-5xl font-bold gradient-text mb-3">
-            Why Pathfinder?
+            Why WayVion?
           </h2>
           <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto">
             Learning that adapts to you — not the other way around

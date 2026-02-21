@@ -73,7 +73,7 @@ export default function Landing() {
         </div>
 
         <div className="relative z-10 text-center max-w-xl animate-fade-in">
-          <img src={logo} alt="PathFinder logo" className="h-36 w-36 mx-auto mb-5 mt-8 object-contain" />
+          <img src={logo} alt="WayVion logo" className="h-36 w-36 mx-auto mb-5 mt-8 object-contain" />
           <h1 className="font-heading text-6xl md:text-7xl font-extrabold gradient-text mb-4">WayVion
 
           </h1>
@@ -137,8 +137,8 @@ export default function Landing() {
       <footer className="relative bg-gradient-to-r from-[hsl(var(--primary)/0.9)] to-[hsl(var(--primary-dark,var(--primary))/0.95)] text-primary-foreground py-10 px-4">
         <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-center md:text-left space-y-2">
-            <p className="font-heading font-bold text-lg">PathFinder AI</p>
-            <p className="text-sm opacity-80">© {new Date().getFullYear()} PathFinder AI. All rights reserved.</p>
+            <p className="font-heading font-bold text-lg">WayVion</p>
+            <p className="text-sm opacity-80">© {new Date().getFullYear()} WayVion. All rights reserved.</p>
             <p className="text-sm opacity-70">Built with ❤️ for lifelong learners.</p>
             <div className="flex gap-4 justify-center md:justify-start text-sm opacity-80">
               <a href="#" className="hover:underline">Terms & Conditions</a>
