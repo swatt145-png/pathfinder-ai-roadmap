@@ -141,7 +141,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
               </Label>
               <input type="range" min={0.5} max={8} step={0.5} value={newHours} onChange={(e) => setNewHours(Number(e.target.value))} className="w-full accent-primary" />
               <p className="text-xs text-muted-foreground mt-2">
-                Total target hours: <span className="text-primary font-heading font-bold">{(totalDays * newHours).toFixed(1)}h</span> ({totalDays} days × {newHours}h/day)
+                Total target hours: <span className="text-primary font-heading font-bold">{(totalDays * newHours).toFixed(1)}h</span>
               </p>
             </div>
 

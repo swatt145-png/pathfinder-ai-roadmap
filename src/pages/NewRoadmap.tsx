@@ -353,7 +353,8 @@ export default function NewRoadmap() {
   ];
 
   if (loading) {
-    const radius = 240;
+    const isMobileView = typeof window !== 'undefined' && window.innerWidth < 640;
+    const radius = isMobileView ? 120 : 240;
     const startAngle = -90;
 
     return (
@@ -361,11 +362,11 @@ export default function NewRoadmap() {
         <AppBar />
         <WavyBackground />
         <div className="flex min-h-screen items-center justify-center px-4 pt-14 overflow-hidden">
-          <div className="flex flex-col items-center animate-fade-in w-full max-w-[620px]">
-            <div className="relative w-full" style={{ aspectRatio: "1/1", maxWidth: 620, maxHeight: 620 }}>
+          <div className="flex flex-col items-center animate-fade-in w-full max-w-[320px] sm:max-w-[480px] md:max-w-[620px]">
+            <div className="relative w-full" style={{ aspectRatio: "1/1" }}>
             {/* Center book image */}
             <div className="absolute inset-0 flex items-center justify-center z-10">
-              <img src={bookKnowledgeImg} alt="Knowledge book" className="w-32 h-32 sm:w-44 sm:h-44 md:w-64 md:h-64 rounded-full object-cover shadow-2xl shadow-primary/20 border-2 border-primary/20" />
+              <img src={bookKnowledgeImg} alt="Knowledge book" className="w-20 h-20 sm:w-36 sm:h-36 md:w-64 md:h-64 rounded-full object-cover shadow-2xl shadow-primary/20 border-2 border-primary/20" />
             </div>
 
             {/* Connecting circle track + arrows */}
@@ -423,7 +424,7 @@ export default function NewRoadmap() {
                   }}
                 >
                   <div
-                    className={`w-12 h-12 sm:w-16 sm:h-16 md:w-24 md:h-24 rounded-full overflow-hidden transition-all duration-700 ${
+                    className={`w-10 h-10 sm:w-14 sm:h-14 md:w-24 md:h-24 rounded-full overflow-hidden transition-all duration-700 ${
                       isDone
                         ? "border-2 border-primary shadow-[0_0_12px_hsl(var(--primary)/0.4)]"
                         : isActive
