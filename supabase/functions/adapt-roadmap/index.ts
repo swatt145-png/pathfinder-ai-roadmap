@@ -615,7 +615,7 @@ ${goalContext}
 
 RULES:
 1. The updated_roadmap MUST include completed modules FIRST (unchanged), then your NEW modules.
-2. Completed modules (IDs: ${JSON.stringify(completedModuleIds)}) MUST appear exactly as provided — same id, title, description, resources, estimated_hours, day_start, day_end, week. Do NOT modify them.
+2. Completed modules (IDs: ${JSON.stringify(completedModuleIds)}) MUST appear exactly as provided — same id, title, description, estimated_hours, day_start, day_end, week. Set their resources: [] and quiz: [] (originals are restored automatically). Do NOT modify them.
 3. For NEW modules, generate fresh content covering topics NOT yet completed. Each module needs:
    - id: "mod_N" format (sequential after completed modules)
    - title: clear, specific module title
@@ -651,11 +651,12 @@ NEW TIME BUDGET: ${displayDays} day(s), ${hrsPerDay}h/day (${totalAvailableHours
 
 Generate a fresh module plan covering the uncovered topics above, fitted to the new time budget. Prioritize the most important uncovered topics if time is tight.
 
-Completed modules to include unchanged: ${JSON.stringify(completedModulesData.map((m: any) => ({
+Completed modules to include unchanged (resources and quiz omitted — they will be restored automatically):
+${JSON.stringify(completedModulesData.map((m: any) => ({
       id: m.id, title: m.title, description: m.description,
       estimated_hours: m.estimated_hours, day_start: m.day_start, day_end: m.day_end,
       week: m.week, prerequisites: m.prerequisites, learning_objectives: m.learning_objectives,
-      anchor_terms: m.anchor_terms, resources: m.resources, quiz: m.quiz || [],
+      anchor_terms: m.anchor_terms,
     })))}
 
 Return ONLY valid JSON:
