@@ -95,14 +95,20 @@ export function ModuleDetail({
     const loadFeedback = async () => {
       if (!user || !roadmapId || resources.length === 0) return;
       const urls = resources.map((r) => r.url);
-      const { data, error } = await supabase
-        .from("resource_feedback" as any)
-        .select("resource_url,relevant,liked")
-        .eq("user_id", user.id)
-        .eq("roadmap_id", roadmapId)
-        .eq("module_id", module.id)
-        .in("resource_url", urls);
-      if (error || !data) return;
+      let data: any[] | null = null;
+      try {
+        const result = await supabase
+          .from("resource_feedback" as any)
+          .select("resource_url,relevant,liked")
+          .eq("user_id", user.id)
+          .eq("roadmap_id", roadmapId)
+          .eq("module_id", module.id)
+          .in("resource_url", urls);
+        data = result.data;
+      } catch {
+        // Table may not exist yet — silently ignore
+      }
+      if (!data) return;
       const next: Record<string, { liked: boolean | null; relevant: boolean | null }> = {};
       for (const row of data as any[]) {
         next[row.resource_url] = { liked: row.liked, relevant: row.relevant };
@@ -149,18 +155,22 @@ export function ModuleDetail({
   const upsertFeedback = async (resourceUrl: string, next: { liked: boolean | null; relevant: boolean | null }) => {
     if (!user || !roadmapId) return;
     setFeedbackByUrl((prev) => ({ ...prev, [resourceUrl]: next }));
-    await (supabase.from as any)("resource_feedback").upsert({
-      user_id: user.id,
-      roadmap_id: roadmapId,
-      module_id: module.id,
-      module_title: module.title,
-      topic_key: normalizeTopicKey(roadmapTopic || module.title),
-      resource_url: resourceUrl,
-      relevant: next.relevant,
-      liked: next.liked,
-    }, {
-      onConflict: "user_id,roadmap_id,module_id,resource_url",
-    });
+    try {
+      await (supabase.from as any)("resource_feedback").upsert({
+        user_id: user.id,
+        roadmap_id: roadmapId,
+        module_id: module.id,
+        module_title: module.title,
+        topic_key: normalizeTopicKey(roadmapTopic || module.title),
+        resource_url: resourceUrl,
+        relevant: next.relevant,
+        liked: next.liked,
+      }, {
+        onConflict: "user_id,roadmap_id,module_id,resource_url",
+      });
+    } catch {
+      // Table may not exist yet — silently ignore
+    }
   };
 
   const toggleLiked = async (resourceUrl: string) => {

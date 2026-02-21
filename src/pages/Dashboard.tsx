@@ -207,15 +207,6 @@ export default function Dashboard() {
         },
       });
 
-      console.log("[check-in] result:", JSON.stringify({
-        needs_adaptation: checkInResult?.needs_adaptation,
-        adaptation_type: checkInResult?.adaptation_type,
-        has_updated_roadmap: !!checkInResult?.updated_roadmap,
-        reason: checkInResult?.reason,
-        message: checkInResult?.message_to_student,
-        error: checkInResult?.error,
-      }));
-
       const suggestion = checkInResult?.needs_adaptation && checkInResult?.updated_roadmap
         ? (checkInResult as AdaptationResult)
         : null;
@@ -274,12 +265,34 @@ export default function Dashboard() {
     if (!adaptationNotif?.updated_roadmap || !roadmap || !user || !roadmapData) return;
     setApplyingAdaptation(true);
     const suggestedRoadmap = adaptationNotif.updated_roadmap;
+
+    // Merge: preserve original modules' resources/quiz so we don't wipe existing data
+    const originalModulesMap = new Map(
+      roadmapData.modules.map((m) => [m.id, m])
+    );
+    const mergedModules = suggestedRoadmap.modules.map((mod) => {
+      const orig = originalModulesMap.get(mod.id);
+      if (orig) {
+        return {
+          ...mod,
+          resources: orig.resources && orig.resources.length > 0 ? orig.resources : mod.resources,
+          quiz: orig.quiz && orig.quiz.length > 0 ? orig.quiz : mod.quiz,
+        };
+      }
+      return mod;
+    });
+
     const updatedRoadmap: RoadmapData = preserveSchedule
       ? {
           ...suggestedRoadmap,
+          modules: mergedModules,
           timeline_weeks: roadmapData.timeline_weeks,
         }
-      : suggestedRoadmap;
+      : { ...suggestedRoadmap, modules: mergedModules };
+
+    // Only populate resources for truly new modules (no existing resources)
+    const newModulesExist = mergedModules.some((m) => !m.resources || m.resources.length === 0);
+
     try {
       await supabase.from("adaptations").insert({
         roadmap_id: roadmap.id,
@@ -303,8 +316,8 @@ export default function Dashboard() {
       setCompletionActions(null);
       fetchData();
 
-      // Populate resources in background for new/modified modules
-      if (updatedRoadmap.resources_pending) {
+      // Populate resources in background only for new modules missing resources
+      if (newModulesExist) {
         supabase.functions.invoke("populate-resources", {
           body: { roadmap_id: roadmap.id },
         }).then(() => {
