@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import WavyBackground from "@/components/WavyBackground";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,6 +35,7 @@ interface RoadmapRow {
   timeline_weeks: number;
   hours_per_day: number;
   roadmap_data: unknown;
+  learning_goal?: string;
 }
 
 const CARD_COLORS = [
@@ -54,13 +55,15 @@ export default function Flashcards() {
   const [selectedRoadmap, setSelectedRoadmap] = useState<RoadmapRow | null>(null);
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [flipped, setFlipped] = useState(false);
+  const [generatingQuizzes, setGeneratingQuizzes] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState("");
 
   useEffect(() => {
     if (!user) return;
     (async () => {
       const { data } = await supabase
         .from("roadmaps")
-        .select("id, topic, skill_level, timeline_weeks, hours_per_day, roadmap_data")
+        .select("id, topic, skill_level, timeline_weeks, hours_per_day, roadmap_data, learning_goal")
         .eq("user_id", user.id)
         .eq("status", "active")
         .order("created_at", { ascending: false });
@@ -68,6 +71,75 @@ export default function Flashcards() {
       setLoading(false);
     })();
   }, [user]);
+
+  const handleSelectRoadmap = useCallback(async (rm: RoadmapRow) => {
+    const roadmapData = rm.roadmap_data as unknown as RoadmapData;
+    const modulesWithoutQuiz = (roadmapData.modules ?? []).filter(
+      (m) => !m.quiz || m.quiz.length === 0
+    );
+
+    if (modulesWithoutQuiz.length === 0) {
+      setSelectedRoadmap(rm);
+      return;
+    }
+
+    // Generate quizzes for all modules missing them
+    setSelectedRoadmap(rm);
+    setGeneratingQuizzes(true);
+    setGenerationProgress(`Generating flashcards... 0/${modulesWithoutQuiz.length} modules`);
+
+    const updatedModules = [...(roadmapData.modules ?? [])];
+    let completed = 0;
+
+    // Process in batches of 3 to avoid rate limits
+    const batchSize = 3;
+    for (let i = 0; i < modulesWithoutQuiz.length; i += batchSize) {
+      const batch = modulesWithoutQuiz.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(async (mod) => {
+          const { data, error } = await supabase.functions.invoke("generate-module-quiz", {
+            body: {
+              topic: roadmapData.topic,
+              skill_level: roadmapData.skill_level,
+              learning_goal: rm.learning_goal || "hands_on",
+              module: {
+                id: mod.id,
+                title: mod.title,
+                description: mod.description,
+                learning_objectives: mod.learning_objectives || [],
+              },
+            },
+          });
+          if (error) throw error;
+          return { moduleId: mod.id, quiz: Array.isArray(data?.quiz) ? data.quiz : [] };
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === "fulfilled" && result.value.quiz.length > 0) {
+          const idx = updatedModules.findIndex((m) => m.id === result.value.moduleId);
+          if (idx !== -1) updatedModules[idx] = { ...updatedModules[idx], quiz: result.value.quiz };
+        }
+        completed++;
+      }
+      setGenerationProgress(`Generating flashcards... ${completed}/${modulesWithoutQuiz.length} modules`);
+    }
+
+    // Update roadmap data in state
+    const updatedRoadmapData: RoadmapData = { ...roadmapData, modules: updatedModules };
+    const updatedRm = { ...rm, roadmap_data: updatedRoadmapData as unknown };
+    setSelectedRoadmap(updatedRm);
+    setRoadmaps((prev) => prev.map((r) => (r.id === rm.id ? updatedRm : r)));
+
+    // Persist to DB
+    await supabase
+      .from("roadmaps")
+      .update({ roadmap_data: updatedRoadmapData as any })
+      .eq("id", rm.id);
+
+    setGeneratingQuizzes(false);
+    setGenerationProgress("");
+  }, []);
 
   if (loading) {
     return (
@@ -137,15 +209,28 @@ export default function Flashcards() {
         <WavyBackground />
         <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-6xl mx-auto animate-fade-in">
           <div className="flex items-center gap-3 mb-8">
-            <Button variant="ghost" size="icon" onClick={() => setSelectedRoadmap(null)}>
+            <Button variant="ghost" size="icon" onClick={() => { setSelectedRoadmap(null); setGeneratingQuizzes(false); }}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
               <h2 className="font-heading text-2xl md:text-3xl font-bold">{selectedRoadmap.topic}</h2>
-              <p className="text-sm text-muted-foreground">{cards.length} flashcards · {selectedRoadmap.skill_level}</p>
+              <p className="text-sm text-muted-foreground">
+                {generatingQuizzes ? generationProgress : `${cards.length} flashcards · ${selectedRoadmap.skill_level}`}
+              </p>
             </div>
           </div>
-          {cards.length === 0 ? (
+          {generatingQuizzes ? (
+            <div className="glass-blue p-8 text-center">
+              <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-4" />
+              <p className="text-muted-foreground">{generationProgress}</p>
+              <p className="text-xs text-muted-foreground mt-2">This may take a moment — generating quiz questions for all modules...</p>
+              {cards.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm text-muted-foreground mb-2">{cards.length} cards ready so far</p>
+                </div>
+              )}
+            </div>
+          ) : cards.length === 0 ? (
             <div className="glass-blue p-8 text-center">
               <p className="text-muted-foreground">No flashcards available for this roadmap yet.</p>
             </div>
@@ -224,13 +309,17 @@ export default function Flashcards() {
             <p className="text-muted-foreground mb-6">Choose a roadmap to study its flashcards</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {roadmaps.map((rm, i) => {
-                const cardCount = generateFlashcards(rm.roadmap_data as unknown as RoadmapData).length;
+                const roadmapData = rm.roadmap_data as unknown as RoadmapData;
+                const existingCards = generateFlashcards(roadmapData).length;
+                const totalModules = (roadmapData.modules ?? []).length;
+                const modulesWithQuiz = (roadmapData.modules ?? []).filter(m => m.quiz && m.quiz.length > 0).length;
                 const grad = CARD_COLORS[i % CARD_COLORS.length];
                 return (
                   <button
                     key={rm.id}
-                    onClick={() => setSelectedRoadmap(rm)}
-                    className="group rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left"
+                    onClick={() => handleSelectRoadmap(rm)}
+                    disabled={generatingQuizzes}
+                    className="group rounded-xl overflow-hidden bg-card border border-border hover:border-primary/40 transition-all hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 text-left disabled:opacity-50"
                   >
                     <div className={`bg-gradient-to-r ${grad} px-5 py-4 h-16 flex items-center`}>
                       <h3 className="font-heading font-bold text-lg text-primary-foreground line-clamp-2">{rm.topic}</h3>
@@ -239,7 +328,9 @@ export default function Flashcards() {
                       <div className="flex items-center justify-between text-sm text-muted-foreground">
                         <span>{rm.skill_level} · {rm.timeline_weeks}w · {rm.hours_per_day}h/day</span>
                         <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading font-semibold">
-                          {cardCount} cards
+                          {modulesWithQuiz < totalModules
+                            ? `~${totalModules * 4} cards`
+                            : `${existingCards} cards`}
                         </span>
                       </div>
                     </div>
