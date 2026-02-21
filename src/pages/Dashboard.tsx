@@ -207,6 +207,15 @@ export default function Dashboard() {
         },
       });
 
+      console.log("[check-in] result:", JSON.stringify({
+        needs_adaptation: checkInResult?.needs_adaptation,
+        adaptation_type: checkInResult?.adaptation_type,
+        has_updated_roadmap: !!checkInResult?.updated_roadmap,
+        reason: checkInResult?.reason,
+        message: checkInResult?.message_to_student,
+        error: checkInResult?.error,
+      }));
+
       const suggestion = checkInResult?.needs_adaptation && checkInResult?.updated_roadmap
         ? (checkInResult as AdaptationResult)
         : null;
