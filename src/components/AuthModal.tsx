@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 
 interface AuthModalProps {
@@ -28,9 +29,12 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const { signUp, signIn } = useAuth();
 
-  // Load saved email on mount
   useEffect(() => {
     const savedEmail = localStorage.getItem("rememberedEmail");
     if (savedEmail) {
@@ -70,10 +74,28 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
     setLoading(false);
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) setError(error.message);
+      else setForgotSent(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to send reset email");
+    }
+    setForgotLoading(false);
+  };
+
   const switchTab = (t: "signin" | "signup") => {
     setTab(t);
     setError(null);
     setSignUpSuccess(false);
+    setForgotMode(false);
+    setForgotSent(false);
   };
 
   return (
@@ -95,7 +117,39 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
         </div>
 
         <div className="p-6">
-          {signUpSuccess ? (
+          {forgotMode ? (
+            forgotSent ? (
+              <div className="text-center py-4">
+                <p className="text-success font-semibold mb-2">Reset link sent!</p>
+                <p className="text-muted-foreground text-sm">Check your email for a password reset link.</p>
+                <Button className="mt-4 w-full gradient-primary text-primary-foreground font-heading" onClick={() => { setForgotMode(false); setForgotSent(false); }}>
+                  Back to Sign In
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <p className="text-sm text-muted-foreground">Enter your email and we'll send you a reset link.</p>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-sm">Email</Label>
+                  <Input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="bg-muted/50 border-border focus:border-primary"
+                  />
+                </div>
+                {error && <p className="text-destructive text-sm">{error}</p>}
+                <Button type="submit" disabled={forgotLoading} className="w-full gradient-primary text-primary-foreground font-heading font-semibold h-12">
+                  {forgotLoading ? <Loader2 className="animate-spin" /> : "Send Reset Link"}
+                </Button>
+                <button type="button" onClick={() => { setForgotMode(false); setError(null); }} className="text-primary hover:underline text-sm w-full text-center">
+                  Back to Sign In
+                </button>
+              </form>
+            )
+          ) : signUpSuccess ? (
             <div className="text-center py-4">
               <p className="text-success font-semibold mb-2">Account created!</p>
               <p className="text-muted-foreground text-sm">Check your email to verify your account, then sign in.</p>
@@ -150,16 +204,21 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                 )}
               </div>
               {tab === "signin" && (
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="remember"
-                    checked={rememberMe}
-                    onCheckedChange={(checked) => setRememberMe(checked === true)}
-                  />
-                  <Label htmlFor="remember" className="text-muted-foreground text-sm cursor-pointer">
-                    Remember me
-                  </Label>
-                </div>
+                <>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="remember"
+                      checked={rememberMe}
+                      onCheckedChange={(checked) => setRememberMe(checked === true)}
+                    />
+                    <Label htmlFor="remember" className="text-muted-foreground text-sm cursor-pointer">
+                      Remember me
+                    </Label>
+                  </div>
+                  <button type="button" onClick={() => { setForgotMode(true); setForgotEmail(email); setError(null); }} className="text-primary hover:underline text-sm">
+                    Forgot password?
+                  </button>
+                </>
               )}
               {error && <p className="text-destructive text-sm">{error}</p>}
               <Button type="submit" disabled={loading} className="w-full gradient-primary text-primary-foreground font-heading font-semibold h-12">

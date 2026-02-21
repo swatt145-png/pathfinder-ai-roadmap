@@ -42,7 +42,7 @@ export function WhyPathfinder() {
   }, []);
 
   return (
-    <section ref={sectionRef} className="w-full py-20 md:py-28 border-t border-border/40">
+    <section ref={sectionRef} className="w-full py-10 md:py-16 border-t border-border/40">
       <div className="max-w-6xl mx-auto px-4">
         <div
           className={`text-center mb-16 transition-all duration-700 ${

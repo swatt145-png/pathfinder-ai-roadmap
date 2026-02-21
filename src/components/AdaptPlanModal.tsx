@@ -96,8 +96,11 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-6">
+        <p className="text-sm text-muted-foreground mb-2">
           You've completed {completedCount} of {roadmapData.modules.length} modules ({daysCompleted} {daysCompleted === 1 ? "day" : "days"} done, {daysRemaining} {daysRemaining === 1 ? "day" : "days"} remaining).
+        </p>
+        <p className="text-xs text-muted-foreground/70 mb-6">
+          Original roadmap: <span className="font-semibold text-foreground/80">{totalRoadmapDays} days</span>, <span className="font-semibold text-foreground/80">{roadmapData.hours_per_day}h/day</span>
         </p>
 
         {!result ? (
@@ -121,7 +124,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
               </div>
 
               <Label className="text-sm text-muted-foreground mb-2 block">
-                {timelineUnit === "days" ? "Days" : "Weeks"} remaining: <span className="text-primary font-heading font-bold">{newValue}</span>
+                Remaining target {timelineUnit === "days" ? "days" : "weeks"}: <span className="text-primary font-heading font-bold">{newValue}</span>
               </Label>
               <input
                 type="range"
@@ -137,6 +140,9 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
                 How many hours a day can you study? <span className="text-primary font-heading font-bold">{newHours}</span>
               </Label>
               <input type="range" min={0.5} max={8} step={0.5} value={newHours} onChange={(e) => setNewHours(Number(e.target.value))} className="w-full accent-primary" />
+              <p className="text-xs text-muted-foreground mt-2">
+                Total target hours: <span className="text-primary font-heading font-bold">{(totalDays * newHours).toFixed(1)}h</span> ({totalDays} days × {newHours}h/day)
+              </p>
             </div>
 
             {error && <p className="text-destructive text-sm">{error}</p>}
