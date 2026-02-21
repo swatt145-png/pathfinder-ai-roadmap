@@ -176,10 +176,12 @@ export default function Dashboard() {
       suggestedAdaptation: null,
     });
 
+    // Start check-in loading indicator immediately (visible in completion popup)
+    setCheckInLoading(true);
+
     await fetchData();
 
     // Call check-in in background
-    setCheckInLoading(true);
     const allProg = Object.values(progressMap);
     allProg.push({
       id: "", roadmap_id: roadmap.id, user_id: user.id,
@@ -209,9 +211,14 @@ export default function Dashboard() {
         ? (checkInResult as AdaptationResult)
         : null;
 
-      // Update popup with adaptation suggestion if available
+      // Update popup with adaptation suggestion, or show standalone notification if popup was dismissed
       if (suggestion) {
-        setCompletionActions(prev => prev ? { ...prev, suggestedAdaptation: suggestion } : null);
+        setCompletionActions(prev => {
+          if (prev) return { ...prev, suggestedAdaptation: suggestion };
+          // Popup already closed — show as standalone notification
+          setAdaptationNotif(suggestion);
+          return null;
+        });
       }
     } catch (e) {
       console.error("Check-in error:", e);
