@@ -35,6 +35,7 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
     const { topic, skill_level, learning_goal, module } = await req.json();
     if (!topic || !module?.title) {
@@ -76,18 +77,52 @@ Return ONLY valid JSON:
   ]
 }`;
 
-    const response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-      }),
-    }, 12000);
+    const model = "gemini-2.5-flash-lite";
+    const messages = [{ role: "user", content: prompt }];
+    const bodyPayload = {
+      model,
+      messages,
+      response_format: { type: "json_object" },
+    };
+
+    let response: Response | null = null;
+
+    // Try Gemini direct first (faster, no proxy hop)
+    if (GEMINI_API_KEY) {
+      try {
+        response = await fetchWithTimeout(
+          "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${GEMINI_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(bodyPayload),
+          },
+          15000,
+        );
+        if (!response.ok) {
+          console.warn(`Direct Gemini quiz returned ${response.status}, falling back to gateway...`);
+          response = null;
+        }
+      } catch (e: any) {
+        console.warn(`Direct Gemini quiz failed: ${e.name === "AbortError" ? "timeout" : e}, falling back to gateway...`);
+        response = null;
+      }
+    }
+
+    // Fallback to gateway
+    if (!response) {
+      response = await fetchWithTimeout("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...bodyPayload, model: `google/${model}` }),
+      }, 20000);
+    }
 
     if (!response.ok) {
       const t = await response.text();

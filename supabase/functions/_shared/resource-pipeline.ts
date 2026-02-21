@@ -667,7 +667,7 @@ export function applyStage4Filter(
 
     const resourceText = `${c.title} ${c.description} ${c.channel || ""}`;
     const similarity = computeHybridSimilarity(moduleText, resourceText);
-    if (similarity < 0.14) continue;
+    if (similarity < 0.20) continue;
 
     const penalty = computeScopePenalty(c, ctx);
     c.scope_penalty = penalty;
@@ -1287,8 +1287,19 @@ export function mergeAndDeduplicate(
     }
   }
 
-  for (const v of topicAnchors.videos) processVideo(v);
-  for (const r of topicAnchors.web) processWeb(r);
+  // Topic anchors: only merge if resource title is relevant to this specific module
+  const moduleTitleLower = moduleTitle.toLowerCase();
+  for (const v of topicAnchors.videos) {
+    const titleLower = (v.title || "").toLowerCase();
+    const sim = computeHybridSimilarity(moduleTitleLower, titleLower);
+    if (sim >= 0.25) processVideo(v);
+  }
+  for (const r of topicAnchors.web) {
+    const titleLower = (r.title || "").toLowerCase();
+    const sim = computeHybridSimilarity(moduleTitleLower, titleLower);
+    if (sim >= 0.25) processWeb(r);
+  }
+  // Module-specific results: merge all (already targeted)
   for (const v of moduleResults.videos) processVideo(v);
   for (const r of moduleResults.web) processWeb(r);
 
