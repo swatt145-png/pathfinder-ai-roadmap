@@ -278,6 +278,7 @@ OTHER RULES:
 - Keep total hours realistic
 - Maintain the same JSON structure as the original roadmap
 - Do NOT pre-generate quizzes. Set every module's quiz to an empty array []
+- Set every module's resources to an empty array [] — resources are populated separately
 - All user-facing text (reason, changes_summary, message_to_student) MUST use "you/your", never third-person`;
 
     // Strip resources and quiz from roadmap to reduce token count — AI doesn't need them
@@ -320,7 +321,7 @@ Return ONLY valid JSON:
           method: "POST",
           headers: { Authorization: `Bearer ${GEMINI_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "gemini-3-pro-preview",
+            model: "gemini-2.5-flash",
             messages: aiMessages,
             response_format: { type: "json_object" },
           }),
@@ -337,7 +338,7 @@ Return ONLY valid JSON:
         method: "POST",
         headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-3-pro-preview",
+          model: "google/gemini-2.5-flash",
           messages: aiMessages,
           response_format: { type: "json_object" },
         }),
@@ -355,9 +356,9 @@ Return ONLY valid JSON:
     const result = parseAiJson(content);
     if (result?.updated_roadmap) stripModuleQuizzes(result.updated_roadmap);
 
-    // Enrich any YouTube URLs in adapted roadmap
-    if (result.updated_roadmap && YOUTUBE_API_KEY) {
-      await enrichRoadmapYouTube(result.updated_roadmap, YOUTUBE_API_KEY);
+    // Mark resources as pending — frontend will call populate-resources after accepting
+    if (result.updated_roadmap) {
+      result.updated_roadmap.resources_pending = true;
     }
 
     // Fix third-person language in user-facing text
