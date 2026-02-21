@@ -20,11 +20,11 @@ export default function Landing() {
   const navigate = useNavigate();
 
   const features = [
-    { icon: Compass, text: "Personalized roadmaps for any skill" },
-    { icon: BarChart3, text: "Adapts based on your actual progress" },
-    { icon: Zap, text: "Real resources, real quizzes, real results" },
-    { icon: Brain, text: "AI-powered insights & smart recommendations" },
-  ];
+  { icon: Compass, text: "Personalized roadmaps for any skill" },
+  { icon: BarChart3, text: "Adapts based on your actual progress" },
+  { icon: Zap, text: "Real resources, real quizzes, real results" },
+  { icon: Brain, text: "AI-powered insights & smart recommendations" }];
+
 
   const handleGuestLogin = async () => {
     setGuestLoading(true);
@@ -38,8 +38,8 @@ export default function Landing() {
         <button
           onClick={toggleTheme}
           className="w-10 h-10 rounded-full flex items-center justify-center border border-border bg-card text-foreground hover:bg-muted transition-colors shadow-sm"
-          aria-label="Toggle theme"
-        >
+          aria-label="Toggle theme">
+
           {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
       </div>
@@ -51,13 +51,13 @@ export default function Landing() {
           {/* Top-left violet glow */}
           <div
             className="absolute -top-20 -left-20 w-80 h-80 rounded-full opacity-20 blur-3xl"
-            style={{ background: "hsl(var(--violet) / 0.4)" }}
-          />
+            style={{ background: "hsl(var(--violet) / 0.4)" }} />
+
           {/* Bottom-right primary glow */}
           <div
             className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full opacity-15 blur-3xl"
-            style={{ background: "hsl(var(--primary) / 0.5)" }}
-          />
+            style={{ background: "hsl(var(--primary) / 0.5)" }} />
+
           {/* Fluid wave shapes — inspired by abstract fluid backgrounds */}
           <svg className="absolute inset-0 w-full h-full hero-waves" viewBox="0 0 1440 900" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M0,300 C360,450 720,150 1080,350 C1260,450 1440,280 1440,280 L1440,0 L0,0 Z" className="hero-wave-1" />
@@ -74,42 +74,42 @@ export default function Landing() {
 
         <div className="relative z-10 text-center max-w-xl animate-fade-in">
           <img src={logo} alt="PathFinder logo" className="h-36 w-36 mx-auto mb-5 mt-8 object-contain" />
-          <h1 className="font-heading text-6xl md:text-7xl font-extrabold gradient-text mb-4">
-            PathFinder
+          <h1 className="font-heading text-6xl md:text-7xl font-extrabold gradient-text mb-4">WayVion
+
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground mb-10 font-body">
             Your AI-powered learning companion that adapts to you
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
-            {features.map((f) => (
-              <div key={f.text} className="flex items-center gap-3 glass-blue px-5 py-4 text-left rounded-xl">
+            {features.map((f) =>
+            <div key={f.text} className="flex items-center gap-3 glass-blue px-5 py-4 text-left rounded-xl">
                 <f.icon className="w-6 h-6 text-primary shrink-0" />
                 <span className="text-base text-foreground/90">{f.text}</span>
               </div>
-            ))}
+            )}
           </div>
 
           <div id="hero-auth">
             <Button
-              onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-              className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 glow-primary"
-            >
+              onClick={() => {setAuthTab("signup");setAuthOpen(true);}}
+              className="w-full sm:w-auto px-10 h-14 text-lg font-heading font-bold gradient-primary text-primary-foreground transition-all hover:scale-105 glow-primary">
+
               Get Started
             </Button>
 
             <div className="mt-5 flex items-center justify-center gap-5 text-base">
               <button
-                onClick={() => { setAuthTab("signin"); setAuthOpen(true); }}
-                className="text-primary hover:underline font-semibold text-base"
-              >
+                onClick={() => {setAuthTab("signin");setAuthOpen(true);}}
+                className="text-primary hover:underline font-semibold text-base">
+
                 Sign In
               </button>
               <span className="text-border">|</span>
               <button
-                onClick={() => { setAuthTab("signup"); setAuthOpen(true); }}
-                className="text-primary hover:underline font-semibold text-base"
-              >
+                onClick={() => {setAuthTab("signup");setAuthOpen(true);}}
+                className="text-primary hover:underline font-semibold text-base">
+
                 Sign Up
               </button>
             </div>
@@ -117,13 +117,13 @@ export default function Landing() {
             <button
               onClick={handleGuestLogin}
               disabled={guestLoading}
-              className="mt-5 glass-blue px-8 py-3 rounded-xl text-base font-semibold text-foreground/80"
-            >
-              {guestLoading ? (
-                <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Entering as guest…</span>
-              ) : (
-                "Continue as Guest"
-              )}
+              className="mt-5 glass-blue px-8 py-3 rounded-xl text-base font-semibold text-foreground/80">
+
+              {guestLoading ?
+              <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Entering as guest…</span> :
+
+              "Continue as Guest"
+              }
             </button>
           </div>
         </div>
@@ -150,13 +150,13 @@ export default function Landing() {
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent("https://pathfinderairoadmap.lovable.app")}&bgcolor=transparent&color=ffffff`}
               alt="QR Code"
-              className="w-24 h-24 rounded-lg bg-white/10 p-1"
-            />
+              className="w-24 h-24 rounded-lg bg-white/10 p-1" />
+
           </div>
         </div>
       </footer>
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} defaultTab={authTab} />
-    </>
-  );
+    </>);
+
 }
