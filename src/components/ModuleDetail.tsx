@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, ExternalLink, CheckSquare, Square, ThumbsUp, Min
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { QuizModal } from "@/components/QuizModal";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-safe";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Module, ModuleProgress } from "@/lib/types";
 import confetti from "canvas-confetti";
