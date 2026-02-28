@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "@/components/ui/button";
 import { LogOut, User, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase-safe";
 import logo from "@/assets/logo.png";
 
 export function AppBar() {
