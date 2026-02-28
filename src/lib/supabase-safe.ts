@@ -1,20 +1,23 @@
 /**
  * Safe Supabase client wrapper that prevents the app from crashing
- * if environment variables are missing (e.g., in published builds
- * where env vars haven't been injected yet).
+ * if environment variables are missing in production builds.
  */
 
-let supabaseClient: any = null;
-let isConfigured = false;
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/integrations/supabase/types';
 
-try {
-  // This import will throw if VITE_SUPABASE_URL is undefined
-  const { supabase } = await import("@/integrations/supabase/client");
-  supabaseClient = supabase;
-  isConfigured = true;
-} catch (e) {
-  console.warn("Supabase client not configured. App will run in offline mode.");
-}
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export const supabase = supabaseClient;
-export const isSupabaseConfigured = isConfigured;
+export const isSupabaseConfigured = !!(SUPABASE_URL && SUPABASE_KEY);
+
+// Only create the client if env vars are present; otherwise export null
+export const supabaseSafe: SupabaseClient<Database> | null = isSupabaseConfigured
+  ? createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        storage: localStorage,
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    })
+  : null;
