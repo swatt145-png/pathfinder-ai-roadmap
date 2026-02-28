@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Compass, BarChart3, Zap, Brain, Loader2, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+
 import { HowItWorks } from "@/components/HowItWorks";
 import { ExploreCategories } from "@/components/ExploreCategories";
 import { WhyWayVion } from "@/components/WhyPathfinder";
+import { toast } from "@/hooks/use-toast";
 
 import logo from "@/assets/logo.png";
 import qrCode from "@/assets/qr-code.png";
@@ -18,7 +19,6 @@ export default function Landing() {
   const [guestLoading, setGuestLoading] = useState(false);
   const { signInAsGuest } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
 
   const features = [
   { icon: Compass, text: "Personalized roadmaps for any skill" },
@@ -29,8 +29,14 @@ export default function Landing() {
 
   const handleGuestLogin = async () => {
     setGuestLoading(true);
-    await signInAsGuest();
-    setGuestLoading(false);
+    const { error } = await signInAsGuest();
+    if (error) {
+      setGuestLoading(false);
+      toast({ title: "Guest login failed", description: error, variant: "destructive" });
+      return;
+    }
+    // Auth state update via onAuthStateChange will trigger HomeRedirect to navigate to /home.
+    // Keep guestLoading true so the spinner shows until redirect happens.
   };
 
   return (
