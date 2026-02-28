@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase-safe";
+import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthState {
@@ -30,10 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Guard: if Supabase is not configured, stop loading immediately
-    if (!isSupabaseConfigured || !supabase) {
-      setLoading(false);
-      return;
-    }
+    // Supabase is always configured via Lovable Cloud
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
@@ -57,7 +54,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, displayName: string) => {
-    if (!supabase) return { error: "Backend not configured" };
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -70,19 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    if (!supabase) return { error: "Backend not configured" };
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   };
 
   const signInAsGuest = async () => {
-    if (!supabase) return { error: "Backend not configured" };
     const { error } = await supabase.auth.signInAnonymously();
     return { error: error?.message ?? null };
   };
 
   const signOut = async () => {
-    if (!supabase) return;
     await supabase.auth.signOut();
   };
 

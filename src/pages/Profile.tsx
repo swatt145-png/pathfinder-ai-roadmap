@@ -4,7 +4,7 @@ import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/lib/supabase-safe";
+import { supabase } from "@/integrations/supabase/client";
 import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X, Lock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import WavyBackground from "@/components/WavyBackground";
