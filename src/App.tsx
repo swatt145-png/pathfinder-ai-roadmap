@@ -31,13 +31,6 @@ function HomeRedirect() {
   return <Navigate to="/home" replace />;
 }
 
-function ProtectedRouteWithFallback({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>;
-  if (!user) return <Navigate to="/" replace />;
-  return <>{children}</>;
-}
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
