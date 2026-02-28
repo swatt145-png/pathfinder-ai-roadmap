@@ -513,9 +513,23 @@ export default function NewRoadmap() {
                 <Input
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Python for data science in 2 weeks, Product Management in 3 weeks"
+                  placeholder="Python for data science in 2 weeks, Product Management in 2 weeks"
                   className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
+                <div className="mt-3">
+                  <p className="text-sm text-muted-foreground mb-2">Quick start:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_STARTS.map((qs) => (
+                      <button
+                        key={qs.label}
+                        onClick={() => applyQuickStart(qs)}
+                        className="glass-blue px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:shadow-sm hover:scale-[1.02] transition-all"
+                      >
+                        {qs.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Learning Goal */}
