@@ -30,10 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Guard: if Supabase is not configured, stop loading immediately
-    if (!isSupabaseConfigured || !supabase) {
-      setLoading(false);
-      return;
-    }
+    // Supabase is always configured via Lovable Cloud
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
