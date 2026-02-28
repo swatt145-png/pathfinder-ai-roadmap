@@ -30,9 +30,8 @@ const LEARNING_GOALS = [
 ];
 
 const QUICK_STARTS = [
-  { label: "Python in 2 weeks", topic: "Python", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
   { label: "Machine Learning in 1 month", topic: "Machine Learning", weeks: 4, hours: 1.5, skill: "intermediate", goal: "hands_on" },
-  { label: "Product Management in 3 weeks", topic: "Product Management", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
+  { label: "Product Management in 2 weeks", topic: "Product Management", weeks: 2, hours: 1, skill: "beginner", goal: "conceptual" },
   { label: "Finance & Investing in 3 weeks", topic: "Finance & Investing", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
   { label: "Digital Marketing in 14 days", topic: "Digital Marketing", days: 14, hours: 1, skill: "beginner", goal: "hands_on" },
   { label: "Creating AI Agents in 5 days", topic: "Creating AI Agents", days: 5, hours: 1, skill: "beginner", goal: "hands_on" },
@@ -514,9 +513,23 @@ export default function NewRoadmap() {
                 <Input
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Python for data science in 2 weeks, Product Management in 3 weeks"
+                  placeholder="Python for data science in 2 weeks, Product Management in 2 weeks"
                   className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
+                <div className="mt-3">
+                  <p className="text-sm text-muted-foreground mb-2">Quick start:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_STARTS.map((qs) => (
+                      <button
+                        key={qs.label}
+                        onClick={() => applyQuickStart(qs)}
+                        className="glass-blue px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:shadow-sm hover:scale-[1.02] transition-all"
+                      >
+                        {qs.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Learning Goal */}
@@ -650,20 +663,6 @@ export default function NewRoadmap() {
                 </Button>
               )}
 
-              <div>
-                <p className="text-sm text-muted-foreground mb-3">Quick start:</p>
-                <div className="flex flex-wrap gap-2">
-                  {QUICK_STARTS.map((qs) => (
-                    <button
-                      key={qs.label}
-                      onClick={() => applyQuickStart(qs)}
-                      className="glass-blue px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:shadow-sm hover:scale-[1.02] transition-all"
-                    >
-                      {qs.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Mobile navigation buttons */}
               <div className="flex md:hidden gap-2">
