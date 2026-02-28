@@ -1,25 +1,12 @@
 /**
- * Safe Supabase client wrapper that prevents the app from crashing
- * if environment variables are missing in production builds.
- * 
+ * Safe Supabase client wrapper that re-exports the Lovable auto-generated
+ * client and exposes a configuration check flag.
+ *
  * All components should import { supabase } from "@/lib/supabase-safe"
  * instead of from "@/integrations/supabase/client".
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@/integrations/supabase/types';
+import { supabase } from '@/integrations/supabase/client';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-export const isSupabaseConfigured = !!(SUPABASE_URL && SUPABASE_KEY);
-
-export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
-  ? createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
-      auth: {
-        storage: localStorage,
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-    })
-  : null;
+export { supabase };
+export const isSupabaseConfigured = true;
