@@ -518,7 +518,7 @@ export default function NewRoadmap() {
                 />
                 <div className="mt-3">
                   <p className="text-sm text-muted-foreground mb-2">Quick start:</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-nowrap gap-2 overflow-x-auto">
                     {QUICK_STARTS.map((qs) => (
                       <button
                         key={qs.label}
