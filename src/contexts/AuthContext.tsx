@@ -28,8 +28,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Guard: if Supabase URL is not configured, stop loading immediately
-    if (!import.meta.env.VITE_SUPABASE_URL) {
+    // Guard: if Supabase is not configured, stop loading immediately
+    if (!isSupabaseConfigured || !supabase) {
       setLoading(false);
       return;
     }
