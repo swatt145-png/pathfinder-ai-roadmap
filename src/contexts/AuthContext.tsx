@@ -23,56 +23,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase.from("profiles").select("display_name").eq("id", userId).single();
-    setProfile(data);
+    try {
+      const { data } = await supabase.from("profiles").select("display_name").eq("id", userId).single();
+      setProfile(data);
+    } catch {
+      // Supabase not available
+    }
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => fetchProfile(session.user.id), 500);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
+    let subscription: { unsubscribe: () => void } | undefined;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+    try {
+      const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          setTimeout(() => fetchProfile(session.user.id), 500);
+        } else {
+          setProfile(null);
+        }
+        setLoading(false);
+      });
+      subscription = data.subscription;
+    } catch {
       setLoading(false);
-    });
+    }
 
-    return () => subscription.unsubscribe();
+    try {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) fetchProfile(session.user.id);
+        setLoading(false);
+      });
+    } catch {
+      setLoading(false);
+    }
+
+    return () => subscription?.unsubscribe();
   }, []);
 
   const signUp = async (email: string, password: string, displayName: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { display_name: displayName },
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { display_name: displayName },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      return { error: error?.message ?? null };
+    } catch (e: any) {
+      return { error: e?.message ?? "Sign up failed" };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return { error: error?.message ?? null };
+    } catch (e: any) {
+      return { error: e?.message ?? "Sign in failed" };
+    }
   };
 
   const signInAsGuest = async () => {
-    const { error } = await supabase.auth.signInAnonymously();
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signInAnonymously();
+      return { error: error?.message ?? null };
+    } catch (e: any) {
+      return { error: e?.message ?? "Guest login failed" };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
   };
 
   const isGuest = !!user && !user.email;
