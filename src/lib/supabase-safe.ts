@@ -1,6 +1,9 @@
 /**
  * Safe Supabase client wrapper that prevents the app from crashing
  * if environment variables are missing in production builds.
+ * 
+ * All components should import { supabase } from "@/lib/supabase-safe"
+ * instead of from "@/integrations/supabase/client".
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -11,8 +14,7 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const isSupabaseConfigured = !!(SUPABASE_URL && SUPABASE_KEY);
 
-// Only create the client if env vars are present; otherwise export null
-export const supabaseSafe: SupabaseClient<Database> | null = isSupabaseConfigured
+export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
   ? createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
       auth: {
         storage: localStorage,
