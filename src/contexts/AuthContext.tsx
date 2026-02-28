@@ -28,6 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Guard: if Supabase URL is not configured, stop loading immediately
+    if (!import.meta.env.VITE_SUPABASE_URL) {
+      setLoading(false);
+      return;
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
