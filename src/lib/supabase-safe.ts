@@ -1,6 +1,6 @@
 /**
  * Re-exports the Supabase client from the auto-generated file.
- * Kept for backwards compatibility with existing imports.
+ * In Lovable Cloud, credentials are injected automatically.
  */
 
 export { supabase } from '@/integrations/supabase/client';

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import WavyBackground from "@/components/WavyBackground";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase-safe";
+import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { ModuleDetail } from "@/components/ModuleDetail";
 import { AdaptPlanModal } from "@/components/AdaptPlanModal";
