@@ -30,9 +30,8 @@ const LEARNING_GOALS = [
 ];
 
 const QUICK_STARTS = [
-  { label: "Python in 2 weeks", topic: "Python", weeks: 2, hours: 1, skill: "beginner", goal: "hands_on" },
   { label: "Machine Learning in 1 month", topic: "Machine Learning", weeks: 4, hours: 1.5, skill: "intermediate", goal: "hands_on" },
-  { label: "Product Management in 3 weeks", topic: "Product Management", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
+  { label: "Product Management in 2 weeks", topic: "Product Management", weeks: 2, hours: 1, skill: "beginner", goal: "conceptual" },
   { label: "Finance & Investing in 3 weeks", topic: "Finance & Investing", weeks: 3, hours: 1, skill: "beginner", goal: "conceptual" },
   { label: "Digital Marketing in 14 days", topic: "Digital Marketing", days: 14, hours: 1, skill: "beginner", goal: "hands_on" },
   { label: "Creating AI Agents in 5 days", topic: "Creating AI Agents", days: 5, hours: 1, skill: "beginner", goal: "hands_on" },
