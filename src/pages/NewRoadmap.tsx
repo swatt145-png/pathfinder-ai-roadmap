@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase-safe";
+import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
