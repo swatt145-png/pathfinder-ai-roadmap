@@ -523,7 +523,7 @@ export default function NewRoadmap() {
                       <button
                         key={qs.label}
                         onClick={() => applyQuickStart(qs)}
-                        className="glass-blue px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:shadow-sm hover:scale-[1.02] transition-all"
+                        className="glass-blue px-2.5 py-1.5 text-xs whitespace-nowrap text-muted-foreground hover:text-foreground hover:border-primary/30 hover:shadow-sm hover:scale-[1.02] transition-all shrink-0"
                       >
                         {qs.label}
                       </button>
