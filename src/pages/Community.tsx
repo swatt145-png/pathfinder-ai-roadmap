@@ -94,7 +94,7 @@ export default function Community() {
 
   const handleConnect = async (receiverId: string) => {
     if (!user) return;
-    const { error } = await supabase.from("connections").insert({
+    const { error } = await (supabase as any).from("connections").insert({
       requester_id: user.id,
       receiver_id: receiverId,
     });
