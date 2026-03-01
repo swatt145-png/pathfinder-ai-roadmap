@@ -87,7 +87,7 @@ export default function PublicProfile() {
     setConnection(conn);
 
     // Count accepted connections for this user
-    const { count } = await supabase
+    const { count } = await (supabase as any)
       .from("connections")
       .select("id", { count: "exact", head: true })
       .eq("status", "accepted")
