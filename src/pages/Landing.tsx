@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import { HowItWorks } from "@/components/HowItWorks";
 import { ExploreCategories } from "@/components/ExploreCategories";
-import { WhyWayVion } from "@/components/WhyPathfinder";
+import { WhyWayVion } from "@/components/WhyWayVion";
 import { toast } from "@/hooks/use-toast";
 
 import logo from "@/assets/logo.png";
