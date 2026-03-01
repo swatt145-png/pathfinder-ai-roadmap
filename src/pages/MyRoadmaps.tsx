@@ -67,7 +67,7 @@ export default function MyRoadmaps() {
     setArchivedRoadmaps((archived as RoadmapRow[]) ?? []);
 
     // Fetch shared roadmaps pending for this user
-    const { data: sharedData } = await supabase
+    const { data: sharedData } = await (supabase as any)
       .from("shared_roadmaps")
       .select("id, sender_id, roadmap_id, status, created_at")
       .eq("receiver_id", user.id)
