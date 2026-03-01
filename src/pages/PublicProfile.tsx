@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
@@ -15,6 +15,8 @@ import {
   Globe,
   Star,
   BookOpen,
+  ArrowLeft,
+  Calendar,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { RoadmapData } from "@/lib/types";
@@ -25,6 +27,7 @@ interface ProfileData {
   bio: string | null;
   location: string | null;
   website: string | null;
+  created_at: string;
 }
 
 interface RoadmapRow {
@@ -47,6 +50,7 @@ export default function PublicProfile() {
   const { userId } = useParams<{ userId: string }>();
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [roadmaps, setRoadmaps] = useState<RoadmapRow[]>([]);
   const [points, setPoints] = useState(0);
@@ -63,7 +67,7 @@ export default function PublicProfile() {
       { data: pointsData },
       { data: connectionData },
     ] = await Promise.all([
-      supabase.from("profiles").select("id, display_name, bio, location, website").eq("id", userId).single(),
+      supabase.from("profiles").select("id, display_name, bio, location, website, created_at").eq("id", userId).single(),
       supabase
         .from("roadmaps")
         .select("id, topic, skill_level, timeline_weeks, hours_per_day, roadmap_data")
@@ -82,11 +86,9 @@ export default function PublicProfile() {
     setRoadmaps((roadmapData as RoadmapRow[]) ?? []);
     setPoints((pointsData as number) ?? 0);
 
-    // Find connection between current user and profile user
     const conn = (connectionData as ConnectionRow[] | null)?.[0] ?? null;
     setConnection(conn);
 
-    // Count accepted connections for this user
     const { count } = await (supabase as any)
       .from("connections")
       .select("id", { count: "exact", head: true })
@@ -159,12 +161,31 @@ export default function PublicProfile() {
 
   const initial = (profile.display_name?.[0] ?? "U").toUpperCase();
   const status = getConnectionStatus();
+  const memberSince = new Date(profile.created_at).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  // Collect all topics from roadmaps
+  const topics = roadmaps.map((rm) => rm.topic);
 
   return (
     <>
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-3xl mx-auto animate-fade-in">
+        {/* Back button */}
+        <div className="mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/community")}
+            className="text-muted-foreground hover:text-foreground font-heading"
+          >
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Community
+          </Button>
+        </div>
+
         {/* Profile header */}
         <div className="glass-strong p-6 mb-6">
           <div className="flex items-start gap-4">
@@ -194,13 +215,39 @@ export default function PublicProfile() {
                     <Globe className="h-3.5 w-3.5" /> Website
                   </a>
                 )}
-                <span className="flex items-center gap-1 font-heading font-bold text-warning">
-                  <Star className="h-3.5 w-3.5" /> {points} pts
-                </span>
                 <span className="flex items-center gap-1">
-                  <UserCheck className="h-3.5 w-3.5" /> {connectionCount} connections
+                  <Calendar className="h-3.5 w-3.5" /> Member since {memberSince}
                 </span>
               </div>
+
+              {/* Stats row */}
+              <div className="flex flex-wrap items-center gap-4 mt-3">
+                <span className="flex items-center gap-1 font-heading font-bold text-warning text-sm">
+                  <Star className="h-4 w-4" /> {points} pts
+                </span>
+                <span className="flex items-center gap-1 text-sm">
+                  <UserCheck className="h-4 w-4 text-success" />
+                  <span className="font-heading font-bold">{connectionCount}</span> connections
+                </span>
+                <span className="flex items-center gap-1 text-sm">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  <span className="font-heading font-bold">{roadmaps.length}</span> roadmaps
+                </span>
+              </div>
+
+              {/* Topics badges */}
+              {topics.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {topics.map((topic) => (
+                    <span
+                      key={topic}
+                      className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-heading"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -257,14 +304,34 @@ export default function PublicProfile() {
               const moduleCount = rd?.modules?.length ?? 0;
               return (
                 <div key={rm.id} className="glass-blue p-4">
-                  <h4 className="font-heading font-bold text-base">{rm.topic}</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day · {moduleCount} modules
+                  <div className="flex items-start justify-between">
+                    <h4 className="font-heading font-bold text-base">{rm.topic}</h4>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-heading shrink-0 ml-2">
+                      {rm.skill_level}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day · {moduleCount} modules
                   </p>
                   {rd?.summary && (
                     <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                       {rd.summary}
                     </p>
+                  )}
+                  {/* Show module titles as preview */}
+                  {rd?.modules && rd.modules.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {rd.modules.slice(0, 4).map((mod) => (
+                        <span key={mod.id} className="text-xs px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
+                          {mod.title}
+                        </span>
+                      ))}
+                      {rd.modules.length > 4 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
+                          +{rd.modules.length - 4} more
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               );

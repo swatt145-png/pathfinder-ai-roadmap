@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Clock, UserCheck, Check } from "lucide-react";
+import { UserPlus, Clock, UserCheck, Check, BookOpen } from "lucide-react";
 
 interface UserCardProps {
   userId: string;
@@ -37,9 +37,13 @@ export function UserCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-heading font-bold text-base truncate">{displayName || "User"}</p>
-          {bio && (
+          {bio ? (
             <p className="text-sm text-muted-foreground line-clamp-1">{bio}</p>
-          )}
+          ) : topics.length > 0 ? (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <BookOpen className="h-3 w-3" /> Learning {topics.length} topic{topics.length !== 1 ? "s" : ""}
+            </p>
+          ) : null}
         </div>
         <span className="text-xs font-heading font-bold px-2 py-1 rounded-full bg-warning/20 text-warning shrink-0">
           {points} pts
