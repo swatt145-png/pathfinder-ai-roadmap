@@ -70,7 +70,7 @@ export default function PublicProfile() {
         .eq("user_id", userId)
         .eq("status", "active"),
       (supabase as any).rpc("calculate_user_points", { p_user_id: userId }),
-      supabase
+      (supabase as any)
         .from("connections")
         .select("id, requester_id, receiver_id, status")
         .or(
