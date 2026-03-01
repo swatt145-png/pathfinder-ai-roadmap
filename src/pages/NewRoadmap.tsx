@@ -513,7 +513,7 @@ export default function NewRoadmap() {
                 <Input
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Python for data science in 2 weeks, Product Management in 2 weeks"
+                  placeholder="Python for data science, Product Management"
                   className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
                 <div className="mt-3">
