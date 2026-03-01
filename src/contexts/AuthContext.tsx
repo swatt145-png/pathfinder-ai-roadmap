@@ -36,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Safety timeout: if auth never resolves, stop loading after 5s
     const timeout = setTimeout(() => {
+      console.warn('[Auth] Session check timed out after 5s — continuing as unauthenticated');
       setLoading(false);
     }, 5000);
 
