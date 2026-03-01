@@ -69,7 +69,7 @@ export default function PublicProfile() {
         .select("id, topic, skill_level, timeline_weeks, hours_per_day, roadmap_data")
         .eq("user_id", userId)
         .eq("status", "active"),
-      supabase.rpc("calculate_user_points", { p_user_id: userId }),
+      (supabase as any).rpc("calculate_user_points", { p_user_id: userId }),
       supabase
         .from("connections")
         .select("id, requester_id, receiver_id, status")
