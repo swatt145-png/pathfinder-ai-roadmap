@@ -53,13 +53,20 @@ export default function MyRoadmaps() {
     setRoadmaps((active as RoadmapRow[]) ?? []);
     setArchivedRoadmaps((archived as RoadmapRow[]) ?? []);
 
-    // Get count of pending shared roadmaps for badge
-    const { count } = await (supabase as any)
-      .from("shared_roadmaps")
-      .select("id", { count: "exact", head: true })
-      .eq("receiver_id", user.id)
-      .eq("status", "pending");
-    setSharedCount(count ?? 0);
+    // Get count of pending shared roadmaps + pending roadmap requests for badge
+    const [{ count: sharedPending }, { count: requestsPending }] = await Promise.all([
+      (supabase as any)
+        .from("shared_roadmaps")
+        .select("id", { count: "exact", head: true })
+        .eq("receiver_id", user.id)
+        .eq("status", "pending"),
+      (supabase as any)
+        .from("roadmap_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", user.id)
+        .eq("status", "pending"),
+    ]);
+    setSharedCount((sharedPending ?? 0) + (requestsPending ?? 0));
 
     setLoading(false);
   };
@@ -112,7 +119,7 @@ export default function MyRoadmaps() {
               className="border-border font-heading font-bold relative"
             >
               <Share2 className="mr-2 h-4 w-4" />
-              Shared with You
+              Shared Roadmaps
               {sharedCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-warning text-warning-foreground text-xs font-bold flex items-center justify-center">
                   {sharedCount}

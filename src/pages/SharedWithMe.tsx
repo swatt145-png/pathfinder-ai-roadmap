@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Share2, Check, X } from "lucide-react";
+import { Loader2, ArrowLeft, Share2, Check, X, Send, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { RoadmapData } from "@/lib/types";
 
@@ -33,18 +33,30 @@ interface SharedRoadmapRow {
   roadmap: RoadmapRow | null;
 }
 
+interface RoadmapRequestRow {
+  id: string;
+  requester_id: string;
+  roadmap_id: string;
+  status: string;
+  created_at: string;
+  requesterName: string;
+  roadmap: RoadmapRow | null;
+}
+
 export default function SharedWithMe() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [pendingShares, setPendingShares] = useState<SharedRoadmapRow[]>([]);
   const [acceptedShares, setAcceptedShares] = useState<SharedRoadmapRow[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<RoadmapRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
-  const fetchShared = async () => {
+  const fetchData = async () => {
     if (!user) return;
 
+    // Fetch shared roadmaps (where I'm the receiver)
     const { data: sharedData } = await (supabase as any)
       .from("shared_roadmaps")
       .select("id, sender_id, roadmap_id, status, created_at")
@@ -52,44 +64,79 @@ export default function SharedWithMe() {
       .in("status", ["pending", "accepted"])
       .order("created_at", { ascending: false });
 
-    if (!sharedData || sharedData.length === 0) {
-      setPendingShares([]);
-      setAcceptedShares([]);
-      setLoading(false);
-      return;
+    // Fetch roadmap requests (where I'm the owner and someone requested my roadmap)
+    const { data: requestData } = await (supabase as any)
+      .from("roadmap_requests")
+      .select("id, requester_id, roadmap_id, status, created_at")
+      .eq("owner_id", user.id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    // Collect all user IDs and roadmap IDs we need to look up
+    const userIds = new Set<string>();
+    const roadmapIds = new Set<string>();
+
+    for (const s of sharedData ?? []) {
+      userIds.add(s.sender_id);
+      roadmapIds.add(s.roadmap_id);
+    }
+    for (const r of requestData ?? []) {
+      userIds.add(r.requester_id);
+      roadmapIds.add(r.roadmap_id);
     }
 
-    const senderIds = [...new Set(sharedData.map((s: any) => s.sender_id))] as string[];
-    const roadmapIds = [...new Set(sharedData.map((s: any) => s.roadmap_id))] as string[];
+    let profileMap: Record<string, string> = {};
+    let roadmapMap: Record<string, RoadmapRow> = {};
 
-    const [{ data: senders }, { data: roadmapDetails }] = await Promise.all([
-      supabase.from("profiles").select("id, display_name").in("id", senderIds),
-      supabase
-        .from("roadmaps")
-        .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
-        .in("id", roadmapIds),
-    ]);
+    if (userIds.size > 0 || roadmapIds.size > 0) {
+      const [{ data: profiles }, { data: roadmaps }] = await Promise.all([
+        userIds.size > 0
+          ? supabase.from("profiles").select("id, display_name").in("id", Array.from(userIds))
+          : { data: [] },
+        roadmapIds.size > 0
+          ? supabase
+              .from("roadmaps")
+              .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
+              .in("id", Array.from(roadmapIds))
+          : { data: [] },
+      ]);
 
-    const senderMap: Record<string, string> = {};
-    for (const s of senders ?? []) senderMap[s.id] = s.display_name ?? "User";
+      for (const p of profiles ?? []) profileMap[p.id] = p.display_name ?? "User";
+      for (const r of (roadmaps as RoadmapRow[]) ?? []) roadmapMap[r.id] = r;
+    }
 
-    const roadmapMap: Record<string, RoadmapRow> = {};
-    for (const r of (roadmapDetails as RoadmapRow[]) ?? []) roadmapMap[r.id] = r;
+    // Build shared roadmap rows
+    if (sharedData && sharedData.length > 0) {
+      const enriched: SharedRoadmapRow[] = sharedData.map((s: any) => ({
+        ...s,
+        senderName: profileMap[s.sender_id] ?? "User",
+        roadmap: roadmapMap[s.roadmap_id] ?? null,
+      }));
+      setPendingShares(enriched.filter((s) => s.status === "pending"));
+      setAcceptedShares(enriched.filter((s) => s.status === "accepted"));
+    } else {
+      setPendingShares([]);
+      setAcceptedShares([]);
+    }
 
-    const enriched: SharedRoadmapRow[] = sharedData.map((s: any) => ({
-      ...s,
-      senderName: senderMap[s.sender_id] ?? "User",
-      roadmap: roadmapMap[s.roadmap_id] ?? null,
-    }));
+    // Build roadmap request rows
+    if (requestData && requestData.length > 0) {
+      const enrichedRequests: RoadmapRequestRow[] = requestData.map((r: any) => ({
+        ...r,
+        requesterName: profileMap[r.requester_id] ?? "User",
+        roadmap: roadmapMap[r.roadmap_id] ?? null,
+      }));
+      setPendingRequests(enrichedRequests);
+    } else {
+      setPendingRequests([]);
+    }
 
-    setPendingShares(enriched.filter((s) => s.status === "pending"));
-    setAcceptedShares(enriched.filter((s) => s.status === "accepted"));
     setLoading(false);
   };
 
-  useEffect(() => { fetchShared(); }, [user]);
+  useEffect(() => { fetchData(); }, [user]);
 
-  const handleAccept = async (shared: SharedRoadmapRow) => {
+  const handleAcceptShare = async (shared: SharedRoadmapRow) => {
     if (!user || !shared.roadmap) return;
     setAcceptingId(shared.id);
 
@@ -131,13 +178,41 @@ export default function SharedWithMe() {
     await (supabase as any).from("shared_roadmaps").update({ status: "accepted" }).eq("id", shared.id);
     toast({ title: "Roadmap accepted! It's now in your active roadmaps." });
     setAcceptingId(null);
-    fetchShared();
+    fetchData();
   };
 
-  const handleReject = async (sharedId: string) => {
+  const handleRejectShare = async (sharedId: string) => {
     await (supabase as any).from("shared_roadmaps").update({ status: "rejected" }).eq("id", sharedId);
     toast({ title: "Shared roadmap rejected." });
-    fetchShared();
+    fetchData();
+  };
+
+  const handleShareToRequester = async (request: RoadmapRequestRow) => {
+    if (!user) return;
+    setAcceptingId(request.id);
+
+    // Share the roadmap with the requester
+    const { error } = await (supabase as any).from("shared_roadmaps").insert({
+      sender_id: user.id,
+      receiver_id: request.requester_id,
+      roadmap_id: request.roadmap_id,
+      status: "pending",
+    });
+
+    if (!error) {
+      await (supabase as any).from("roadmap_requests").update({ status: "accepted" }).eq("id", request.id);
+      toast({ title: `Roadmap shared with ${request.requesterName}!` });
+    } else {
+      toast({ title: "Error", description: "Could not share roadmap.", variant: "destructive" });
+    }
+    setAcceptingId(null);
+    fetchData();
+  };
+
+  const handleDeclineRequest = async (requestId: string) => {
+    await (supabase as any).from("roadmap_requests").update({ status: "rejected" }).eq("id", requestId);
+    toast({ title: "Request declined." });
+    fetchData();
   };
 
   if (loading) {
@@ -186,7 +261,7 @@ export default function SharedWithMe() {
         {showActions && (
           <div className="flex gap-2 mt-3">
             <Button
-              onClick={() => handleAccept(shared)}
+              onClick={() => handleAcceptShare(shared)}
               disabled={acceptingId === shared.id}
               className="flex-1 gradient-primary text-primary-foreground font-heading font-bold"
               size="sm"
@@ -199,7 +274,7 @@ export default function SharedWithMe() {
               Accept
             </Button>
             <Button
-              onClick={() => handleReject(shared.id)}
+              onClick={() => handleRejectShare(shared.id)}
               variant="outline"
               className="border-border hover:bg-destructive/10 hover:text-destructive"
               size="sm"
@@ -215,6 +290,8 @@ export default function SharedWithMe() {
     );
   };
 
+  const hasNothing = pendingShares.length === 0 && acceptedShares.length === 0 && pendingRequests.length === 0;
+
   return (
     <>
       <AppBar />
@@ -225,14 +302,70 @@ export default function SharedWithMe() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Share2 className="h-6 w-6 text-primary" />
-          <h2 className="font-heading text-2xl md:text-3xl font-bold">Shared with You</h2>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold">Shared Roadmaps</h2>
         </div>
 
-        {/* Pending */}
+        {/* Roadmap Requests (someone requested your roadmap) */}
+        {pendingRequests.length > 0 && (
+          <div className="mb-8">
+            <h3 className="font-heading text-lg font-bold mb-3 flex items-center gap-2">
+              <Bell className="h-5 w-5 text-warning" />
+              Roadmap Requests
+              <span className="text-xs font-heading font-bold px-2 py-0.5 rounded-full bg-warning/20 text-warning">
+                {pendingRequests.length}
+              </span>
+            </h3>
+            <div className="space-y-3">
+              {pendingRequests.map((req) => {
+                const rm = req.roadmap;
+                if (!rm) return null;
+                const rd = rm.roadmap_data as unknown as RoadmapData;
+                const moduleCount = rd?.modules?.length ?? 0;
+
+                return (
+                  <div key={req.id} className="glass-blue p-5 border-l-4 border-warning/60">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      <span className="font-heading font-bold text-foreground">{req.requesterName}</span> requested your roadmap
+                    </p>
+                    <h4 className="font-heading font-bold text-lg">{rm.topic}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day · {moduleCount} modules
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        onClick={() => handleShareToRequester(req)}
+                        disabled={acceptingId === req.id}
+                        className="flex-1 gradient-primary text-primary-foreground font-heading font-bold"
+                        size="sm"
+                      >
+                        {acceptingId === req.id ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Share
+                      </Button>
+                      <Button
+                        onClick={() => handleDeclineRequest(req.id)}
+                        variant="outline"
+                        className="border-border hover:bg-destructive/10 hover:text-destructive"
+                        size="sm"
+                      >
+                        <X className="mr-1.5 h-3.5 w-3.5" /> Decline
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Pending shared roadmaps (someone shared with you) */}
         {pendingShares.length > 0 && (
           <div className="mb-8">
             <h3 className="font-heading text-lg font-bold mb-3 flex items-center gap-2">
-              Pending
+              Shared with You
               <span className="text-xs font-heading font-bold px-2 py-0.5 rounded-full bg-warning/20 text-warning">
                 {pendingShares.length}
               </span>
@@ -253,10 +386,10 @@ export default function SharedWithMe() {
           </div>
         )}
 
-        {pendingShares.length === 0 && acceptedShares.length === 0 && (
+        {hasNothing && (
           <div className="glass-strong p-8 text-center">
             <p className="text-muted-foreground">
-              No roadmaps have been shared with you yet. Connect with other learners and they can share their roadmaps!
+              No shared roadmaps or requests yet. Connect with other learners to share and request roadmaps!
             </p>
           </div>
         )}
