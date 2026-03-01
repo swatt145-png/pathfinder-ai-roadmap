@@ -113,7 +113,7 @@ export default function PublicProfile() {
 
   const handleConnect = async () => {
     if (!user || !userId) return;
-    const { error } = await supabase.from("connections").insert({
+    const { error } = await (supabase as any).from("connections").insert({
       requester_id: user.id,
       receiver_id: userId,
     });
