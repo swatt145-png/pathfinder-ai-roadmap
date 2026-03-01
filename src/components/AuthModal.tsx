@@ -154,14 +154,6 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                 </button>
               </form>
             )
-          ) : signUpSuccess ? (
-            <div className="text-center py-4">
-              <p className="text-success font-semibold mb-2">Account created!</p>
-              <p className="text-muted-foreground text-sm">Check your email to verify your account, then sign in.</p>
-              <Button className="mt-4 w-full gradient-primary text-primary-foreground font-heading" onClick={() => switchTab("signin")}>
-                Go to Sign In
-              </Button>
-            </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {tab === "signup" && (
