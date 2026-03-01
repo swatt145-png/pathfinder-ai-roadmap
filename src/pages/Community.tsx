@@ -38,7 +38,7 @@ export default function Community() {
       await Promise.all([
         supabase.from("profiles").select("id, display_name, bio"),
         supabase.from("roadmaps").select("user_id, topic"),
-        supabase.from("connections").select("id, requester_id, receiver_id, status"),
+        (supabase as any).from("connections").select("id, requester_id, receiver_id, status"),
       ]);
 
     const otherProfiles = (profileData ?? []).filter((p) => p.id !== user.id);
@@ -60,7 +60,7 @@ export default function Community() {
     const points: Record<string, number> = {};
     await Promise.all(
       otherProfiles.map(async (p) => {
-        const { data } = await supabase.rpc("calculate_user_points", {
+        const { data } = await (supabase as any).rpc("calculate_user_points", {
           p_user_id: p.id,
         });
         points[p.id] = (data as number) ?? 0;
@@ -94,7 +94,7 @@ export default function Community() {
 
   const handleConnect = async (receiverId: string) => {
     if (!user) return;
-    const { error } = await supabase.from("connections").insert({
+    const { error } = await (supabase as any).from("connections").insert({
       requester_id: user.id,
       receiver_id: receiverId,
     });
@@ -116,7 +116,7 @@ export default function Community() {
       (c) => c.requester_id === requesterId && c.receiver_id === user.id
     );
     if (!conn) return;
-    await supabase
+    await (supabase as any)
       .from("connections")
       .update({ status: "accepted" })
       .eq("id", conn.id);

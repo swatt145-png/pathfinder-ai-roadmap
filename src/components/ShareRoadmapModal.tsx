@@ -32,7 +32,7 @@ export function ShareRoadmapModal({ roadmapId, open, onClose }: ShareRoadmapModa
 
     (async () => {
       // Fetch accepted connections
-      const { data: connData } = await supabase
+      const { data: connData } = await (supabase as any)
         .from("connections")
         .select("requester_id, receiver_id")
         .eq("status", "accepted")
@@ -84,7 +84,7 @@ export function ShareRoadmapModal({ roadmapId, open, onClose }: ShareRoadmapModa
       roadmap_id: roadmapId,
     }));
 
-    const { error } = await supabase.from("shared_roadmaps").insert(rows);
+    const { error } = await (supabase as any).from("shared_roadmaps").insert(rows);
 
     if (error) {
       toast({

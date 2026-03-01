@@ -69,8 +69,8 @@ export default function PublicProfile() {
         .select("id, topic, skill_level, timeline_weeks, hours_per_day, roadmap_data")
         .eq("user_id", userId)
         .eq("status", "active"),
-      supabase.rpc("calculate_user_points", { p_user_id: userId }),
-      supabase
+      (supabase as any).rpc("calculate_user_points", { p_user_id: userId }),
+      (supabase as any)
         .from("connections")
         .select("id, requester_id, receiver_id, status")
         .or(
@@ -87,7 +87,7 @@ export default function PublicProfile() {
     setConnection(conn);
 
     // Count accepted connections for this user
-    const { count } = await supabase
+    const { count } = await (supabase as any)
       .from("connections")
       .select("id", { count: "exact", head: true })
       .eq("status", "accepted")
@@ -113,7 +113,7 @@ export default function PublicProfile() {
 
   const handleConnect = async () => {
     if (!user || !userId) return;
-    const { error } = await supabase.from("connections").insert({
+    const { error } = await (supabase as any).from("connections").insert({
       requester_id: user.id,
       receiver_id: userId,
     });
@@ -127,7 +127,7 @@ export default function PublicProfile() {
 
   const handleAccept = async () => {
     if (!connection) return;
-    await supabase.from("connections").update({ status: "accepted" }).eq("id", connection.id);
+    await (supabase as any).from("connections").update({ status: "accepted" }).eq("id", connection.id);
     toast({ title: "Connection accepted!" });
     fetchData();
   };
