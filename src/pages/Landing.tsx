@@ -121,17 +121,6 @@ export default function Landing() {
               </button>
             </div>
 
-            <button
-              onClick={handleGuestLogin}
-              disabled={guestLoading}
-              className="mt-5 glass-blue px-8 py-3 rounded-xl text-base font-semibold text-foreground/80">
-
-              {guestLoading ?
-              <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Entering as guest…</span> :
-
-              "Continue as Guest"
-              }
-            </button>
           </div>
         </div>
       </section>
