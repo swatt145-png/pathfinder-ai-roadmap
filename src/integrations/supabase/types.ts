@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      connections: {
+        Row: {
+          id: string
+          requester_id: string
+          receiver_id: string
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          requester_id: string
+          receiver_id: string
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          requester_id?: string
+          receiver_id?: string
+          status?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      shared_roadmaps: {
+        Row: {
+          id: string
+          sender_id: string
+          receiver_id: string
+          roadmap_id: string
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          sender_id: string
+          receiver_id: string
+          roadmap_id: string
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          sender_id?: string
+          receiver_id?: string
+          roadmap_id?: string
+          status?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_roadmaps_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adaptations: {
         Row: {
           changes_summary: string | null
@@ -212,6 +271,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_user_points: { Args: { p_user_id: string }; Returns: number }
       has_active_roadmap: { Args: { p_user_id: string }; Returns: boolean }
     }
     Enums: {

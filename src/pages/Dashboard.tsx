@@ -11,7 +11,8 @@ import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActio
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap } from "lucide-react";
+import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap, Share2 } from "lucide-react";
+import { ShareRoadmapModal } from "@/components/ShareRoadmapModal";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
 interface CompletionActionState {
@@ -42,6 +43,7 @@ export default function Dashboard() {
   
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const fetchData = async () => {
     if (!user) return;
@@ -608,6 +610,7 @@ export default function Dashboard() {
               
               <Button onClick={() => setArchiveConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Archive Roadmap</Button>
               <Button onClick={() => navigate("/new")} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Create New Roadmap</Button>
+              <Button onClick={() => setShareOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 flex-1 min-w-[45%]"><Share2 className="mr-1 h-3.5 w-3.5" /> Share</Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 font-heading font-bold text-xs h-9 flex-1 min-w-[45%]">Delete</Button>
             </>
           )}
@@ -696,6 +699,7 @@ export default function Dashboard() {
               
               <Button onClick={() => setArchiveConfirmOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Archive Roadmap</Button>
               <Button onClick={() => navigate("/new")} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full">Create New Roadmap</Button>
+              <Button onClick={() => setShareOpen(true)} size="sm" className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-9 transition-all w-full"><Share2 className="mr-1.5 h-3.5 w-3.5" /> Share</Button>
               <Button onClick={() => setDeleteConfirmOpen(true)} size="sm" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 font-heading font-bold text-xs h-9 w-full">Delete</Button>
             </>
           )}
@@ -907,6 +911,14 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {roadmap && (
+        <ShareRoadmapModal
+          roadmapId={roadmap.id}
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </>
   );
 }
