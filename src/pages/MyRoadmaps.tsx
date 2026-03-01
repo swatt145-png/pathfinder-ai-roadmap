@@ -76,8 +76,8 @@ export default function MyRoadmaps() {
 
     if (sharedData && sharedData.length > 0) {
       // Fetch sender profiles and roadmap data
-      const senderIds = [...new Set(sharedData.map((s) => s.sender_id))];
-      const roadmapIds = [...new Set(sharedData.map((s) => s.roadmap_id))];
+      const senderIds = [...new Set(sharedData.map((s: any) => s.sender_id))] as string[];
+      const roadmapIds = [...new Set(sharedData.map((s: any) => s.roadmap_id))] as string[];
 
       const [{ data: senders }, { data: roadmapDetails }] = await Promise.all([
         supabase.from("profiles").select("id, display_name").in("id", senderIds),
