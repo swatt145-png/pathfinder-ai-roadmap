@@ -116,7 +116,7 @@ export default function Community() {
       (c) => c.requester_id === requesterId && c.receiver_id === user.id
     );
     if (!conn) return;
-    await supabase
+    await (supabase as any)
       .from("connections")
       .update({ status: "accepted" })
       .eq("id", conn.id);

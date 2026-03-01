@@ -171,7 +171,7 @@ export default function MyRoadmaps() {
   };
 
   const handleRejectShared = async (sharedId: string) => {
-    await supabase.from("shared_roadmaps").update({ status: "rejected" }).eq("id", sharedId);
+    await (supabase as any).from("shared_roadmaps").update({ status: "rejected" }).eq("id", sharedId);
     toast({ title: "Shared roadmap rejected." });
     fetchRoadmaps();
   };

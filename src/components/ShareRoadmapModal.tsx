@@ -84,7 +84,7 @@ export function ShareRoadmapModal({ roadmapId, open, onClose }: ShareRoadmapModa
       roadmap_id: roadmapId,
     }));
 
-    const { error } = await supabase.from("shared_roadmaps").insert(rows);
+    const { error } = await (supabase as any).from("shared_roadmaps").insert(rows);
 
     if (error) {
       toast({

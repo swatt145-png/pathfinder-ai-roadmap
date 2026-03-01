@@ -127,7 +127,7 @@ export default function PublicProfile() {
 
   const handleAccept = async () => {
     if (!connection) return;
-    await supabase.from("connections").update({ status: "accepted" }).eq("id", connection.id);
+    await (supabase as any).from("connections").update({ status: "accepted" }).eq("id", connection.id);
     toast({ title: "Connection accepted!" });
     fetchData();
   };
