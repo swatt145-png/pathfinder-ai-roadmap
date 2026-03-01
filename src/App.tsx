@@ -14,6 +14,7 @@ import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword";
 import Community from "./pages/Community";
 import PublicProfile from "./pages/PublicProfile";
+import SharedWithMe from "./pages/SharedWithMe";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/my-roadmaps" element={<ProtectedRoute><MyRoadmaps /></ProtectedRoute>} />
             <Route path="/flashcards" element={<ProtectedRoute><Flashcards /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/shared-with-me" element={<ProtectedRoute><SharedWithMe /></ProtectedRoute>} />
             <Route path="/community" element={<ProtectedRoute><Community /></ProtectedRoute>} />
             <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
             <Route path="/dashboard/:roadmapId" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

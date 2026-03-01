@@ -11,7 +11,7 @@ import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActio
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap, Share2 } from "lucide-react";
+import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap, Share2, Bell, Check, X } from "lucide-react";
 import { ShareRoadmapModal } from "@/components/ShareRoadmapModal";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
@@ -44,6 +44,7 @@ export default function Dashboard() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [roadmapRequests, setRoadmapRequests] = useState<any[]>([]);
 
   const fetchData = async () => {
     if (!user) return;
@@ -85,6 +86,28 @@ export default function Dashboard() {
     const map: Record<string, ModuleProgress> = {};
     (prog || []).forEach((p: any) => { map[p.module_id] = p as ModuleProgress; });
     setProgressMap(map);
+
+    // Fetch pending roadmap requests for this roadmap (where current user is owner)
+    if (rm) {
+      const { data: reqData } = await (supabase as any)
+        .from("roadmap_requests")
+        .select("id, requester_id, roadmap_id, status")
+        .eq("roadmap_id", rm.id)
+        .eq("owner_id", user.id)
+        .eq("status", "pending");
+
+      if (reqData && reqData.length > 0) {
+        // Fetch requester names
+        const requesterIds = reqData.map((r: any) => r.requester_id);
+        const { data: profiles } = await supabase.from("profiles").select("id, display_name").in("id", requesterIds);
+        const nameMap: Record<string, string> = {};
+        for (const p of profiles ?? []) nameMap[p.id] = p.display_name ?? "User";
+        setRoadmapRequests(reqData.map((r: any) => ({ ...r, requesterName: nameMap[r.requester_id] ?? "User" })));
+      } else {
+        setRoadmapRequests([]);
+      }
+    }
+
     setLoading(false);
   };
 
@@ -398,6 +421,26 @@ export default function Dashboard() {
     navigate("/my-roadmaps");
   };
 
+  const handleAcceptRoadmapRequest = async (requestId: string, requesterId: string) => {
+    if (!roadmap || !user) return;
+    // Share the roadmap with the requester
+    const { error } = await (supabase as any).from("shared_roadmaps").insert({
+      sender_id: user.id,
+      receiver_id: requesterId,
+      roadmap_id: roadmap.id,
+      status: "pending",
+    });
+    if (!error) {
+      await (supabase as any).from("roadmap_requests").update({ status: "accepted" }).eq("id", requestId);
+      setRoadmapRequests((prev) => prev.filter((r) => r.id !== requestId));
+    }
+  };
+
+  const handleRejectRoadmapRequest = async (requestId: string) => {
+    await (supabase as any).from("roadmap_requests").update({ status: "rejected" }).eq("id", requestId);
+    setRoadmapRequests((prev) => prev.filter((r) => r.id !== requestId));
+  };
+
   const handleDeleteRoadmap = async () => {
     if (!roadmap || !user) return;
     setDeleting(true);
@@ -615,6 +658,37 @@ export default function Dashboard() {
             </>
           )}
         </div>
+        )}
+
+        {/* Roadmap Requests */}
+        {roadmapRequests.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {roadmapRequests.map((req) => (
+              <div key={req.id} className="glass-blue p-4 border-l-4 border-warning/60 flex items-center gap-3 flex-wrap">
+                <Bell className="h-4 w-4 text-warning shrink-0" />
+                <p className="text-sm flex-1 min-w-0">
+                  <span className="font-heading font-bold">{req.requesterName}</span> requested this roadmap
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleAcceptRoadmapRequest(req.id, req.requester_id)}
+                    className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-7"
+                  >
+                    <Check className="mr-1 h-3 w-3" /> Share
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRejectRoadmapRequest(req.id)}
+                    className="border-border hover:bg-destructive/10 hover:text-destructive text-xs h-7"
+                  >
+                    <X className="mr-1 h-3 w-3" /> Decline
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Next Step */}

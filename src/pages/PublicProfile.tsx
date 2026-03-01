@@ -17,6 +17,7 @@ import {
   BookOpen,
   ArrowLeft,
   Calendar,
+  Send,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { RoadmapData } from "@/lib/types";
@@ -57,6 +58,8 @@ export default function PublicProfile() {
   const [connectionCount, setConnectionCount] = useState(0);
   const [connection, setConnection] = useState<ConnectionRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requestedRoadmaps, setRequestedRoadmaps] = useState<Set<string>>(new Set());
+  const [requestingRoadmap, setRequestingRoadmap] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!userId || !user) return;
@@ -96,6 +99,19 @@ export default function PublicProfile() {
       .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`);
     setConnectionCount(count ?? 0);
 
+    // Fetch existing roadmap requests from current user to this profile
+    if (user) {
+      const { data: existingRequests } = await (supabase as any)
+        .from("roadmap_requests")
+        .select("roadmap_id, status")
+        .eq("requester_id", user.id)
+        .eq("owner_id", userId)
+        .in("status", ["pending", "accepted"]);
+      if (existingRequests) {
+        setRequestedRoadmaps(new Set(existingRequests.map((r: any) => r.roadmap_id)));
+      }
+    }
+
     setLoading(false);
   };
 
@@ -132,6 +148,23 @@ export default function PublicProfile() {
     await (supabase as any).from("connections").update({ status: "accepted" }).eq("id", connection.id);
     toast({ title: "Connection accepted!" });
     fetchData();
+  };
+
+  const handleRequestRoadmap = async (roadmapId: string) => {
+    if (!user || !userId) return;
+    setRequestingRoadmap(roadmapId);
+    const { error } = await (supabase as any).from("roadmap_requests").insert({
+      requester_id: user.id,
+      owner_id: userId,
+      roadmap_id: roadmapId,
+    });
+    if (error) {
+      toast({ title: "Error", description: "Could not send request.", variant: "destructive" });
+    } else {
+      toast({ title: "Roadmap request sent!" });
+      setRequestedRoadmaps((prev) => new Set(prev).add(roadmapId));
+    }
+    setRequestingRoadmap(null);
   };
 
   if (loading) {
@@ -330,6 +363,30 @@ export default function PublicProfile() {
                         <span className="text-xs px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
                           +{rd.modules.length - 4} more
                         </span>
+                      )}
+                    </div>
+                  )}
+                  {/* Request Roadmap button — only if connected */}
+                  {status === "accepted" && (
+                    <div className="mt-3">
+                      {requestedRoadmaps.has(rm.id) ? (
+                        <Button size="sm" disabled className="font-heading font-bold text-xs h-8 opacity-60">
+                          <Clock className="mr-1.5 h-3.5 w-3.5" /> Requested
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => handleRequestRoadmap(rm.id)}
+                          disabled={requestingRoadmap === rm.id}
+                          className="gradient-primary text-primary-foreground font-heading font-bold text-xs h-8"
+                        >
+                          {requestingRoadmap === rm.id ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Send className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Request Roadmap
+                        </Button>
                       )}
                     </div>
                   )}
