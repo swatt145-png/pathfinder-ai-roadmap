@@ -99,6 +99,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
     setTab(t);
     setError(null);
     setSignUpSuccess(false);
+    setVerifyMessage(false);
     setForgotMode(false);
     setForgotSent(false);
   };
