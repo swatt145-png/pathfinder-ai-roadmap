@@ -34,12 +34,21 @@ export default function Community() {
   const fetchData = async () => {
     if (!user) return;
 
-    const [{ data: profileData }, { data: roadmapData }, { data: connectionData }] =
+    const [profileResult, roadmapResult, connectionResult] =
       await Promise.all([
         supabase.from("profiles").select("id, display_name, bio"),
         supabase.from("roadmaps").select("user_id, topic"),
         (supabase as any).from("connections").select("id, requester_id, receiver_id, status"),
       ]);
+
+    const profileData = profileResult.data;
+    const roadmapData = roadmapResult.data;
+    const connectionData = connectionResult.data;
+
+    console.log("[Community] profiles:", profileData?.length, "error:", profileResult.error?.message);
+    console.log("[Community] roadmaps:", roadmapData?.length, "error:", roadmapResult.error?.message);
+    console.log("[Community] connections:", connectionData?.length, "error:", connectionResult.error?.message);
+    console.log("[Community] current user id:", user.id);
 
     const otherProfiles = (profileData ?? []).filter((p) => p.id !== user.id);
     setProfiles(otherProfiles);
