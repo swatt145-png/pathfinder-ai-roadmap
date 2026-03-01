@@ -60,7 +60,7 @@ export default function Community() {
     const points: Record<string, number> = {};
     await Promise.all(
       otherProfiles.map(async (p) => {
-        const { data } = await supabase.rpc("calculate_user_points", {
+        const { data } = await (supabase as any).rpc("calculate_user_points", {
           p_user_id: p.id,
         });
         points[p.id] = (data as number) ?? 0;
