@@ -44,14 +44,11 @@ export default function Community() {
         (supabase as any).from("connections").select("id, requester_id, receiver_id, status"),
       ]);
 
-    // Filter out self and guest accounts (no display name set or default "User" with no activity)
-    const roadmapOwners = new Set((roadmapData ?? []).map((r: any) => r.user_id));
+    // Filter out self and guest/anonymous accounts (guests have default name "User" and can never return)
     const otherProfiles = (profileData ?? []).filter((p) => {
       if (p.id === user.id) return false;
-      // Keep users who have a real name (not default "User") OR have at least one roadmap
-      const hasRealName = p.display_name && p.display_name !== "User";
-      const hasRoadmaps = roadmapOwners.has(p.id);
-      return hasRealName || hasRoadmaps;
+      // Only show users who set a real display name (not the default "User")
+      return p.display_name && p.display_name !== "User";
     });
     setProfiles(otherProfiles);
 
