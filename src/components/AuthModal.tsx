@@ -29,6 +29,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
@@ -58,10 +59,9 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
       const { error } = await signUp(email, password, displayName);
       if (error) setError(error);
       else {
-        // Auto-switch to sign-in with credentials pre-filled
         setTab("signin");
         setError(null);
-        // email and password are already in state, so sign-in form is pre-filled
+        setVerifyMessage(true);
       }
     } else {
       const { error } = await signIn(email, password);
@@ -99,6 +99,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
     setTab(t);
     setError(null);
     setSignUpSuccess(false);
+    setVerifyMessage(false);
     setForgotMode(false);
     setForgotSent(false);
   };
@@ -216,6 +217,9 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                     Forgot password?
                   </button>
                 </>
+              )}
+              {verifyMessage && tab === "signin" && (
+                <p className="text-success text-sm font-medium">Verification email sent — please verify your email before signing in.</p>
               )}
               {error && <p className="text-destructive text-sm">{error}</p>}
               <Button type="submit" disabled={loading} className="w-full gradient-primary text-primary-foreground font-heading font-semibold h-12">
