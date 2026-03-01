@@ -38,7 +38,7 @@ export default function Community() {
       await Promise.all([
         supabase.from("profiles").select("id, display_name, bio"),
         supabase.from("roadmaps").select("user_id, topic"),
-        supabase.from("connections").select("id, requester_id, receiver_id, status"),
+        (supabase as any).from("connections").select("id, requester_id, receiver_id, status"),
       ]);
 
     const otherProfiles = (profileData ?? []).filter((p) => p.id !== user.id);
