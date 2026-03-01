@@ -85,6 +85,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          is_public: boolean
           location: string | null
           phone: string | null
           website: string | null
@@ -94,6 +95,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id: string
+          is_public?: boolean
           location?: string | null
           phone?: string | null
           website?: string | null
@@ -103,6 +105,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_public?: boolean
           location?: string | null
           phone?: string | null
           website?: string | null
