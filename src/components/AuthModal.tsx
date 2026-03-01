@@ -57,7 +57,12 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
       }
       const { error } = await signUp(email, password, displayName);
       if (error) setError(error);
-      else setSignUpSuccess(true);
+      else {
+        // Auto-switch to sign-in with credentials pre-filled
+        setTab("signin");
+        setError(null);
+        // email and password are already in state, so sign-in form is pre-filled
+      }
     } else {
       const { error } = await signIn(email, password);
       if (error) {
@@ -149,14 +154,6 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                 </button>
               </form>
             )
-          ) : signUpSuccess ? (
-            <div className="text-center py-4">
-              <p className="text-success font-semibold mb-2">Account created!</p>
-              <p className="text-muted-foreground text-sm">Check your email to verify your account, then sign in.</p>
-              <Button className="mt-4 w-full gradient-primary text-primary-foreground font-heading" onClick={() => switchTab("signin")}>
-                Go to Sign In
-              </Button>
-            </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {tab === "signup" && (
