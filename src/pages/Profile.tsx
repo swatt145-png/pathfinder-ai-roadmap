@@ -107,6 +107,33 @@ export default function Profile() {
 
           {/* Form */}
           <div className="glass-strong p-6 md:p-8 space-y-5">
+            {/* Profile Visibility */}
+            <div className="flex items-center justify-between p-4 glass border border-border rounded-lg">
+              <div className="flex items-center gap-3">
+                {isPublic ? <Eye className="w-5 h-5 text-success" /> : <EyeOff className="w-5 h-5 text-muted-foreground" />}
+                <div>
+                  <p className="text-sm font-heading font-semibold">{isPublic ? "Public Profile" : "Private Profile"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isPublic ? "Visible to other learners in the community" : "Hidden from the community page"}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!isPublic) {
+                    setShowPublicConfirm(true);
+                  } else {
+                    setIsPublic(false);
+                  }
+                }}
+                className={isPublic ? "border-border" : "gradient-primary text-primary-foreground font-heading font-bold"}
+              >
+                {isPublic ? "Make Private" : "Make Public"}
+              </Button>
+            </div>
+
             {/* Display Name */}
             <div>
               <label className="text-sm font-heading font-semibold text-foreground flex items-center gap-2 mb-1.5">
@@ -243,33 +270,6 @@ export default function Profile() {
               />
             </div>
 
-            {/* Profile Visibility */}
-            <div className="flex items-center justify-between p-4 glass border border-border rounded-lg">
-              <div className="flex items-center gap-3">
-                {isPublic ? <Eye className="w-5 h-5 text-success" /> : <EyeOff className="w-5 h-5 text-muted-foreground" />}
-                <div>
-                  <p className="text-sm font-heading font-semibold">{isPublic ? "Public Profile" : "Private Profile"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {isPublic ? "Visible to other learners in the community" : "Hidden from the community page"}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (!isPublic) {
-                    setShowPublicConfirm(true);
-                  } else {
-                    setIsPublic(false);
-                  }
-                }}
-                className={isPublic ? "border-border" : "gradient-primary text-primary-foreground font-heading font-bold"}
-              >
-                {isPublic ? "Make Private" : "Make Public"}
-              </Button>
-            </div>
-
             <Button
               onClick={handleSave}
               disabled={saving}
@@ -287,7 +287,7 @@ export default function Profile() {
           <DialogHeader>
             <DialogTitle className="font-heading">Make your profile public?</DialogTitle>
             <DialogDescription className="text-base">
-              Only your name, bio, and roadmap topics will be shown to others — so everyone can continue to learn and grow together.
+              Share, learn and grow together. Only your name, bio, and roadmap topics will be visible to others.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
