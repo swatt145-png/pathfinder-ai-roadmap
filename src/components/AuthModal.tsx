@@ -57,7 +57,12 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
       }
       const { error } = await signUp(email, password, displayName);
       if (error) setError(error);
-      else setSignUpSuccess(true);
+      else {
+        // Auto-switch to sign-in with credentials pre-filled
+        setTab("signin");
+        setError(null);
+        // email and password are already in state, so sign-in form is pre-filled
+      }
     } else {
       const { error } = await signIn(email, password);
       if (error) {
