@@ -163,7 +163,7 @@ export default function MyRoadmaps() {
     }
 
     // Update shared_roadmaps status
-    await supabase.from("shared_roadmaps").update({ status: "accepted" }).eq("id", shared.id);
+    await (supabase as any).from("shared_roadmaps").update({ status: "accepted" }).eq("id", shared.id);
 
     toast({ title: "Roadmap accepted! It's now in your active roadmaps." });
     setAcceptingId(null);
