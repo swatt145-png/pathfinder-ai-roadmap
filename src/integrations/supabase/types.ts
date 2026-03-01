@@ -168,6 +168,41 @@ export type Database = {
           },
         ]
       }
+      roadmap_requests: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          requester_id: string
+          roadmap_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          requester_id: string
+          roadmap_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          requester_id?: string
+          roadmap_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_requests_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roadmaps: {
         Row: {
           completed_modules: number | null
