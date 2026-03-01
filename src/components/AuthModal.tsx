@@ -218,6 +218,9 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                   </button>
                 </>
               )}
+              {verifyMessage && tab === "signin" && (
+                <p className="text-success text-sm font-medium">Verification email sent — please verify your email before signing in.</p>
+              )}
               {error && <p className="text-destructive text-sm">{error}</p>}
               <Button type="submit" disabled={loading} className="w-full gradient-primary text-primary-foreground font-heading font-semibold h-12">
                 {loading ? <Loader2 className="animate-spin" /> : tab === "signup" ? "Create Account" : "Sign In"}
