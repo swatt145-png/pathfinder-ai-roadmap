@@ -29,6 +29,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
