@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X, Lock } from "lucide-react";
+import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X, Lock, Eye, EyeOff } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import WavyBackground from "@/components/WavyBackground";
 import { toast } from "@/hooks/use-toast";
@@ -29,13 +30,15 @@ export default function Profile() {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [linkingAccount, setLinkingAccount] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [showPublicConfirm, setShowPublicConfirm] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("display_name, bio, location, website, phone")
+        .select("display_name, bio, location, website, phone, is_public")
         .eq("id", user.id)
         .single();
       if (data) {
@@ -44,6 +47,7 @@ export default function Profile() {
         setLocation(data.location ?? "");
         setWebsite(data.website ?? "");
         setPhone(data.phone ?? "");
+        setIsPublic((data as any).is_public ?? false);
       }
       setLoading(false);
     })();
@@ -54,7 +58,7 @@ export default function Profile() {
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
-      .update({ display_name: displayName, bio, location, website, phone })
+      .update({ display_name: displayName, bio, location, website, phone, is_public: isPublic })
       .eq("id", user.id);
     setSaving(false);
     if (error) {
@@ -239,6 +243,33 @@ export default function Profile() {
               />
             </div>
 
+            {/* Profile Visibility */}
+            <div className="flex items-center justify-between p-4 glass border border-border rounded-lg">
+              <div className="flex items-center gap-3">
+                {isPublic ? <Eye className="w-5 h-5 text-success" /> : <EyeOff className="w-5 h-5 text-muted-foreground" />}
+                <div>
+                  <p className="text-sm font-heading font-semibold">{isPublic ? "Public Profile" : "Private Profile"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isPublic ? "Visible to other learners in the community" : "Hidden from the community page"}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!isPublic) {
+                    setShowPublicConfirm(true);
+                  } else {
+                    setIsPublic(false);
+                  }
+                }}
+                className={isPublic ? "border-border" : "gradient-primary text-primary-foreground font-heading font-bold"}
+              >
+                {isPublic ? "Make Private" : "Make Public"}
+              </Button>
+            </div>
+
             <Button
               onClick={handleSave}
               disabled={saving}
@@ -250,6 +281,31 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      <Dialog open={showPublicConfirm} onOpenChange={setShowPublicConfirm}>
+        <DialogContent className="glass-strong border-border">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Make your profile public?</DialogTitle>
+            <DialogDescription className="text-base">
+              Only your name, bio, and roadmap topics will be shown to others — so everyone can continue to learn and grow together.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowPublicConfirm(false)} className="border-border">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setIsPublic(true);
+                setShowPublicConfirm(false);
+              }}
+              className="gradient-primary text-primary-foreground font-heading font-bold"
+            >
+              Yes, Make Public
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

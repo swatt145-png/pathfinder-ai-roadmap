@@ -14,6 +14,7 @@ interface ProfileRow {
   id: string;
   display_name: string | null;
   bio: string | null;
+  is_public: boolean | null;
 }
 
 interface ConnectionRow {
@@ -33,22 +34,27 @@ export default function Community() {
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [currentUserIsPublic, setCurrentUserIsPublic] = useState(true);
 
   const fetchData = async () => {
     if (!user) return;
 
     const [{ data: profileData }, { data: roadmapData }, { data: connectionData }] =
       await Promise.all([
-        supabase.from("profiles").select("id, display_name, bio"),
+        supabase.from("profiles").select("id, display_name, bio, is_public"),
         supabase.from("roadmaps").select("user_id, topic"),
         (supabase as any).from("connections").select("id, requester_id, receiver_id, status"),
       ]);
 
-    // Filter out self and guest/anonymous accounts (guests have default name "User" and can never return)
+    // Check current user's public status
+    const currentUserProfile = (profileData ?? []).find((p) => p.id === user.id);
+    setCurrentUserIsPublic((currentUserProfile as any)?.is_public ?? false);
+
+    // Filter out self, guest accounts, and private profiles
     const otherProfiles = (profileData ?? []).filter((p) => {
       if (p.id === user.id) return false;
-      // Only show users who set a real display name (not the default "User")
-      return p.display_name && p.display_name !== "User";
+      if (!p.display_name || p.display_name === "User") return false;
+      return (p as any).is_public === true;
     });
     setProfiles(otherProfiles);
 
@@ -207,6 +213,23 @@ export default function Community() {
             className="pl-10 glass-strong border-border font-heading"
           />
         </div>
+
+        {/* Privacy banner */}
+        {!currentUserIsPublic && (
+          <div className="glass p-4 mb-6 border border-primary/20 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-heading font-semibold">Your profile is private</p>
+              <p className="text-xs text-muted-foreground">Make your profile public to appear in the community and connect with other learners.</p>
+            </div>
+            <Button
+              onClick={() => navigate("/profile")}
+              className="gradient-primary text-primary-foreground font-heading font-bold shrink-0"
+              size="sm"
+            >
+              Go to Profile
+            </Button>
+          </div>
+        )}
 
         {/* Pending Connection Requests */}
         {pendingRequests.length > 0 && (
