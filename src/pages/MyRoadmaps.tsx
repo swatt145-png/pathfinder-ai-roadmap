@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, ArrowRight, Archive, ArrowLeft, Share2 } from "lucide-react";
+import { Loader2, Plus, ArrowRight, Archive, ArrowLeft, Share2, Users } from "lucide-react";
 import type { RoadmapData } from "@/lib/types";
 
 interface RoadmapRow {
@@ -29,6 +29,7 @@ export default function MyRoadmaps() {
   const [roadmaps, setRoadmaps] = useState<RoadmapRow[]>([]);
   const [archivedRoadmaps, setArchivedRoadmaps] = useState<RoadmapRow[]>([]);
   const [sharedCount, setSharedCount] = useState(0);
+  const [roadmapShareCounts, setRoadmapShareCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [unarchiveConfirmId, setUnarchiveConfirmId] = useState<string | null>(null);
@@ -67,6 +68,21 @@ export default function MyRoadmaps() {
         .eq("status", "pending"),
     ]);
     setSharedCount((sharedPending ?? 0) + (requestsPending ?? 0));
+
+    // Fetch share counts per roadmap (how many times each roadmap was shared with accepted status)
+    const allRoadmapIds = [...(active ?? []), ...(archived ?? [])].map((r: any) => r.id);
+    if (allRoadmapIds.length > 0) {
+      const { data: shareData } = await (supabase as any)
+        .from("shared_roadmaps")
+        .select("roadmap_id")
+        .in("roadmap_id", allRoadmapIds)
+        .eq("status", "accepted");
+      const counts: Record<string, number> = {};
+      for (const s of shareData ?? []) {
+        counts[s.roadmap_id] = (counts[s.roadmap_id] ?? 0) + 1;
+      }
+      setRoadmapShareCounts(counts);
+    }
 
     setLoading(false);
   };
@@ -175,9 +191,16 @@ export default function MyRoadmaps() {
                         {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day
                       </p>
                     </div>
-                    <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">
-                      {pct}%
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(roadmapShareCounts[rm.id] ?? 0) > 0 && (
+                        <span className="px-2 py-0.5 text-xs font-heading rounded-full bg-success/20 text-success flex items-center gap-1">
+                          <Users className="h-3 w-3" /> {roadmapShareCounts[rm.id]}
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">
+                        {pct}%
+                      </span>
+                    </div>
                   </div>
 
                   {rd?.summary && (
