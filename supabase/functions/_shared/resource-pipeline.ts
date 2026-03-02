@@ -728,7 +728,7 @@ export function getGoalSearchConfig(goal: string, _topic = ""): GoalSearchConfig
     case "conceptual":
       return {
         queryModifiers: ["explained", "concepts", "theory", "visual explanation", "article", "guide"],
-        videoCount: 6, webCount: 10,
+        videoCount: 4, webCount: 8,
         semanticHint: "mental model and concept explanation with examples and articles",
         intentTokens: ["mental model", "concept explanation", "tradeoffs"],
         outcomeTokens: ["deep explanation", "why this works", "design intuition"],
@@ -736,26 +736,26 @@ export function getGoalSearchConfig(goal: string, _topic = ""): GoalSearchConfig
     case "hands_on":
       return {
         queryModifiers: ["tutorial", "build", "project", "practice", "hands-on", "step by step", "code along"],
-        videoCount: 8, webCount: 6,
+        videoCount: 8, webCount: 5,
         semanticHint: "project based practical walkthrough",
         intentTokens: ["implementation", "code walkthrough", "real project"],
         outcomeTokens: ["build from scratch", "hands-on lab", "practical exercise"],
       };
     case "quick_overview":
       return {
-        queryModifiers: ["crash course", "full guide", "start to finish", "top 10", "overview", "essentials"],
-        videoCount: 6, webCount: 6,
+        queryModifiers: ["crash course", "full guide", "start to finish", "top 10", "overview", "essentials", "cheat sheet", "top things to know"],
+        videoCount: 5, webCount: 6,
         semanticHint: "high level summary and key takeaways",
         intentTokens: ["key ideas", "summary", "what matters most"],
         outcomeTokens: ["fast understanding", "cheat sheet", "essentials only"],
       };
     case "deep_mastery":
       return {
-        queryModifiers: ["comprehensive", "advanced", "in depth", "research paper", "official documentation", "technical deep dive"],
-        videoCount: 4, webCount: 12,
-        semanticHint: "deep dive with advanced tradeoffs references and official documentation",
-        intentTokens: ["advanced patterns", "production scale", "architecture"],
-        outcomeTokens: ["expert level", "edge cases", "system tradeoffs"],
+        queryModifiers: ["comprehensive", "advanced", "in depth", "research paper", "official documentation", "technical deep dive", "university", "arxiv", "IEEE", "Stanford", "MIT"],
+        videoCount: 3, webCount: 10,
+        semanticHint: "deep dive with advanced tradeoffs references official documentation and research papers",
+        intentTokens: ["advanced patterns", "production scale", "architecture", "research paper", "university publication"],
+        outcomeTokens: ["expert level", "edge cases", "system tradeoffs", "academic depth"],
       };
     default:
       return {
@@ -1024,8 +1024,8 @@ export async function fetchTopicAnchors(
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const goalConfig = getGoalSearchConfig(goal, topic);
   const plan = buildTopicQueryPlan(topic, level, goal, certificationIntent);
-  const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 4) : Math.min(goalConfig.videoCount, 5);
-  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 5) : Math.min(goalConfig.webCount, 8);
+  const effectiveVideoCount = fastMode ? Math.min(goalConfig.videoCount, 4) : goalConfig.videoCount;
+  const effectiveWebCount = fastMode ? Math.min(goalConfig.webCount, 5) : goalConfig.webCount;
   const precisionQueries = plan.precision.slice(0, 1);
   const runQueryBatch = async (queries: string[]) => {
     const promises: Promise<any>[] = [];
@@ -1060,8 +1060,8 @@ export async function fetchModuleResults(
 ): Promise<{ videos: SerperVideoResult[]; web: SerperWebResult[] }> {
   const config = getGoalSearchConfig(goal, `${topic} ${module?.title || ""}`);
   const plan = buildModuleQueryPlan(module, topic, level, goal, certificationIntent);
-  const effectiveVideoCount = fastMode ? Math.min(config.videoCount, 4) : Math.min(config.videoCount, 5);
-  const effectiveWebCount = fastMode ? Math.min(config.webCount, 4) : Math.min(config.webCount, 6);
+  const effectiveVideoCount = fastMode ? Math.min(config.videoCount, 4) : config.videoCount;
+  const effectiveWebCount = fastMode ? Math.min(config.webCount, 4) : config.webCount;
   const precisionQueries = plan.precision.slice(0, 1);
   const expansionQueries = fastMode ? [] : plan.expansion.slice(0, 1);
 
@@ -1369,10 +1369,11 @@ export function clusterAndDiversify(candidates: CandidateResource[], ctx: Module
   const dailyCapMinutes = ctx.moduleMinutes * 1.2;
 
   // Goal-aware video caps: limit how many slots videos can take
-  const isHandsOn = ctx.goal === "hands_on";
-  const maxVideoSlots = isHandsOn
-    ? Math.max(2, Math.ceil(maxResources * 0.6))
-    : Math.max(1, Math.floor(maxResources * 0.4));
+  const goalVideoRatio = ctx.goal === "hands_on" ? 0.6
+    : ctx.goal === "quick_overview" ? 0.5
+    : ctx.goal === "deep_mastery" ? 0.25
+    : 0.4; // conceptual + default
+  const maxVideoSlots = Math.max(1, Math.round(maxResources * goalVideoRatio));
 
   // Split pool by type
   const videoPool = selectionPool.filter(c => c.type === "video");

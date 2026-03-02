@@ -265,15 +265,6 @@ export default function NewRoadmap() {
 
         const roadmapData = data as RoadmapData;
 
-        // Log pipeline diagnostics for debugging resource issues
-        if ((data as any)?._pipeline_diag) {
-          console.log("[Roadmap Pipeline Diagnostics]", (data as any)._pipeline_diag);
-        }
-        const totalRes = roadmapData.modules?.reduce((s, m) => s + (m.resources?.length || 0), 0) || 0;
-        if (totalRes === 0) {
-          console.warn("[Roadmap] WARNING: Generated roadmap has 0 resources across all modules!", (data as any)?._pipeline_diag);
-        }
-
         const { data: insertedRows, error: insertError } = await supabase.from("roadmaps").insert({
           user_id: user.id,
           topic: roadmapData.topic,
@@ -302,9 +293,15 @@ export default function NewRoadmap() {
         }
 
         const newId = insertedRows?.[0]?.id;
-        // Schedule background quiz generation after navigation completes
-        // Using setTimeout ensures the async work isn't cancelled by React unmount
+        // Fire populate-resources in background — Dashboard will poll for completion
         if (newId) {
+          const populateArgs = { roadmap_id: newId };
+          setTimeout(() => {
+            supabase.functions.invoke("populate-resources", { body: populateArgs }).catch((err) =>
+              console.warn("[Resources] Background populate-resources failed:", err)
+            );
+          }, 200);
+
           const quizArgs = { roadmapId: newId, roadmapData, learningGoal, supabaseClient: supabase };
           setTimeout(() => {
             generateAllQuizzesInBackground(quizArgs.roadmapId, quizArgs.roadmapData, quizArgs.learningGoal, quizArgs.supabaseClient).catch((err) =>

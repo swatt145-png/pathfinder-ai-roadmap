@@ -113,6 +113,15 @@ export default function Dashboard() {
 
   useEffect(() => { fetchData(); }, [user]);
 
+  // Poll for resource population when resources_pending is true
+  useEffect(() => {
+    if (!roadmapData?.resources_pending) return;
+    const interval = setInterval(() => {
+      fetchData();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [roadmapData?.resources_pending, user]);
+
   // Only count completed modules that exist in the current roadmap
   const currentModuleIds = new Set(roadmapData?.modules.map((m) => m.id) ?? []);
   const completedCount = Object.values(progressMap).filter((p) => p.status === "completed" && currentModuleIds.has(p.module_id)).length;
