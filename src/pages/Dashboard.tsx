@@ -325,10 +325,13 @@ export default function Dashboard() {
     const mergedModules = suggestedRoadmap.modules.map((mod) => {
       const orig = originalModulesMap.get(mod.id);
       if (orig) {
+        // Spread original first to preserve all fields (description, day_start, etc.)
+        // then overlay AI changes, but keep original resources/quiz if they exist
         return {
+          ...orig,
           ...mod,
-          resources: orig.resources && orig.resources.length > 0 ? orig.resources : mod.resources,
-          quiz: orig.quiz && orig.quiz.length > 0 ? orig.quiz : mod.quiz,
+          resources: orig.resources && orig.resources.length > 0 ? orig.resources : (mod.resources || []),
+          quiz: orig.quiz && orig.quiz.length > 0 ? orig.quiz : (mod.quiz || []),
         };
       }
       return mod;
