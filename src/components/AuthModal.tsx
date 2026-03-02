@@ -108,6 +108,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
     setError(null);
     setSignUpSuccess(false);
     setVerifyMessage(false);
+    setAlreadyRegistered(false);
     setForgotMode(false);
     setForgotSent(false);
   };

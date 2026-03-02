@@ -80,9 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = async (email: string, password: string, displayName: string): Promise<{ error: string | null; alreadyRegistered?: boolean }> => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -90,7 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           emailRedirectTo: window.location.origin,
         },
       });
-      return { error: error?.message ?? null };
+      if (error) return { error: error.message };
+      // Supabase returns a fake user with no identities for already-registered emails
+      if (data?.user && data.user.identities && data.user.identities.length === 0) {
+        return { error: null, alreadyRegistered: true };
+      }
+      return { error: null };
     } catch (e: any) {
       return { error: e?.message ?? "Sign up failed" };
     }
