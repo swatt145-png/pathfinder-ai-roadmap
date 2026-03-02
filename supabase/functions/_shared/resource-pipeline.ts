@@ -400,11 +400,12 @@ export function detectCertificationIntent(text: string): boolean {
 }
 
 export function getMaxResourcesForModule(moduleHours: number): number {
-  if (moduleHours <= 1.5) return 3;
-  if (moduleHours <= 3) return 4;
-  if (moduleHours <= 5) return 5;
-  if (moduleHours <= 10) return 6;
-  return 6;
+  if (moduleHours <= 1) return 3;
+  if (moduleHours <= 2) return 5;
+  if (moduleHours <= 3) return 6;
+  if (moduleHours <= 5) return 7;
+  if (moduleHours <= 10) return 8;
+  return 8;
 }
 
 // ─── Tokenization & Similarity ───────────────────────────────────────────────
@@ -1425,7 +1426,7 @@ export function clusterAndDiversify(candidates: CandidateResource[], ctx: Module
   }
 
   // Coverage enforcement: if total minutes < 50% of module budget, try to add more
-  const coverageFloor = ctx.moduleMinutes * 0.5;
+  const coverageFloor = ctx.moduleMinutes * 0.7;
   if (totalMinutes < coverageFloor && selected.length < maxResources) {
     for (const c of selectionPool) {
       if (selected.length >= maxResources) break;

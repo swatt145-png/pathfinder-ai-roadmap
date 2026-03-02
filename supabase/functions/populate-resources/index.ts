@@ -775,7 +775,7 @@ serve(async (req) => {
       const dayEnd = Number(mod.day_end || dayStart);
       const moduleDays = Math.max(1, dayEnd - dayStart + 1);
       const windowBudgetCap = moduleDays * dailyCapMinutes;
-      const moduleBudgetCap = Math.min(moduleMinutes * 1.05, windowBudgetCap);
+      const moduleBudgetCap = Math.min(moduleMinutes * 1.15, windowBudgetCap);
       const maxResources = getMaxResourcesForModule(Number(mod.estimated_hours || 1));
       const ctx: ModuleContext = {
         topic,
@@ -863,7 +863,7 @@ serve(async (req) => {
       }
 
       // Constraint 4: Coverage recovery
-      const coverageTarget = moduleMinutes * 0.6;
+      const coverageTarget = moduleMinutes * 0.75;
       if (moduleTotal < coverageTarget) {
         const recoveryPool = [...candidates]
           .filter(c => !budgetedResources.some(b => b.url === c.url))
@@ -921,7 +921,7 @@ serve(async (req) => {
 
       // Constraint 8: Hard coverage top-up
       let finalizedMinutes = finalizedResources.reduce((sum, r) => sum + Number(r.estimated_minutes || 0), 0);
-      const hardCoverageTarget = Math.min(moduleBudgetCap, Math.max(20, moduleMinutes * 0.45));
+      const hardCoverageTarget = Math.min(moduleBudgetCap, Math.max(30, moduleMinutes * 0.65));
 
       if (finalizedMinutes < hardCoverageTarget) {
         const topUpPools = [...candidates, ...(moduleRescuePools.get(mod.id) || [])]
