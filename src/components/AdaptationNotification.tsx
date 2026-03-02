@@ -57,7 +57,7 @@ export function AdaptationNotification({
         <h3 className="font-heading font-bold text-lg mb-3">Suggested Update</h3>
 
         <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 mb-4">
-          <p className="text-sm mb-2 line-clamp-3">{result.changes_summary}</p>
+          <p className="text-sm mb-2">{result.changes_summary}</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <p>Timeline: {currentTimelineDays}d → {proposedTimelineDays}d</p>
             <p>{formatDelta(timelineDeltaDays, "days")}</p>

@@ -280,18 +280,45 @@ OTHER RULES:
 - Do NOT pre-generate quizzes. Set every module's quiz to an empty array []
 - Set every module's resources to an empty array [] — resources are populated separately
 - All user-facing text (reason, changes_summary, message_to_student) MUST use "you/your", never third-person
-- Keep message_to_student to MAX 2 sentences. Be concise and encouraging, no long paragraphs.
-- Keep changes_summary to MAX 2 sentences describing what changed.`;
+- message_to_student MUST be ONE short sentence (under 15 words). Example: "A review module has been added to reinforce these concepts."
+- changes_summary MUST be ONE short sentence (under 15 words). Example: "Added a 2-hour review module after Module 3."`;
 
-    // Strip resources and quiz from roadmap to reduce token count — AI doesn't need them
-    const strippedRoadmap = {
-      ...roadmap_data,
-      modules: (roadmap_data.modules || []).map((m: any) => ({
+    // Build a minimal payload — only send module titles/hours for completed ones,
+    // full detail only for the completed module and upcoming modules
+    const allModules = roadmap_data.modules || [];
+    const completedModuleIds = new Set(
+      (all_progress || []).filter((p: any) => p.status === "completed").map((p: any) => p.module_id)
+    );
+    completedModuleIds.add(module_id);
+
+    const completedModuleIndex = allModules.findIndex((m: any) => m.id === module_id);
+
+    const compactModules = allModules.map((m: any, idx: number) => {
+      const isCompleted = completedModuleIds.has(m.id) && m.id !== module_id;
+      if (isCompleted) {
+        // Completed modules: just title + hours (AI shouldn't modify them)
+        return { id: m.id, title: m.title, estimated_hours: m.estimated_hours, status: "completed" };
+      }
+      // Current + upcoming modules: include detail for adaptation decisions
+      return {
         id: m.id, title: m.title, description: m.description,
         estimated_hours: m.estimated_hours, day_start: m.day_start, day_end: m.day_end,
         week: m.week, prerequisites: m.prerequisites, learning_objectives: m.learning_objectives,
-        anchor_terms: m.anchor_terms,
-      })),
+      };
+    });
+
+    // Compact progress: just module_id, status, self_report, quiz_score
+    const compactProgress = (all_progress || []).map((p: any) => ({
+      module_id: p.module_id, status: p.status, self_report: p.self_report, quiz_score: p.quiz_score,
+    }));
+
+    const strippedRoadmap = {
+      topic: roadmap_data.topic,
+      skill_level: roadmap_data.skill_level,
+      timeline_weeks: roadmap_data.timeline_weeks,
+      hours_per_day: roadmap_data.hours_per_day,
+      total_hours: roadmap_data.total_hours,
+      modules: compactModules,
     };
 
     const userPrompt = `You just completed module "${module_title}" (${module_id}).
@@ -300,16 +327,16 @@ Quiz score: ${quiz_score ?? "not taken"}
 ${quiz_answers ? `Wrong answers: ${JSON.stringify(quiz_answers)}` : ""}
 Learning Goal: ${effectiveGoal}
 
-Current roadmap (resources/quiz omitted — they are restored automatically): ${JSON.stringify(strippedRoadmap)}
-All progress: ${JSON.stringify(all_progress)}
+Current roadmap (resources/quiz omitted — restored automatically): ${JSON.stringify(strippedRoadmap)}
+Progress: ${JSON.stringify(compactProgress)}
 
 Return ONLY valid JSON:
 {
   "needs_adaptation": boolean,
   "adaptation_type": "none|minor|major",
   "reason": "explanation",
-  "changes_summary": "human-readable summary of changes",
-  "message_to_student": "encouraging personalized message",
+  "changes_summary": "short summary of changes",
+  "message_to_student": "short encouraging message",
   "updated_roadmap": { full roadmap JSON with same structure, resources: [] and quiz: [] for all modules } or null
 }`;
 
