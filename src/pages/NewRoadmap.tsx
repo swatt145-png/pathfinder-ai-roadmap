@@ -627,7 +627,7 @@ export default function NewRoadmap() {
                   <input
                     type="range"
                     min={1}
-                    max={timelineUnit === "days" ? 30 : 12}
+                    max={timelineUnit === "days" ? 30 : 10}
                     value={timelineValue}
                     onChange={(e) => setTimelineValue(Number(e.target.value))}
                     className="w-full accent-primary"
