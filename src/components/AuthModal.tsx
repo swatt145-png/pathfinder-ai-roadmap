@@ -56,12 +56,19 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
         setLoading(false);
         return;
       }
-      const { error } = await signUp(email, password, displayName);
-      if (error) setError(error);
-      else {
+      const result = await signUp(email, password, displayName);
+      if (result.error) {
+        setError(result.error);
+      } else if (result.alreadyRegistered) {
+        setTab("signin");
+        setError(null);
+        setVerifyMessage(false);
+        setAlreadyRegistered(true);
+      } else {
         setTab("signin");
         setError(null);
         setVerifyMessage(true);
+        setAlreadyRegistered(false);
       }
     } else {
       const { error } = await signIn(email, password);
