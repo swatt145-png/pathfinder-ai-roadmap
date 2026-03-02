@@ -41,7 +41,7 @@ const LOADING_STEPS = [
   "Understanding your learning goal...",
   "Designing your curriculum...",
   "Curating the best resources...",
-  "Preparing optional quizzes...",
+  "Preparing quizzes...",
   "Finalizing your personalized roadmap...",
 ];
 
