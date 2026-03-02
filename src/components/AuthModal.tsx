@@ -29,6 +29,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -56,12 +57,19 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
         setLoading(false);
         return;
       }
-      const { error } = await signUp(email, password, displayName);
-      if (error) setError(error);
-      else {
+      const result = await signUp(email, password, displayName);
+      if (result.error) {
+        setError(result.error);
+      } else if (result.alreadyRegistered) {
+        setTab("signin");
+        setError(null);
+        setVerifyMessage(false);
+        setAlreadyRegistered(true);
+      } else {
         setTab("signin");
         setError(null);
         setVerifyMessage(true);
+        setAlreadyRegistered(false);
       }
     } else {
       const { error } = await signIn(email, password);
@@ -100,6 +108,7 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
     setError(null);
     setSignUpSuccess(false);
     setVerifyMessage(false);
+    setAlreadyRegistered(false);
     setForgotMode(false);
     setForgotSent(false);
   };
@@ -217,6 +226,9 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                     Forgot password?
                   </button>
                 </>
+              )}
+              {alreadyRegistered && tab === "signin" && (
+                <p className="text-amber-500 text-sm font-medium">You have already registered. Please sign in.</p>
               )}
               {verifyMessage && tab === "signin" && (
                 <p className="text-success text-sm font-medium">Verification email sent — please verify your email before signing in.</p>
