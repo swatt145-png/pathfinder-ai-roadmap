@@ -227,6 +227,9 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                   </button>
                 </>
               )}
+              {alreadyRegistered && tab === "signin" && (
+                <p className="text-amber-500 text-sm font-medium">You have already registered. Please sign in.</p>
+              )}
               {verifyMessage && tab === "signin" && (
                 <p className="text-success text-sm font-medium">Verification email sent — please verify your email before signing in.</p>
               )}
