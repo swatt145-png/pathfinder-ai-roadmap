@@ -1108,7 +1108,8 @@ serve(async (req) => {
         };
 
         // Merge and deduplicate new candidates
-        const newCandidates = mergeAndDeduplicate(videos, web, topic, mod.title, mod.description || "");
+        const existingUrlsForMerge = new Set((mod.resources || []).map((r: any) => normalizeResourceUrl(r.url)));
+        const newCandidates = mergeAndDeduplicate({ videos: [], web: [] }, { videos, web }, mod.title, moduleMinutes, existingUrlsForMerge, new Set());
         enrichCandidatesWithYouTube(newCandidates, ytMap, ctx);
 
         // Filter and score
