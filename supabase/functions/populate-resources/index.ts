@@ -42,6 +42,8 @@ import {
   computeContextFitScoreFallback,
 
   // Search
+  searchSerper,
+  getGoalSearchConfig,
   fetchTopicAnchors,
   fetchModuleResults,
   fetchYouTubeMetadata,
@@ -1015,6 +1017,152 @@ serve(async (req) => {
       }
 
       console.log(`Module "${mod.title}": ${mod.resources.length} resources assigned`);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // BACKFILL STAGE: Fetch additional resources for under-filled modules
+    // If any module has < 85% of its time budget filled, run new Serper
+    // searches with broader/different queries and add resources.
+    // ════════════════════════════════════════════════════════════════════════
+    const BACKFILL_COVERAGE_THRESHOLD = 0.85;
+    const underfilledModules: any[] = [];
+
+    for (const mod of modulesNeedingResources) {
+      const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
+      const filledMinutes = (mod.resources || []).reduce((sum: number, r: any) => sum + Number(r.estimated_minutes || 0), 0);
+      if (filledMinutes < moduleMinutes * BACKFILL_COVERAGE_THRESHOLD) {
+        underfilledModules.push(mod);
+        console.log(`Backfill needed: "${mod.title}" has ${filledMinutes}/${moduleMinutes} min (${Math.round(filledMinutes / moduleMinutes * 100)}%)`);
+      }
+    }
+
+    if (underfilledModules.length > 0) {
+      console.log(`Backfill: ${underfilledModules.length} under-filled modules, fetching additional resources...`);
+      const tBackfill = Date.now();
+
+      // Build broader queries using learning objectives and different search terms
+      const backfillPromises = underfilledModules.map(async (mod: any) => {
+        const objectives = (mod.learning_objectives || []).filter((o: string) => typeof o === "string" && o.length > 0);
+        const goalConfig = getGoalSearchConfig(goal, `${topic} ${mod.title}`);
+
+        // Use different queries than the first round: objective-based + broader topic queries
+        const backfillQueries: string[] = [];
+        if (objectives.length > 0) {
+          backfillQueries.push(`${mod.title} ${objectives[0]} ${goalConfig.intentTokens[0] || "tutorial"}`);
+        }
+        backfillQueries.push(`${topic} ${mod.title} ${goalConfig.queryModifiers[1] || "guide"} ${level}`);
+        if (objectives.length > 1) {
+          backfillQueries.push(`${objectives[1]} ${topic} ${goalConfig.intentTokens[1] || "explained"}`);
+        }
+
+        // Fetch videos + web for each query in parallel
+        const fetchPromises: Promise<any>[] = [];
+        for (const q of backfillQueries) {
+          fetchPromises.push(searchSerper(q, SERPER_API_KEY, "videos", goalConfig.videoCount, supabaseAdmin, true));
+          fetchPromises.push(searchSerper(q, SERPER_API_KEY, "search", goalConfig.webCount, supabaseAdmin, true));
+        }
+        const results = await Promise.all(fetchPromises);
+
+        const videos: SerperVideoResult[] = [];
+        const web: SerperWebResult[] = [];
+        for (let i = 0; i < results.length; i++) {
+          if (i % 2 === 0) videos.push(...(results[i] as SerperVideoResult[]));
+          else web.push(...(results[i] as SerperWebResult[]));
+        }
+
+        return { moduleId: mod.id, videos, web };
+      });
+
+      const backfillResults = await Promise.all(backfillPromises);
+
+      // Enrich new candidates with YouTube metadata
+      const backfillVideoIds = new Set<string>();
+      for (const { videos } of backfillResults) {
+        for (const v of videos) {
+          const vid = extractYouTubeVideoId(v.link);
+          if (vid && !ytMap.has(vid)) backfillVideoIds.add(vid);
+        }
+      }
+
+      if (backfillVideoIds.size > 0 && YOUTUBE_API_KEY) {
+        const backfillYtMap = await fetchYouTubeMetadata([...backfillVideoIds], YOUTUBE_API_KEY, supabaseAdmin);
+        for (const [k, v] of backfillYtMap) ytMap.set(k, v);
+      }
+
+      // Process backfill results and add to under-filled modules
+      for (const { moduleId, videos, web } of backfillResults) {
+        const mod = modulesNeedingResources.find((m: any) => m.id === moduleId);
+        if (!mod) continue;
+
+        const moduleMinutes = Math.floor((mod.estimated_hours || 1) * 60);
+        const existingMinutes = (mod.resources || []).reduce((sum: number, r: any) => sum + Number(r.estimated_minutes || 0), 0);
+        const targetMinutes = moduleMinutes * BACKFILL_COVERAGE_THRESHOLD;
+        const maxResources = getMaxResourcesForModule(Number(mod.estimated_hours || 1));
+        const moduleBudgetCap = moduleMinutes * 1.15;
+
+        if (existingMinutes >= targetMinutes) continue;
+
+        const ctx: ModuleContext = {
+          topic, moduleTitle: mod.title, moduleDescription: mod.description || "",
+          learningObjectives: mod.learning_objectives || [], goal, level, moduleMinutes,
+        };
+
+        // Merge and deduplicate new candidates
+        const newCandidates = mergeAndDeduplicate(videos, web, topic, mod.title, mod.description || "");
+        enrichCandidatesWithYouTube(newCandidates, ytMap, ctx);
+
+        // Filter and score
+        const existingUrls = new Set((mod.resources || []).map((r: any) => normalizeResourceUrl(r.url)));
+        const filtered = newCandidates.filter(c => {
+          if (isGarbage(c)) return false;
+          if (!isAllowedResourceUrl(c.url)) return false;
+          if (looksLikeListingPage(c.url, c.title, c.description)) return false;
+          if (isDiscussionOrMetaResource(c.url, c.title, c.description)) return false;
+          if (isExcludedResource(c.url, excludedUrls, excludedDomains)) return false;
+          const normalized = normalizeResourceUrl(c.url);
+          if (existingUrls.has(normalized) || usedResourceUrls.has(normalized)) return false;
+          const videoId = extractYouTubeVideoId(normalized);
+          if (videoId && usedVideoIds.has(videoId)) return false;
+          return true;
+        });
+
+        for (const c of filtered) {
+          computeLightAuthorityBump(c);
+          computeContextFitScoreFallback(c, ctx);
+        }
+
+        // Sort by combined score and add until we hit 85% or maxResources
+        filtered.sort((a, b) => (b.context_fit_score + b.authority_score) - (a.context_fit_score + a.authority_score));
+
+        let addedMinutes = existingMinutes;
+        let addedCount = (mod.resources || []).length;
+
+        for (const c of filtered) {
+          if (addedMinutes >= targetMinutes) break;
+          if (addedCount >= maxResources) break;
+          if (addedMinutes + c.estimated_minutes > moduleBudgetCap) continue;
+
+          mod.resources.push({
+            title: c.title, url: c.url, type: c.type,
+            estimated_minutes: c.estimated_minutes, description: c.description,
+            source: c.source, channel: c.channel,
+            view_count: c.view_count, like_count: c.like_count,
+            quality_signal: c.quality_signal,
+            span_plan: c.span_plan, is_continuation: c.is_continuation,
+            continuation_of: c.continuation_of,
+          });
+
+          addedMinutes += c.estimated_minutes;
+          addedCount++;
+          usedResourceUrls.add(normalizeResourceUrl(c.url));
+          const videoId = extractYouTubeVideoId(normalizeResourceUrl(c.url));
+          if (videoId) usedVideoIds.add(videoId);
+        }
+
+        console.log(`Backfill "${mod.title}": ${existingMinutes} → ${addedMinutes} min (${addedCount} resources)`);
+      }
+
+      console.log(`[TIMING] Backfill stage: ${Date.now() - tBackfill} ms`);
     }
 
     // ── Roadmap-level video diversity pass ──
