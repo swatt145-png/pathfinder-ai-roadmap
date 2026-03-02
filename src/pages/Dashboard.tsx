@@ -661,6 +661,14 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
+
+          {/* Resources loading indicator */}
+          {roadmapData?.resources_pending && (
+            <div className="flex items-center gap-2 mt-3 px-1 animate-fade-in">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+              <span className="text-xs text-muted-foreground font-body">Loading resources for your modules...</span>
+            </div>
+          )}
         </div>
 
         {/* Mobile: inline action buttons */}

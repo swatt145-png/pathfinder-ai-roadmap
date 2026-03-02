@@ -535,7 +535,7 @@ export default function NewRoadmap() {
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="Python for data science, Product Management"
-                  className="h-14 text-xl glass-blue border-accent/15 focus:border-primary font-body"
+                  className="h-14 text-base md:text-xl glass-blue border-accent/15 focus:border-primary font-body"
                 />
                 <div className="mt-3">
                   <p className="text-sm text-muted-foreground mb-2">Quick start:</p>
