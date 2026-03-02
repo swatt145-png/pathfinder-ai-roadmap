@@ -474,7 +474,7 @@ export function ModuleDetail({
                   <p className="text-sm text-destructive mt-1 text-center">{quizGenerationError}</p>
                 ) : (
                   <p className="text-base text-muted-foreground mt-1 text-center">
-                    Quiz generation is optional and created on demand.
+                    Quiz is generated on demand.
                   </p>
                 )}
               </div>
