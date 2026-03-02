@@ -58,7 +58,7 @@ const LOADING_MESSAGES = [
   "Great choice! Let's build your roadmap 🚀",
   "Crafting a personalized curriculum just for you...",
   "Finding the best resources from top educators...",
-  "Setting up optional quizzes for later...",
+  "Setting up quizzes for later...",
   "Almost done — your learning journey is taking shape! ✨",
 ];
 
