@@ -1385,10 +1385,11 @@ export function clusterAndDiversify(candidates: CandidateResource[], ctx: Module
   let videoCount = 0;
   let nonVideoCount = 0;
 
-  // For non-hands-on goals, lead with non-video resources
-  const primaryPool = isHandsOn ? videoPool : nonVideoPool;
-  const secondaryPool = isHandsOn ? nonVideoPool : videoPool;
-  const primaryIsVideo = isHandsOn;
+  // For hands-on goals, lead with video resources; otherwise lead with non-video
+  const isHandsOnGoal = ctx.goal === "hands_on";
+  const primaryPool = isHandsOnGoal ? videoPool : nonVideoPool;
+  const secondaryPool = isHandsOnGoal ? nonVideoPool : videoPool;
+  const primaryIsVideo = isHandsOnGoal;
   let pi = 0, si = 0;
 
   while (selected.length < maxResources && (pi < primaryPool.length || si < secondaryPool.length)) {
