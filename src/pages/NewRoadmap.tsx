@@ -94,6 +94,7 @@ async function generateAllQuizzesInBackground(
     );
 
     // Read latest roadmap_data, merge quiz results, write back
+    // Re-read fresh to avoid overwriting resources populated by populate-resources
     const { data: current } = await supabaseClient
       .from("roadmaps")
       .select("roadmap_data")
@@ -103,6 +104,7 @@ async function generateAllQuizzesInBackground(
     if (!current?.roadmap_data) continue;
     const updatedData = current.roadmap_data as unknown as RoadmapData;
 
+    let hasUpdates = false;
     for (let j = 0; j < batch.length; j++) {
       const result = results[j];
       if (result.status !== "fulfilled") continue;
@@ -112,13 +114,35 @@ async function generateAllQuizzesInBackground(
       const moduleIndex = i + j;
       if (updatedData.modules?.[moduleIndex]) {
         updatedData.modules[moduleIndex].quiz = data.quiz;
+        hasUpdates = true;
       }
     }
 
-    await supabaseClient
-      .from("roadmaps")
-      .update({ roadmap_data: updatedData as any })
-      .eq("id", roadmapId);
+    if (hasUpdates) {
+      // Re-read one more time to get the very latest resources_pending state
+      // This minimizes the race window with populate-resources
+      const { data: latest } = await supabaseClient
+        .from("roadmaps")
+        .select("roadmap_data")
+        .eq("id", roadmapId)
+        .single();
+      if (latest?.roadmap_data) {
+        const latestData = latest.roadmap_data as any;
+        // Preserve resources and resources_pending from the latest read
+        updatedData.resources_pending = latestData.resources_pending;
+        if (Array.isArray(latestData.modules)) {
+          for (let k = 0; k < updatedData.modules.length; k++) {
+            if (latestData.modules[k]?.resources?.length > 0) {
+              updatedData.modules[k].resources = latestData.modules[k].resources;
+            }
+          }
+        }
+      }
+      await supabaseClient
+        .from("roadmaps")
+        .update({ roadmap_data: updatedData as any })
+        .eq("id", roadmapId);
+    }
   }
   console.log(`[Flashcards] Background quiz generation complete for roadmap ${roadmapId}`);
 }

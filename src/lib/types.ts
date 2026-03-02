@@ -11,6 +11,11 @@ export interface Resource {
   type: "video" | "article" | "documentation" | "tutorial" | "practice";
   estimated_minutes: number;
   description: string;
+  source?: string;
+  channel?: string;
+  view_count?: number;
+  like_count?: number;
+  quality_signal?: string;
   span_plan?: ResourceSegment[];
   is_continuation?: boolean;
   continuation_of?: string;

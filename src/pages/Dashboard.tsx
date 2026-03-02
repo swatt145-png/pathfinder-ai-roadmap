@@ -114,13 +114,28 @@ export default function Dashboard() {
   useEffect(() => { fetchData(); }, [user]);
 
   // Poll for resource population when resources_pending is true
+  // Stops after 3 minutes to avoid polling forever if something fails
   useEffect(() => {
-    if (!roadmapData?.resources_pending) return;
-    const interval = setInterval(() => {
-      fetchData();
-    }, 5000);
+    if (!roadmapData?.resources_pending || !user) return;
+    let pollCount = 0;
+    const maxPolls = 36; // 36 × 5s = 3 minutes
+    const poll = async () => {
+      pollCount++;
+      if (pollCount > maxPolls) {
+        clearInterval(interval);
+        fetchData(); // Final refresh attempt
+        return;
+      }
+      if (!roadmapId) return;
+      const { data: rm } = await supabase.from("roadmaps").select("roadmap_data").eq("id", roadmapId).eq("user_id", user.id).maybeSingle();
+      if (rm && !(rm.roadmap_data as any)?.resources_pending) {
+        clearInterval(interval);
+        fetchData();
+      }
+    };
+    const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, [roadmapData?.resources_pending, user]);
+  }, [roadmapData?.resources_pending, user, roadmapId]);
 
   // Only count completed modules that exist in the current roadmap
   const currentModuleIds = new Set(roadmapData?.modules.map((m) => m.id) ?? []);
