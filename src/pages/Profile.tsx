@@ -228,6 +228,8 @@ export default function Profile() {
                     if (error) {
                       toast({ title: "Error", description: error.message, variant: "destructive" });
                     } else {
+                      // Mark profile as email user
+                      await supabase.from("profiles").update({ is_email_user: true } as any).eq("id", user!.id);
                       toast({ title: "Account linked!", description: "Check your email to confirm, then sign in with your new credentials." });
                       setNewEmail("");
                       setNewPassword("");

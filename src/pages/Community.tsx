@@ -15,6 +15,7 @@ interface ProfileRow {
   display_name: string | null;
   bio: string | null;
   is_public: boolean | null;
+  is_email_user: boolean | null;
 }
 
 interface ConnectionRow {
@@ -41,7 +42,7 @@ export default function Community() {
 
     const [{ data: profileData }, { data: roadmapData }, { data: connectionData }] =
       await Promise.all([
-        supabase.from("profiles").select("id, display_name, bio, is_public"),
+        supabase.from("profiles").select("id, display_name, bio, is_public, is_email_user"),
         supabase.from("roadmaps").select("user_id, topic"),
         (supabase as any).from("connections").select("id, requester_id, receiver_id, status"),
       ]);
@@ -50,10 +51,11 @@ export default function Community() {
     const currentUserProfile = (profileData ?? []).find((p) => p.id === user.id);
     setCurrentUserIsPublic((currentUserProfile as any)?.is_public ?? false);
 
-    // Filter out self, guest accounts, and private profiles
+    // Filter out self, guest/anonymous accounts, and private profiles
     const otherProfiles = (profileData ?? []).filter((p) => {
       if (p.id === user.id) return false;
       if (!p.display_name || p.display_name === "User") return false;
+      if (!(p as any).is_email_user) return false;
       return (p as any).is_public === true;
     });
     setProfiles(otherProfiles);

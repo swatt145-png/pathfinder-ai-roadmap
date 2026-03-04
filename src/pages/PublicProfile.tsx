@@ -18,6 +18,7 @@ import {
   ArrowLeft,
   Calendar,
   Send,
+  Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { RoadmapData } from "@/lib/types";
@@ -326,7 +327,22 @@ export default function PublicProfile() {
           <h3 className="font-heading text-lg font-bold">Learning Roadmaps</h3>
         </div>
 
-        {roadmaps.length === 0 ? (
+        {status !== "accepted" && userId !== user?.id ? (
+          <div className="glass-strong p-6 text-center">
+            <Lock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-muted-foreground font-heading font-semibold">Roadmap details are private</p>
+            <p className="text-sm text-muted-foreground mt-1">Connect with {profile.display_name || "this user"} to see their full roadmaps, share roadmaps, and send requests.</p>
+            {roadmaps.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 justify-center mt-3">
+                {roadmaps.map((rm) => (
+                  <span key={rm.id} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-heading">
+                    {rm.topic}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : roadmaps.length === 0 ? (
           <div className="glass-strong p-6 text-center">
             <p className="text-muted-foreground">No roadmaps yet.</p>
           </div>
