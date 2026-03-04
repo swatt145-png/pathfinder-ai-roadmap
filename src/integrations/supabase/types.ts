@@ -85,9 +85,11 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          is_email_user: boolean | null
           is_public: boolean
           location: string | null
           phone: string | null
+          role: string | null
           website: string | null
         }
         Insert: {
@@ -95,9 +97,11 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id: string
+          is_email_user?: boolean | null
           is_public?: boolean
           location?: string | null
           phone?: string | null
+          role?: string | null
           website?: string | null
         }
         Update: {
@@ -105,9 +109,11 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_email_user?: boolean | null
           is_public?: boolean
           location?: string | null
           phone?: string | null
+          role?: string | null
           website?: string | null
         }
         Relationships: []
@@ -220,6 +226,7 @@ export type Database = {
           original_roadmap_data: Json | null
           roadmap_data: Json
           skill_level: string
+          source_roadmap_id: string | null
           status: string
           timeline_weeks: number
           topic: string
@@ -240,6 +247,7 @@ export type Database = {
           original_roadmap_data?: Json | null
           roadmap_data: Json
           skill_level: string
+          source_roadmap_id?: string | null
           status?: string
           timeline_weeks: number
           topic: string
@@ -260,6 +268,7 @@ export type Database = {
           original_roadmap_data?: Json | null
           roadmap_data?: Json
           skill_level?: string
+          source_roadmap_id?: string | null
           status?: string
           timeline_weeks?: number
           topic?: string
@@ -267,7 +276,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "roadmaps_source_roadmap_id_fkey"
+            columns: ["source_roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shared_roadmaps: {
         Row: {
