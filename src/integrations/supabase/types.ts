@@ -55,149 +55,6 @@ export type Database = {
           },
         ]
       }
-      groups: {
-        Row: {
-          id: string
-          owner_id: string
-          name: string
-          description: string | null
-          type: string
-          invite_code: string
-          is_active: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          owner_id: string
-          name: string
-          description?: string | null
-          type?: string
-          invite_code: string
-          is_active?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          owner_id?: string
-          name?: string
-          description?: string | null
-          type?: string
-          invite_code?: string
-          is_active?: boolean
-          created_at?: string
-        }
-        Relationships: []
-      }
-      group_members: {
-        Row: {
-          id: string
-          group_id: string
-          user_id: string
-          role: string
-          joined_at: string
-        }
-        Insert: {
-          id?: string
-          group_id: string
-          user_id: string
-          role?: string
-          joined_at?: string
-        }
-        Update: {
-          id?: string
-          group_id?: string
-          user_id?: string
-          role?: string
-          joined_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "group_members_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "groups"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      group_roadmaps: {
-        Row: {
-          id: string
-          group_id: string
-          roadmap_id: string
-          assigned_by: string
-          assigned_at: string
-        }
-        Insert: {
-          id?: string
-          group_id: string
-          roadmap_id: string
-          assigned_by: string
-          assigned_at?: string
-        }
-        Update: {
-          id?: string
-          group_id?: string
-          roadmap_id?: string
-          assigned_by?: string
-          assigned_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "group_roadmaps_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "group_roadmaps_roadmap_id_fkey"
-            columns: ["roadmap_id"]
-            isOneToOne: false
-            referencedRelation: "roadmaps"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      member_group_roadmaps: {
-        Row: {
-          id: string
-          group_roadmap_id: string
-          member_id: string
-          roadmap_id: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          group_roadmap_id: string
-          member_id: string
-          roadmap_id: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          group_roadmap_id?: string
-          member_id?: string
-          roadmap_id?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "member_group_roadmaps_group_roadmap_id_fkey"
-            columns: ["group_roadmap_id"]
-            isOneToOne: false
-            referencedRelation: "group_roadmaps"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "member_group_roadmaps_roadmap_id_fkey"
-            columns: ["roadmap_id"]
-            isOneToOne: false
-            referencedRelation: "roadmaps"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       connections: {
         Row: {
           created_at: string
@@ -228,11 +85,9 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
-          is_email_user: boolean
           is_public: boolean
           location: string | null
           phone: string | null
-          role: string
           website: string | null
         }
         Insert: {
@@ -240,11 +95,9 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id: string
-          is_email_user?: boolean
           is_public?: boolean
           location?: string | null
           phone?: string | null
-          role?: string
           website?: string | null
         }
         Update: {
@@ -252,11 +105,9 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
-          is_email_user?: boolean
           is_public?: boolean
           location?: string | null
           phone?: string | null
-          role?: string
           website?: string | null
         }
         Relationships: []
@@ -369,7 +220,6 @@ export type Database = {
           original_roadmap_data: Json | null
           roadmap_data: Json
           skill_level: string
-          source_roadmap_id: string | null
           status: string
           timeline_weeks: number
           topic: string
@@ -390,7 +240,6 @@ export type Database = {
           original_roadmap_data?: Json | null
           roadmap_data: Json
           skill_level: string
-          source_roadmap_id?: string | null
           status?: string
           timeline_weeks: number
           topic: string
@@ -411,7 +260,6 @@ export type Database = {
           original_roadmap_data?: Json | null
           roadmap_data?: Json
           skill_level?: string
-          source_roadmap_id?: string | null
           status?: string
           timeline_weeks?: number
           topic?: string
