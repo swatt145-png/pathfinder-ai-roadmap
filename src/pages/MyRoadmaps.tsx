@@ -21,6 +21,12 @@ interface RoadmapRow {
   total_modules: number | null;
   current_streak: number | null;
   roadmap_data: unknown;
+  source_roadmap_id: string | null;
+}
+
+interface GroupAssignment {
+  ownerName: string;
+  groupName: string;
 }
 
 export default function MyRoadmaps() {
@@ -34,19 +40,20 @@ export default function MyRoadmaps() {
   const [showArchived, setShowArchived] = useState(false);
   const [unarchiveConfirmId, setUnarchiveConfirmId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [groupAssignments, setGroupAssignments] = useState<Record<string, GroupAssignment>>({});
 
   const fetchRoadmaps = async () => {
     if (!user) return;
     const [{ data: active }, { data: archived }] = await Promise.all([
       supabase
         .from("roadmaps")
-        .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
+        .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data, source_roadmap_id")
         .eq("user_id", user.id)
         .eq("status", "active")
         .order("created_at", { ascending: false }),
       supabase
         .from("roadmaps")
-        .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data")
+        .select("id, topic, skill_level, timeline_weeks, hours_per_day, status, created_at, completed_modules, total_modules, current_streak, roadmap_data, source_roadmap_id")
         .eq("user_id", user.id)
         .eq("status", "archived")
         .order("created_at", { ascending: false }),
@@ -82,6 +89,43 @@ export default function MyRoadmaps() {
         counts[s.roadmap_id] = (counts[s.roadmap_id] ?? 0) + 1;
       }
       setRoadmapShareCounts(counts);
+    }
+
+    // Fetch group assignment info for roadmaps with source_roadmap_id
+    const allRoadmaps = [...(active ?? []), ...(archived ?? [])] as RoadmapRow[];
+    const assignedRoadmapIds = allRoadmaps.filter((r) => r.source_roadmap_id).map((r) => r.id);
+    if (assignedRoadmapIds.length > 0) {
+      const { data: mgrRows } = await (supabase as any)
+        .from("member_group_roadmaps")
+        .select("roadmap_id, group_roadmap_id")
+        .in("roadmap_id", assignedRoadmapIds);
+
+      const assignments: Record<string, GroupAssignment> = {};
+      for (const mgr of mgrRows ?? []) {
+        if (assignments[mgr.roadmap_id]) continue;
+        const { data: gr } = await (supabase as any)
+          .from("group_roadmaps")
+          .select("group_id")
+          .eq("id", mgr.group_roadmap_id)
+          .single();
+        if (!gr) continue;
+        const { data: g } = await (supabase as any)
+          .from("groups")
+          .select("name, owner_id")
+          .eq("id", gr.group_id)
+          .single();
+        if (!g) continue;
+        const { data: ownerProfile } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", g.owner_id)
+          .single();
+        assignments[mgr.roadmap_id] = {
+          ownerName: ownerProfile?.display_name ?? "Unknown",
+          groupName: g.name,
+        };
+      }
+      setGroupAssignments(assignments);
     }
 
     setLoading(false);
@@ -190,6 +234,11 @@ export default function MyRoadmaps() {
                       <p className="text-sm text-muted-foreground">
                         {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day
                       </p>
+                      {groupAssignments[rm.id] && (
+                        <p className="text-xs text-primary mt-0.5">
+                          Assigned by {groupAssignments[rm.id].ownerName} · {groupAssignments[rm.id].groupName}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {(roadmapShareCounts[rm.id] ?? 0) > 0 && (

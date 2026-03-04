@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Mail, MapPin, Globe, Phone, FileText, Save, Loader2, X, Lock, Eye, EyeOff, GraduationCap, Briefcase, BookOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
 import WavyBackground from "@/components/WavyBackground";
@@ -32,13 +32,14 @@ export default function Profile() {
   const [linkingAccount, setLinkingAccount] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [showPublicConfirm, setShowPublicConfirm] = useState(false);
+  const [role, setRole] = useState("learner");
 
   useEffect(() => {
     if (!user) return;
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("display_name, bio, location, website, phone, is_public")
+        .select("display_name, bio, location, website, phone, is_public, role")
         .eq("id", user.id)
         .single();
       if (data) {
@@ -48,6 +49,7 @@ export default function Profile() {
         setWebsite(data.website ?? "");
         setPhone(data.phone ?? "");
         setIsPublic((data as any).is_public ?? false);
+        setRole((data as any).role ?? "learner");
       }
       setLoading(false);
     })();
@@ -58,7 +60,7 @@ export default function Profile() {
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
-      .update({ display_name: displayName, bio, location, website, phone, is_public: isPublic })
+      .update({ display_name: displayName, bio, location, website, phone, is_public: isPublic, role } as any)
       .eq("id", user.id);
     setSaving(false);
     if (error) {
@@ -132,6 +134,36 @@ export default function Profile() {
               >
                 {isPublic ? "Make Private" : "Make Public"}
               </Button>
+            </div>
+
+            {/* Role Selection */}
+            <div className="space-y-3">
+              <label className="text-sm font-heading font-semibold text-foreground flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-primary" /> My Role
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {[
+                  { value: "learner", label: "Learner", icon: BookOpen, desc: "Focus on your personal learning journey" },
+                  { value: "educator", label: "Educator", icon: GraduationCap, desc: "Create classrooms, assign roadmaps, track student progress" },
+                  { value: "manager", label: "Manager", icon: Briefcase, desc: "Create teams, assign upskilling paths, track team progress" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setRole(opt.value)}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      role === opt.value
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <opt.icon className={`w-4 h-4 ${role === opt.value ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="font-heading font-semibold text-sm">{opt.label}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Display Name */}

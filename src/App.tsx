@@ -15,6 +15,10 @@ import ResetPassword from "./pages/ResetPassword";
 import Community from "./pages/Community";
 import PublicProfile from "./pages/PublicProfile";
 import SharedWithMe from "./pages/SharedWithMe";
+import MyGroups from "./pages/MyGroups";
+import GroupDetail from "./pages/GroupDetail";
+import ProgressDashboard from "./pages/ProgressDashboard";
+import JoinGroup from "./pages/JoinGroup";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -50,6 +54,10 @@ const App = () => (
             <Route path="/flashcards" element={<ProtectedRoute><Flashcards /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/shared-with-me" element={<ProtectedRoute><SharedWithMe /></ProtectedRoute>} />
+            <Route path="/groups" element={<ProtectedRoute><MyGroups /></ProtectedRoute>} />
+            <Route path="/group/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
+            <Route path="/group/:groupId/progress/:roadmapId" element={<ProtectedRoute><ProgressDashboard /></ProtectedRoute>} />
+            <Route path="/join/:inviteCode" element={<ProtectedRoute><JoinGroup /></ProtectedRoute>} />
             <Route path="/community" element={<ProtectedRoute><Community /></ProtectedRoute>} />
             <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
             <Route path="/dashboard/:roadmapId" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

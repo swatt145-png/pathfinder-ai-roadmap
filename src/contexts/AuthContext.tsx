@@ -2,16 +2,23 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
+interface ProfileData {
+  display_name: string | null;
+  role: string | null;
+}
+
 interface AuthState {
   user: User | null;
   session: Session | null;
-  profile: { display_name: string | null } | null;
+  profile: ProfileData | null;
   loading: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null; alreadyRegistered?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signInAsGuest: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   isGuest: boolean;
+  isEducator: boolean;
+  isManager: boolean;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -19,12 +26,12 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<{ display_name: string | null } | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data } = await supabase.from("profiles").select("display_name").eq("id", userId).single();
+      const { data } = await supabase.from("profiles").select("display_name, role").eq("id", userId).single();
       setProfile(data);
     } catch {
       // Supabase not available
@@ -128,9 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isGuest = !!user && !user.email;
+  const isEducator = profile?.role === 'educator';
+  const isManager = profile?.role === 'manager';
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signInAsGuest, signOut, isGuest }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signInAsGuest, signOut, isGuest, isEducator, isManager }}>
       {children}
     </AuthContext.Provider>
   );
