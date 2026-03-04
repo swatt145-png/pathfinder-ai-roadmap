@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, Sun, Moon, Users, BookOpen, UsersRound } from "lucide-react";
+import { LogOut, User, Sun, Moon, Globe, BookOpen, FolderOpen } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.png";
