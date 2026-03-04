@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, Sun, Moon, Users, BookOpen, UsersRound } from "lucide-react";
+import { LogOut, User, Sun, Moon, Globe, BookOpen, FolderOpen } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.png";
@@ -47,14 +47,14 @@ export function AppBar() {
           className="w-9 h-9 rounded-full flex items-center justify-center border border-border text-foreground hover:bg-muted transition-colors"
           aria-label="My Groups"
         >
-          <UsersRound className="h-5 w-5" />
+          <FolderOpen className="h-5 w-5" />
         </Link>
         <Link
           to="/community"
           className="w-9 h-9 rounded-full flex items-center justify-center border border-border text-foreground hover:bg-muted transition-colors"
           aria-label="Community"
         >
-          <Users className="h-5 w-5" />
+          <Globe className="h-5 w-5" />
         </Link>
         <button
           onClick={toggleTheme}
