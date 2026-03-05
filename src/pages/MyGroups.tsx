@@ -240,10 +240,9 @@ export default function MyGroups() {
                     {/* Topic tags */}
                     {g.topics.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {g.topics.slice(0, 3).map((t, i) => (
-                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-heading">{t.length > 28 ? t.slice(0, 28) + "…" : t}</span>
+                        {g.topics.map((t, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-heading">{t}</span>
                         ))}
-                        {g.topics.length > 3 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{g.topics.length - 3}</span>}
                       </div>
                     )}
 
@@ -288,10 +287,9 @@ export default function MyGroups() {
                     {/* Topic tags */}
                     {m.topics.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mb-3">
-                        {m.topics.slice(0, 3).map((t, i) => (
-                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-heading">{t.length > 28 ? t.slice(0, 28) + "…" : t}</span>
+                        {m.topics.map((t, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-heading">{t}</span>
                         ))}
-                        {m.topics.length > 3 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{m.topics.length - 3}</span>}
                       </div>
                     )}
 
