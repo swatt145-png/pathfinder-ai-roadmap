@@ -177,9 +177,14 @@ export default function GroupDetail() {
           .maybeSingle();
         if (mgr) {
           map[gr.id] = mgr.roadmap_id;
-          // Get topic and progress for this cloned roadmap
-          const { data: rm } = await supabase.from("roadmaps").select("topic").eq("id", mgr.roadmap_id).single();
+          // Get topic, module count from roadmap_data, and progress for this cloned roadmap
+          const { data: rm } = await supabase.from("roadmaps").select("topic, roadmap_data").eq("id", mgr.roadmap_id).single();
           if (rm?.topic) topics.push(rm.topic);
+
+          // Count total modules from roadmap_data (source of truth, includes adapted modules)
+          const rmData = rm?.roadmap_data as any;
+          const moduleCount = rmData?.modules?.length ?? 0;
+          totalModules += moduleCount;
 
           const { data: progressRows } = await supabase
             .from("progress")
@@ -188,7 +193,6 @@ export default function GroupDetail() {
             .eq("user_id", user.id);
 
           if (progressRows) {
-            totalModules += progressRows.length;
             completedModules += progressRows.filter((p: any) => p.status === "completed").length;
           }
         }

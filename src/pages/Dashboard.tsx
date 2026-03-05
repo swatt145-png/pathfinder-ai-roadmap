@@ -11,7 +11,7 @@ import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActio
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap, Share2, Bell, Check, X } from "lucide-react";
+import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap, Share2, Bell, Check, X, Users } from "lucide-react";
 import { ShareRoadmapModal } from "@/components/ShareRoadmapModal";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [deleting, setDeleting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [roadmapRequests, setRoadmapRequests] = useState<any[]>([]);
+  const [groupInfo, setGroupInfo] = useState<{ groupId: string; groupName: string } | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -86,6 +87,33 @@ export default function Dashboard() {
     const map: Record<string, ModuleProgress> = {};
     (prog || []).forEach((p: any) => { map[p.module_id] = p as ModuleProgress; });
     setProgressMap(map);
+
+    // Check if this roadmap is from a group assignment
+    if (rm.source_roadmap_id) {
+      const { data: mgr } = await (supabase as any)
+        .from("member_group_roadmaps")
+        .select("group_roadmap_id")
+        .eq("roadmap_id", rm.id)
+        .eq("member_id", user.id)
+        .maybeSingle();
+      if (mgr) {
+        const { data: gr } = await (supabase as any)
+          .from("group_roadmaps")
+          .select("group_id")
+          .eq("id", mgr.group_roadmap_id)
+          .single();
+        if (gr) {
+          const { data: g } = await (supabase as any)
+            .from("groups")
+            .select("id, name")
+            .eq("id", gr.group_id)
+            .single();
+          if (g) setGroupInfo({ groupId: g.id, groupName: g.name });
+        }
+      }
+    } else {
+      setGroupInfo(null);
+    }
 
     // Fetch pending roadmap requests for this roadmap (where current user is owner)
     if (rm) {
@@ -620,6 +648,20 @@ export default function Dashboard() {
               );
             })()}
           </div>
+
+          {/* Return to Group button */}
+          {groupInfo && (
+            <div className="flex justify-end mb-2">
+              <Button
+                onClick={() => navigate(`/group/${groupInfo.groupId}`)}
+                variant="outline"
+                size="sm"
+                className="border-border font-heading text-xs"
+              >
+                <Users className="mr-1 h-3 w-3" /> Return to {groupInfo.groupName}
+              </Button>
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="mb-4">
