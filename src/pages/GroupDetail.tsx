@@ -6,7 +6,7 @@ import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Copy, Check, Users, Trash2, BarChart3, RefreshCw, LogOut, Save, Send, ChevronDown } from "lucide-react";
+import { Loader2, ArrowLeft, Copy, Check, Users, Trash2, BarChart3, RefreshCw, LogOut, Save, Send, ChevronDown, CheckCircle, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
@@ -47,6 +47,11 @@ interface RoadmapOption {
   skill_level: string;
 }
 
+// Maps group_roadmap_id → member's cloned roadmap_id (for member view)
+interface MemberRoadmapMap {
+  [groupRoadmapId: string]: string;
+}
+
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const { user } = useAuth();
@@ -72,6 +77,8 @@ export default function GroupDetail() {
   const [addingRoadmap, setAddingRoadmap] = useState<string | null>(null);
   const [sharingRoadmap, setSharingRoadmap] = useState<string | null>(null);
   const [removeRoadmapConfirm, setRemoveRoadmapConfirm] = useState<string | null>(null);
+  // Member's cloned roadmap IDs (group_roadmap_id → cloned roadmap_id)
+  const [memberRoadmapMap, setMemberRoadmapMap] = useState<MemberRoadmapMap>({});
 
   const fetchGroup = async () => {
     if (!user || !groupId) return;
@@ -145,6 +152,21 @@ export default function GroupDetail() {
 
       const assignedIds = new Set((grRows ?? []).map((r: any) => r.roadmap_id));
       setAvailableRoadmaps((myRoadmaps ?? []).filter((r) => !assignedIds.has(r.id)));
+    } else {
+      // For members: fetch their cloned roadmap IDs
+      const map: MemberRoadmapMap = {};
+      for (const gr of grRows ?? []) {
+        const { data: mgr } = await (supabase as any)
+          .from("member_group_roadmaps")
+          .select("roadmap_id")
+          .eq("group_roadmap_id", gr.id)
+          .eq("member_id", user.id)
+          .maybeSingle();
+        if (mgr) {
+          map[gr.id] = mgr.roadmap_id;
+        }
+      }
+      setMemberRoadmapMap(map);
     }
 
     setLoading(false);
@@ -221,7 +243,7 @@ export default function GroupDetail() {
 
   // Share/distribute a roadmap to all members (clone to each)
   const handleShareToMembers = async (groupRoadmapId: string, roadmapId: string) => {
-    if (!user) return;
+    if (!user || !groupId) return;
     setSharingRoadmap(groupRoadmapId);
 
     const { data: fullRoadmap } = await supabase
@@ -236,6 +258,20 @@ export default function GroupDetail() {
       return;
     }
 
+    // Re-fetch members directly to avoid stale state
+    const { data: currentMembers } = await (supabase as any)
+      .from("group_members")
+      .select("user_id")
+      .eq("group_id", groupId);
+
+    const allMemberIds = (currentMembers ?? []).map((m: any) => m.user_id);
+
+    if (allMemberIds.length === 0) {
+      toast({ title: "No members in this group yet" });
+      setSharingRoadmap(null);
+      return;
+    }
+
     // Get members who don't already have this roadmap
     const { data: existingAssignments } = await (supabase as any)
       .from("member_group_roadmaps")
@@ -243,10 +279,7 @@ export default function GroupDetail() {
       .eq("group_roadmap_id", groupRoadmapId);
 
     const alreadyHas = new Set((existingAssignments ?? []).map((a: any) => a.member_id));
-
-    const memberIds = members
-      .map((m) => m.user_id)
-      .filter((id) => !alreadyHas.has(id));
+    const memberIds = allMemberIds.filter((id: string) => !alreadyHas.has(id));
 
     if (memberIds.length === 0) {
       toast({ title: "All members already have this roadmap" });
@@ -486,52 +519,81 @@ export default function GroupDetail() {
                 No roadmaps added yet.{isOwner ? " Use the dropdown above to add roadmaps from your library." : ""}
               </div>
             ) : (
-              assignedRoadmaps.map((ar) => (
-                <div key={ar.id} className="glass-blue p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-heading font-semibold">{ar.topic}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Added {new Date(ar.assigned_at).toLocaleDateString()}
-                        {ar.sharedCount > 0 && ` · Shared with ${ar.sharedCount} ${ar.sharedCount === 1 ? labels.member.toLowerCase() : labels.members.toLowerCase()}`}
-                      </p>
-                    </div>
-                    {isOwner && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          onClick={() => handleShareToMembers(ar.id, ar.roadmap_id)}
-                          disabled={sharingRoadmap === ar.id || members.length === 0}
-                          size="sm"
-                          className="gradient-primary text-primary-foreground font-heading font-bold text-xs"
-                        >
-                          {sharingRoadmap === ar.id ? (
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              assignedRoadmaps.map((ar) => {
+                const isShared = ar.sharedCount > 0;
+                const memberClonedId = memberRoadmapMap[ar.id];
+
+                return (
+                  <div key={ar.id} className="glass-blue p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        {!isOwner && memberClonedId ? (
+                          <button
+                            onClick={() => navigate(`/dashboard/${memberClonedId}`)}
+                            className="font-heading font-semibold text-left hover:text-primary transition-colors flex items-center gap-1.5"
+                          >
+                            {ar.topic}
+                            <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                          </button>
+                        ) : (
+                          <p className="font-heading font-semibold">{ar.topic}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {isOwner ? (
+                            <>
+                              Added {new Date(ar.assigned_at).toLocaleDateString()}
+                              {isShared && ` · Shared with ${ar.sharedCount} ${ar.sharedCount === 1 ? labels.member.toLowerCase() : labels.members.toLowerCase()}`}
+                            </>
+                          ) : memberClonedId ? (
+                            "Click to view modules and track progress"
                           ) : (
-                            <Send className="mr-1 h-3 w-3" />
+                            "Not yet shared by the group owner"
                           )}
-                          Share
-                        </Button>
-                        <Button
-                          onClick={() => navigate(`/group/${groupId}/progress/${ar.roadmap_id}`)}
-                          variant="outline"
-                          size="sm"
-                          className="border-border font-heading font-bold text-xs"
-                        >
-                          <BarChart3 className="mr-1 h-3 w-3" /> Progress
-                        </Button>
-                        <Button
-                          onClick={() => setRemoveRoadmapConfirm(ar.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </p>
                       </div>
-                    )}
+                      {isOwner && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isShared ? (
+                            <span className="flex items-center gap-1 text-xs font-heading font-bold text-success px-2 py-1">
+                              <CheckCircle className="h-3.5 w-3.5" /> Shared
+                            </span>
+                          ) : (
+                            <Button
+                              onClick={() => handleShareToMembers(ar.id, ar.roadmap_id)}
+                              disabled={sharingRoadmap === ar.id || members.length === 0}
+                              size="sm"
+                              className="gradient-primary text-primary-foreground font-heading font-bold text-xs"
+                            >
+                              {sharingRoadmap === ar.id ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Send className="mr-1 h-3 w-3" />
+                              )}
+                              Share
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => navigate(`/group/${groupId}/progress/${ar.roadmap_id}`)}
+                            variant="outline"
+                            size="sm"
+                            className="border-border font-heading font-bold text-xs"
+                          >
+                            <BarChart3 className="mr-1 h-3 w-3" /> Progress
+                          </Button>
+                          <Button
+                            onClick={() => setRemoveRoadmapConfirm(ar.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

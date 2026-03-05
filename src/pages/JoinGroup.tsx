@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Users, CheckCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
-import { cloneRoadmapsForMember } from "@/components/JoinGroupModal";
+import { cloneSharedRoadmapsForMember } from "@/components/JoinGroupModal";
 
 interface GroupInfo {
   id: string;
@@ -79,7 +79,7 @@ export default function JoinGroup() {
       return;
     }
 
-    await cloneRoadmapsForMember(user.id, group.id);
+    await cloneSharedRoadmapsForMember(user.id, group.id);
 
     toast({ title: `Joined "${group.name}"!` });
     navigate(`/group/${group.id}`);

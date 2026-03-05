@@ -12,7 +12,9 @@ interface Props {
   onJoined: () => void;
 }
 
-async function cloneRoadmapsForMember(userId: string, groupId: string) {
+async function cloneSharedRoadmapsForMember(userId: string, groupId: string) {
+  // Only clone roadmaps that have been explicitly shared by the owner
+  // (i.e., at least one other member already has an entry in member_group_roadmaps)
   const { data: groupRoadmaps } = await (supabase as any)
     .from("group_roadmaps")
     .select("id, roadmap_id")
@@ -21,6 +23,14 @@ async function cloneRoadmapsForMember(userId: string, groupId: string) {
   if (!groupRoadmaps || groupRoadmaps.length === 0) return;
 
   for (const gr of groupRoadmaps) {
+    // Check if this roadmap was shared (has any member_group_roadmaps entries)
+    const { count } = await (supabase as any)
+      .from("member_group_roadmaps")
+      .select("id", { count: "exact", head: true })
+      .eq("group_roadmap_id", gr.id);
+
+    if ((count ?? 0) === 0) continue; // Not shared yet, skip
+
     const { data: fullRoadmap } = await supabase
       .from("roadmaps")
       .select("*")
@@ -97,7 +107,7 @@ export default function JoinGroupModal({ open, onClose, onJoined }: Props) {
       return;
     }
 
-    await cloneRoadmapsForMember(user.id, group.id);
+    await cloneSharedRoadmapsForMember(user.id, group.id);
 
     toast({ title: `Joined "${group.name}"!`, description: "You're now a member of this group." });
     setJoining(false);
@@ -141,4 +151,4 @@ export default function JoinGroupModal({ open, onClose, onJoined }: Props) {
   );
 }
 
-export { cloneRoadmapsForMember };
+export { cloneSharedRoadmapsForMember };

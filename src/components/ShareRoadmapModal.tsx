@@ -137,58 +137,11 @@ export function ShareRoadmapModal({ roadmapId, open, onClose }: ShareRoadmapModa
       await (supabase as any).from("shared_roadmaps").insert(rows);
     }
 
-    // Add to groups (add + distribute to members)
+    // Add to groups (just link — owner shares explicitly from group page)
     for (const groupId of selectedGroups) {
-      // Add to group_roadmaps
-      const { data: gr, error } = await (supabase as any)
+      await (supabase as any)
         .from("group_roadmaps")
-        .insert({ group_id: groupId, roadmap_id: roadmapId, assigned_by: user.id })
-        .select("id")
-        .single();
-
-      if (error || !gr) continue;
-
-      // Clone to all members
-      const { data: members } = await (supabase as any)
-        .from("group_members")
-        .select("user_id")
-        .eq("group_id", groupId);
-
-      const { data: fullRoadmap } = await supabase
-        .from("roadmaps")
-        .select("*")
-        .eq("id", roadmapId)
-        .single();
-
-      if (!fullRoadmap) continue;
-
-      for (const m of members ?? []) {
-        const { data: cloned } = await supabase.from("roadmaps").insert({
-          user_id: m.user_id,
-          topic: fullRoadmap.topic,
-          skill_level: fullRoadmap.skill_level,
-          timeline_weeks: fullRoadmap.timeline_weeks,
-          hours_per_day: fullRoadmap.hours_per_day,
-          hard_deadline: fullRoadmap.hard_deadline,
-          deadline_date: fullRoadmap.deadline_date,
-          roadmap_data: fullRoadmap.roadmap_data,
-          original_roadmap_data: fullRoadmap.original_roadmap_data,
-          learning_goal: fullRoadmap.learning_goal,
-          status: "active",
-          completed_modules: 0,
-          total_modules: fullRoadmap.total_modules,
-          current_streak: 0,
-          source_roadmap_id: fullRoadmap.id,
-        } as any).select("id").single();
-
-        if (cloned) {
-          await (supabase as any).from("member_group_roadmaps").insert({
-            group_roadmap_id: gr.id,
-            member_id: m.user_id,
-            roadmap_id: cloned.id,
-          });
-        }
-      }
+        .insert({ group_id: groupId, roadmap_id: roadmapId, assigned_by: user.id });
     }
 
     const totalShared = selectedUsers.size + selectedGroups.size;
