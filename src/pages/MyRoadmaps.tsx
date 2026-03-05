@@ -268,6 +268,71 @@ export default function MyRoadmaps() {
           </div>
         </div>
 
+        {/* Group Roadmaps section — shown at top */}
+        {!showArchived && groupRoadmaps.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="h-5 w-5 text-primary" />
+              <h3 className="font-heading text-xl font-bold">Group Roadmaps</h3>
+              <span className="text-xs font-heading font-bold px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                {groupRoadmaps.length}
+              </span>
+            </div>
+            <div className="space-y-4">
+              {groupRoadmaps.map((rm) => {
+                const completed = rm.completed_modules ?? 0;
+                const total = rm.total_modules ?? 0;
+                const pct = total ? Math.round((completed / total) * 100) : 0;
+                const rd = rm.roadmap_data as unknown as RoadmapData;
+
+                return (
+                  <div key={rm.id} className="glass-blue p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-heading font-bold text-lg">{rm.topic}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day
+                        </p>
+                        <p className="text-xs text-primary mt-0.5">
+                          Assigned by {rm.ownerName} · {rm.groupName}
+                        </p>
+                      </div>
+                      <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary shrink-0">
+                        {pct}%
+                      </span>
+                    </div>
+
+                    {rd?.summary && (
+                      <p className="text-base text-muted-foreground mb-3 line-clamp-2">{rd.summary}</p>
+                    )}
+
+                    <div className="mb-3">
+                      <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
+                        <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{completed} of {total} modules completed</p>
+                    </div>
+
+                    <Button
+                      onClick={() => navigate(`/dashboard/${rm.id}`)}
+                      className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+                    >
+                      Continue <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* My Roadmaps header for regular section */}
+        {!showArchived && groupRoadmaps.length > 0 && displayRoadmaps.length > 0 && (
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="font-heading text-xl font-bold">My Roadmaps</h3>
+          </div>
+        )}
+
         {displayRoadmaps.length === 0 ? (
           <div className="glass-strong p-8 text-center">
             <p className="text-muted-foreground mb-4">
@@ -372,63 +437,6 @@ export default function MyRoadmaps() {
           </p>
         )}
 
-        {/* Group Roadmaps section */}
-        {!showArchived && groupRoadmaps.length > 0 && (
-          <div className="mt-10">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="h-5 w-5 text-primary" />
-              <h3 className="font-heading text-xl font-bold">Group Roadmaps</h3>
-              <span className="text-xs font-heading font-bold px-2 py-0.5 rounded-full bg-primary/20 text-primary">
-                {groupRoadmaps.length}
-              </span>
-            </div>
-            <div className="space-y-4">
-              {groupRoadmaps.map((rm) => {
-                const completed = rm.completed_modules ?? 0;
-                const total = rm.total_modules ?? 0;
-                const pct = total ? Math.round((completed / total) * 100) : 0;
-                const rd = rm.roadmap_data as unknown as RoadmapData;
-
-                return (
-                  <div key={rm.id} className="glass-blue p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="font-heading font-bold text-lg">{rm.topic}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day
-                        </p>
-                        <p className="text-xs text-primary mt-0.5">
-                          Assigned by {rm.ownerName} · {rm.groupName}
-                        </p>
-                      </div>
-                      <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary shrink-0">
-                        {pct}%
-                      </span>
-                    </div>
-
-                    {rd?.summary && (
-                      <p className="text-base text-muted-foreground mb-3 line-clamp-2">{rd.summary}</p>
-                    )}
-
-                    <div className="mb-3">
-                      <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
-                        <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">{completed} of {total} modules completed</p>
-                    </div>
-
-                    <Button
-                      onClick={() => navigate(`/dashboard/${rm.id}`)}
-                      className="w-full gradient-primary text-primary-foreground font-heading font-bold"
-                    >
-                      Continue <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       <Dialog open={!!archiveConfirmId} onOpenChange={() => setArchiveConfirmId(null)}>

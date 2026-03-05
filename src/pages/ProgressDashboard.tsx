@@ -164,6 +164,20 @@ export default function ProgressDashboard() {
   const avgQuiz = quizScores.length > 0 ? Math.round(quizScores.reduce((a, b) => a + b, 0) / quizScores.length) : null;
   const hardReports = memberProgress.reduce((s, m) => s + m.hardModules, 0);
 
+  // Module difficulty analysis — aggregate across all members
+  const moduleDifficulty: Record<string, { title: string; hard: number; easy: number; total: number }> = {};
+  for (const mp of memberProgress) {
+    for (const mod of mp.modules) {
+      if (!moduleDifficulty[mod.moduleId]) {
+        moduleDifficulty[mod.moduleId] = { title: mod.moduleTitle, hard: 0, easy: 0, total: 0 };
+      }
+      moduleDifficulty[mod.moduleId].total++;
+      if (mod.selfReport === "hard" || mod.selfReport === "very_hard") moduleDifficulty[mod.moduleId].hard++;
+      if (mod.selfReport === "easy" || mod.selfReport === "very_easy") moduleDifficulty[mod.moduleId].easy++;
+    }
+  }
+  const difficultyList = Object.values(moduleDifficulty).filter((d) => d.hard > 0 || d.easy > 0);
+
   // Sort
   const sorted = [...memberProgress].sort((a, b) => {
     if (sortBy === "name") return a.displayName.localeCompare(b.displayName);
@@ -215,6 +229,67 @@ export default function ProgressDashboard() {
             <p className="text-xs text-muted-foreground">Hard Reports</p>
           </div>
         </div>
+
+        {/* Completion bar chart */}
+        {sorted.length > 0 && (
+          <div className="glass-strong p-5 mb-6">
+            <h3 className="font-heading font-bold text-sm mb-4">Member Completion</h3>
+            <div className="space-y-3">
+              {sorted.map((mp) => (
+                <div key={mp.memberId} className="flex items-center gap-3">
+                  <span className="text-xs font-heading w-20 truncate shrink-0">{mp.displayName}</span>
+                  <div className="flex-1 h-6 bg-muted/30 rounded-full overflow-hidden relative">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${mp.completionPct}%`,
+                        background: mp.completionPct === 100
+                          ? "linear-gradient(90deg, #10b981, #059669)"
+                          : mp.completionPct >= 50
+                            ? "linear-gradient(90deg, #06b6d4, #0891b2)"
+                            : "linear-gradient(90deg, #8b5cf6, #7c3aed)",
+                      }}
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-heading font-bold text-white drop-shadow-sm">
+                      {mp.completionPct > 0 ? `${mp.completionPct}%` : ""}
+                    </span>
+                  </div>
+                  <span className="text-xs text-muted-foreground w-16 text-right shrink-0">
+                    {mp.completedModules}/{mp.totalModules}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Module difficulty insights */}
+        {difficultyList.length > 0 && (
+          <div className="glass-strong p-5 mb-6">
+            <h3 className="font-heading font-bold text-sm mb-3">Module Difficulty Insights</h3>
+            <div className="space-y-2">
+              {difficultyList
+                .sort((a, b) => b.hard - a.hard)
+                .map((d) => (
+                  <div key={d.title} className="flex items-center gap-3">
+                    <span className="text-xs font-heading flex-1 truncate">{d.title}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {d.hard > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-warning/20 text-warning font-heading">
+                          {d.hard} found hard
+                        </span>
+                      )}
+                      {d.easy > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success font-heading">
+                          {d.easy} found easy
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Sort controls */}
         <div className="flex gap-2 mb-3">
