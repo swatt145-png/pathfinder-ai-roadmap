@@ -272,7 +272,7 @@ export default function PublicProfile() {
               {/* Topics badges */}
               {topics.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
-                  {topics.map((topic) => (
+                  {topics.slice(0, 6).map((topic) => (
                     <span
                       key={topic}
                       className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-heading"
@@ -280,6 +280,11 @@ export default function PublicProfile() {
                       {topic}
                     </span>
                   ))}
+                  {topics.length > 6 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground font-heading">
+                      +{topics.length - 6} more
+                    </span>
+                  )}
                 </div>
               )}
             </div>
