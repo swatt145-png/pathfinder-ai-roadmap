@@ -200,8 +200,8 @@ export default function PublicProfile() {
     year: "numeric",
   });
 
-  // Collect all topics from roadmaps
-  const topics = roadmaps.map((rm) => rm.topic);
+  // Collect unique topics from roadmaps (deduplicated)
+  const topics = [...new Set(roadmaps.map((rm) => rm.topic))];
 
   return (
     <>
