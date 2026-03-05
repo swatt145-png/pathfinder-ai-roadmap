@@ -1,9 +1,23 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Loader2, Star } from "lucide-react";
+import { X, Loader2, Star, BookOpenCheck, Code2, Zap, GraduationCap } from "lucide-react";
 import type { RoadmapData, ModuleProgress, AdaptOption, AdaptResult } from "@/lib/types";
+
+const LEARNING_GOALS = [
+  { id: "conceptual", label: "Conceptual", icon: BookOpenCheck, desc: "Lectures, theory, explainers" },
+  { id: "hands_on", label: "Hands-On", icon: Code2, desc: "Tutorials, exercises, projects" },
+  { id: "quick_overview", label: "Quick Overview", icon: Zap, desc: "Crash courses, summaries" },
+  { id: "deep_mastery", label: "Deep Mastery", icon: GraduationCap, desc: "Comprehensive, advanced" },
+] as const;
+
+const SKILL_LEVELS = [
+  { id: "beginner", label: "Beginner" },
+  { id: "intermediate", label: "Intermediate" },
+  { id: "advanced", label: "Advanced" },
+] as const;
 
 interface Props {
   roadmapData: RoadmapData;
@@ -11,7 +25,7 @@ interface Props {
   roadmapId: string;
   learningGoal?: string;
   onClose: () => void;
-  onApply: (updatedRoadmap: RoadmapData) => void;
+  onApply: (updatedRoadmap: RoadmapData, meta?: { topic?: string; skill_level?: string; learning_goal?: string }) => void;
 }
 
 export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGoal, onClose, onApply }: Props) {
@@ -33,10 +47,17 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
   const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
   const [newValue, setNewValue] = useState(daysRemaining);
   const [newHours, setNewHours] = useState(roadmapData.hours_per_day);
+  const [newTopic, setNewTopic] = useState(roadmapData.topic || "");
+  const [newGoal, setNewGoal] = useState(learningGoal || "hands_on");
+  const [newSkillLevel, setNewSkillLevel] = useState(roadmapData.skill_level || "beginner");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AdaptResult | null>(null);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const topicChanged = newTopic.trim() !== (roadmapData.topic || "").trim();
+  const goalChanged = newGoal !== (learningGoal || "hands_on");
+  const skillChanged = newSkillLevel !== (roadmapData.skill_level || "beginner");
 
   const totalDays = timelineUnit === "weeks" ? newValue * 7 : newValue;
 
@@ -51,7 +72,9 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
           new_timeline_days: totalDays,
           new_hours_per_day: newHours,
           adjustment_type: "manual",
-          learning_goal: learningGoal || "hands_on",
+          learning_goal: newGoal,
+          ...(topicChanged ? { new_topic: newTopic.trim() } : {}),
+          ...(skillChanged ? { new_skill_level: newSkillLevel } : {}),
         },
       });
       if (fnErr) throw new Error(fnErr.message);
@@ -81,10 +104,16 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
 
     const mergedRoadmap: RoadmapData = {
       ...opt.updated_roadmap,
+      skill_level: newSkillLevel,
       modules: [...originalCompletedModules, ...aiAdaptedModules],
     };
 
-    onApply(mergedRoadmap);
+    const meta: { topic?: string; skill_level?: string; learning_goal?: string } = {};
+    if (topicChanged) meta.topic = newTopic.trim();
+    if (skillChanged) meta.skill_level = newSkillLevel;
+    if (goalChanged) meta.learning_goal = newGoal;
+
+    onApply(mergedRoadmap, Object.keys(meta).length > 0 ? meta : undefined);
   };
 
   return (
@@ -105,6 +134,57 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
 
         {!result ? (
           <div className="space-y-4">
+            {/* Topic */}
+            <div>
+              <Label className="text-sm text-muted-foreground mb-2 block">Topic</Label>
+              <Input
+                value={newTopic}
+                onChange={(e) => setNewTopic(e.target.value)}
+                placeholder="e.g. Digital Marketing Fundamentals"
+                className="bg-background/50 border-border"
+              />
+              <p className="text-[11px] text-muted-foreground/70 mt-1">Keep as-is, add keywords, or change entirely</p>
+            </div>
+
+            {/* Learning Goal */}
+            <div>
+              <Label className="text-sm text-muted-foreground mb-2 block">Learning Goal</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {LEARNING_GOALS.map((g) => {
+                  const Icon = g.icon;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => setNewGoal(g.id)}
+                      className={`p-2 rounded-lg text-left transition-all border ${newGoal === g.id ? "border-primary bg-primary/15 ring-1 ring-primary/40" : "border-transparent glass hover:bg-muted/30"}`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <Icon className={`w-3.5 h-3.5 ${newGoal === g.id ? "text-primary" : "text-muted-foreground"}`} />
+                        <span className={`text-xs font-heading font-bold ${newGoal === g.id ? "text-primary" : ""}`}>{g.label}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{g.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Proficiency */}
+            <div>
+              <Label className="text-sm text-muted-foreground mb-2 block">Proficiency Level</Label>
+              <div className="grid grid-cols-3 gap-1 p-1 glass rounded-xl">
+                {SKILL_LEVELS.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setNewSkillLevel(s.id)}
+                    className={`py-2 px-3 rounded-lg text-sm font-heading font-bold transition-all ${newSkillLevel === s.id ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Timeline unit toggle */}
             <div>
               <Label className="text-sm text-muted-foreground mb-2 block">Timeline</Label>

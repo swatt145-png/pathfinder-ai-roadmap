@@ -289,7 +289,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day, learning_goal } = await req.json();
+    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day, learning_goal, new_topic, new_skill_level } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
@@ -336,11 +336,25 @@ serve(async (req) => {
       ? "Learning goal: DEEP MASTERY — prefer comprehensive courses, official docs, and advanced tutorials."
       : "";
 
+    const effectiveTopic = new_topic || roadmap_data.title || roadmap_data.topic || "this subject";
+    const effectiveSkillLevel = new_skill_level || roadmap_data.skill_level || "beginner";
+    const topicChanged = new_topic && new_topic !== (roadmap_data.title || roadmap_data.topic || "");
+    const skillChanged = new_skill_level && new_skill_level !== (roadmap_data.skill_level || "");
+
+    const topicContext = topicChanged
+      ? `\nIMPORTANT: The user has CHANGED the topic from "${roadmap_data.title || roadmap_data.topic}" to "${new_topic}". New modules must focus on the NEW topic while preserving completed modules (which covered the old topic). Ensure the updated_roadmap title/topic reflects the new topic.`
+      : "";
+
+    const skillContext = skillChanged
+      ? `\nIMPORTANT: The user has CHANGED the proficiency level from "${roadmap_data.skill_level}" to "${new_skill_level}". Adjust the depth and complexity of new modules accordingly — ${new_skill_level === "beginner" ? "start with fundamentals, use simple explanations" : new_skill_level === "advanced" ? "skip basics, focus on advanced concepts, edge cases, and expert-level material" : "assume foundational knowledge, cover intermediate concepts"}.`
+      : "";
+
     const systemPrompt = `You are an expert learning-plan designer. Address the user directly ("you/your"). Keep all text crisp — no filler.
 
 Your job: generate a FRESH set of modules to cover topics the user hasn't completed yet, fitted to their new time budget. Do NOT restructure or redistribute old modules — design new ones from scratch based on what still needs to be learned.
 
-${goalContext}
+${goalContext}${topicContext}${skillContext}
+Skill level: ${effectiveSkillLevel.toUpperCase()}
 
 RULES:
 1. The updated_roadmap MUST include completed modules FIRST (unchanged), then your NEW modules.
@@ -368,7 +382,7 @@ RULES:
 10. total_hours = ${totalCompletedHours} (completed) + new module hours
 11. Keep analysis to 1-2 sentences`;
 
-    const userPrompt = `The user is learning: "${roadmap_data.title || roadmap_data.topic || "this subject"}"
+    const userPrompt = `The user is learning: "${effectiveTopic}"${topicChanged ? `\n(Previously was: "${roadmap_data.title || roadmap_data.topic}")` : ""}
 
 COMPLETED TOPICS (${completedModules.length} modules, ${totalCompletedHours}h):
 ${completedTopicsSummary || "(none)"}
@@ -404,8 +418,9 @@ Return ONLY valid JSON:
       "modules_added": ["list of new module titles"],
       "tradeoff": "1 sentence about what changed",
       "updated_roadmap": {
-        "title": "${roadmap_data.title || ""}",
-        "topic": "${roadmap_data.topic || ""}",
+        "title": "${effectiveTopic}",
+        "topic": "${effectiveTopic}",
+        "skill_level": "${effectiveSkillLevel}",
         "summary": "updated 1-2 sentence summary",
         "tips": "1-2 practical tips",
         "timeline_days": ${daysCompleted + displayDays},

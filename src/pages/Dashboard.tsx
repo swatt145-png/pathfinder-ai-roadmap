@@ -306,23 +306,28 @@ export default function Dashboard() {
     }
   };
 
-  const handleAdaptApply = async (updatedRoadmap: RoadmapData) => {
+  const handleAdaptApply = async (updatedRoadmap: RoadmapData, meta?: { topic?: string; skill_level?: string; learning_goal?: string }) => {
     if (!roadmap || !user) return;
     await supabase.from("adaptations").insert({
       roadmap_id: roadmap.id,
       user_id: user.id,
       trigger_reason: "manual_adjustment",
-      changes_summary: "Manual plan adaptation",
+      changes_summary: meta ? `Adapted: ${[meta.topic && "topic", meta.skill_level && "proficiency", meta.learning_goal && "learning goal"].filter(Boolean).join(", ")} changed` : "Manual plan adaptation",
       previous_roadmap: roadmapData as any,
       new_roadmap: updatedRoadmap as any,
     });
 
-    await supabase.from("roadmaps").update({
+    const updateFields: any = {
       roadmap_data: updatedRoadmap as any,
       total_modules: updatedRoadmap.modules.length,
       timeline_weeks: updatedRoadmap.timeline_weeks,
       hours_per_day: updatedRoadmap.hours_per_day,
-    }).eq("id", roadmap.id);
+    };
+    if (meta?.topic) updateFields.topic = meta.topic;
+    if (meta?.skill_level) updateFields.skill_level = meta.skill_level;
+    if (meta?.learning_goal) updateFields.learning_goal = meta.learning_goal;
+
+    await supabase.from("roadmaps").update(updateFields).eq("id", roadmap.id);
 
     setAdaptOpen(false);
     fetchData();
