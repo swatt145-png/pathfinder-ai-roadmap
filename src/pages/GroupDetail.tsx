@@ -6,13 +6,13 @@ import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ArrowLeft, Copy, Check, Users, Plus, Trash2, BarChart3, RefreshCw, LogOut, Save } from "lucide-react";
+import { Loader2, ArrowLeft, Copy, Check, Users, Trash2, BarChart3, RefreshCw, LogOut, Save, Send, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
 import { generateInviteCode } from "@/lib/inviteCode";
-import AssignRoadmapModal from "@/components/AssignRoadmapModal";
+
+const MAX_GROUP_ROADMAPS = 5;
 
 interface GroupData {
   id: string;
@@ -38,7 +38,13 @@ interface AssignedRoadmap {
   roadmap_id: string;
   assigned_at: string;
   topic: string;
-  memberCount: number;
+  sharedCount: number;
+}
+
+interface RoadmapOption {
+  id: string;
+  topic: string;
+  skill_level: string;
 }
 
 export default function GroupDetail() {
@@ -54,12 +60,18 @@ export default function GroupDetail() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"members" | "roadmaps">("members");
   const [copiedCode, setCopiedCode] = useState(false);
-  const [showAssign, setShowAssign] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [saving, setSaving] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
+
+  // Roadmap dropdown state
+  const [availableRoadmaps, setAvailableRoadmaps] = useState<RoadmapOption[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [addingRoadmap, setAddingRoadmap] = useState<string | null>(null);
+  const [sharingRoadmap, setSharingRoadmap] = useState<string | null>(null);
+  const [removeRoadmapConfirm, setRemoveRoadmapConfirm] = useState<string | null>(null);
 
   const fetchGroup = async () => {
     if (!user || !groupId) return;
@@ -80,7 +92,6 @@ export default function GroupDetail() {
     setEditName(g.name);
     setEditDesc(g.description ?? "");
 
-    // Fetch owner name
     const { data: ownerProfile } = await supabase
       .from("profiles")
       .select("display_name")
@@ -88,7 +99,6 @@ export default function GroupDetail() {
       .single();
     setOwnerName(ownerProfile?.display_name ?? "Unknown");
 
-    // Fetch members with profiles
     const { data: memberRows } = await (supabase as any)
       .from("group_members")
       .select("id, user_id, role, joined_at")
@@ -119,10 +129,24 @@ export default function GroupDetail() {
       roadmapsWithDetails.push({
         ...gr,
         topic: rm?.topic ?? "Deleted Roadmap",
-        memberCount: count ?? 0,
+        sharedCount: count ?? 0,
       });
     }
     setAssignedRoadmaps(roadmapsWithDetails);
+
+    // Fetch available roadmaps for dropdown (owner only)
+    if (g.owner_id === user.id) {
+      const { data: myRoadmaps } = await supabase
+        .from("roadmaps")
+        .select("id, topic, skill_level")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+
+      const assignedIds = new Set((grRows ?? []).map((r: any) => r.roadmap_id));
+      setAvailableRoadmaps((myRoadmaps ?? []).filter((r) => !assignedIds.has(r.id)));
+    }
+
     setLoading(false);
   };
 
@@ -176,6 +200,103 @@ export default function GroupDetail() {
     navigate("/groups");
   };
 
+  // Add roadmap to group (just links it, doesn't distribute)
+  const handleAddRoadmap = async (roadmapId: string) => {
+    if (!user || !groupId) return;
+    setAddingRoadmap(roadmapId);
+
+    const { error } = await (supabase as any)
+      .from("group_roadmaps")
+      .insert({ group_id: groupId, roadmap_id: roadmapId, assigned_by: user.id });
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Roadmap added to group" });
+    }
+    setAddingRoadmap(null);
+    setShowDropdown(false);
+    fetchGroup();
+  };
+
+  // Share/distribute a roadmap to all members (clone to each)
+  const handleShareToMembers = async (groupRoadmapId: string, roadmapId: string) => {
+    if (!user) return;
+    setSharingRoadmap(groupRoadmapId);
+
+    const { data: fullRoadmap } = await supabase
+      .from("roadmaps")
+      .select("*")
+      .eq("id", roadmapId)
+      .single();
+
+    if (!fullRoadmap) {
+      toast({ title: "Error", description: "Roadmap not found.", variant: "destructive" });
+      setSharingRoadmap(null);
+      return;
+    }
+
+    // Get members who don't already have this roadmap
+    const { data: existingAssignments } = await (supabase as any)
+      .from("member_group_roadmaps")
+      .select("member_id")
+      .eq("group_roadmap_id", groupRoadmapId);
+
+    const alreadyHas = new Set((existingAssignments ?? []).map((a: any) => a.member_id));
+
+    const memberIds = members
+      .map((m) => m.user_id)
+      .filter((id) => !alreadyHas.has(id));
+
+    if (memberIds.length === 0) {
+      toast({ title: "All members already have this roadmap" });
+      setSharingRoadmap(null);
+      return;
+    }
+
+    let shared = 0;
+    for (const memberId of memberIds) {
+      const { data: cloned } = await supabase.from("roadmaps").insert({
+        user_id: memberId,
+        topic: fullRoadmap.topic,
+        skill_level: fullRoadmap.skill_level,
+        timeline_weeks: fullRoadmap.timeline_weeks,
+        hours_per_day: fullRoadmap.hours_per_day,
+        hard_deadline: fullRoadmap.hard_deadline,
+        deadline_date: fullRoadmap.deadline_date,
+        roadmap_data: fullRoadmap.roadmap_data,
+        original_roadmap_data: fullRoadmap.original_roadmap_data,
+        learning_goal: fullRoadmap.learning_goal,
+        status: "active",
+        completed_modules: 0,
+        total_modules: fullRoadmap.total_modules,
+        current_streak: 0,
+        source_roadmap_id: fullRoadmap.id,
+      } as any).select("id").single();
+
+      if (cloned) {
+        await (supabase as any).from("member_group_roadmaps").insert({
+          group_roadmap_id: groupRoadmapId,
+          member_id: memberId,
+          roadmap_id: cloned.id,
+        });
+        shared++;
+      }
+    }
+
+    toast({ title: `Roadmap shared with ${shared} ${shared === 1 ? "member" : "members"}!` });
+    setSharingRoadmap(null);
+    fetchGroup();
+  };
+
+  // Remove roadmap from group
+  const handleRemoveRoadmap = async (groupRoadmapId: string) => {
+    await (supabase as any).from("group_roadmaps").delete().eq("id", groupRoadmapId);
+    toast({ title: "Roadmap removed from group" });
+    setRemoveRoadmapConfirm(null);
+    fetchGroup();
+  };
+
   if (loading) {
     return (
       <>
@@ -191,6 +312,7 @@ export default function GroupDetail() {
 
   const labels = getGroupLabels(group.type as GroupType);
   const inviteLink = `${window.location.origin}/join/${group.invite_code}`;
+  const atLimit = assignedRoadmaps.length >= MAX_GROUP_ROADMAPS;
 
   return (
     <>
@@ -275,7 +397,7 @@ export default function GroupDetail() {
             variant={tab === "roadmaps" ? "default" : "outline"}
             className={tab === "roadmaps" ? "gradient-primary text-primary-foreground font-heading font-bold" : "border-border font-heading font-bold"}
           >
-            Roadmaps ({assignedRoadmaps.length})
+            Roadmaps ({assignedRoadmaps.length}/{MAX_GROUP_ROADMAPS})
           </Button>
         </div>
 
@@ -317,38 +439,97 @@ export default function GroupDetail() {
         {/* Roadmaps tab */}
         {tab === "roadmaps" && (
           <div className="space-y-2">
+            {/* Add roadmap dropdown (owner only) */}
             {isOwner && (
-              <Button
-                onClick={() => setShowAssign(true)}
-                className="mb-3 gradient-primary text-primary-foreground font-heading font-bold"
-              >
-                <Plus className="mr-2 h-4 w-4" /> {labels.assign} Roadmap
-              </Button>
+              <div className="relative mb-3">
+                {atLimit ? (
+                  <p className="text-sm text-muted-foreground">Maximum of {MAX_GROUP_ROADMAPS} roadmaps reached. Remove one to add another.</p>
+                ) : (
+                  <>
+                    <Button
+                      onClick={() => setShowDropdown(!showDropdown)}
+                      variant="outline"
+                      className="w-full justify-between border-border font-heading font-bold"
+                    >
+                      <span>Add a roadmap to this group...</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${showDropdown ? "rotate-180" : ""}`} />
+                    </Button>
+                    {showDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-1 glass-strong border border-border rounded-lg z-10 max-h-60 overflow-y-auto">
+                        {availableRoadmaps.length === 0 ? (
+                          <p className="p-3 text-sm text-muted-foreground text-center">No more roadmaps available to add.</p>
+                        ) : (
+                          availableRoadmaps.map((rm) => (
+                            <button
+                              key={rm.id}
+                              onClick={() => handleAddRoadmap(rm.id)}
+                              disabled={addingRoadmap === rm.id}
+                              className="w-full p-3 text-left hover:bg-muted/20 transition-colors flex items-center justify-between border-b border-border/50 last:border-0"
+                            >
+                              <div>
+                                <p className="font-heading font-semibold text-sm">{rm.topic}</p>
+                                <p className="text-xs text-muted-foreground">{rm.skill_level}</p>
+                              </div>
+                              {addingRoadmap === rm.id && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             )}
 
             {assignedRoadmaps.length === 0 ? (
               <div className="glass p-6 text-center text-muted-foreground">
-                No roadmaps assigned yet.
+                No roadmaps added yet.{isOwner ? " Use the dropdown above to add roadmaps from your library." : ""}
               </div>
             ) : (
               assignedRoadmaps.map((ar) => (
-                <div key={ar.id} className="glass-blue p-4 flex items-center justify-between">
-                  <div>
-                    <p className="font-heading font-semibold">{ar.topic}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Assigned {new Date(ar.assigned_at).toLocaleDateString()} · {ar.memberCount} {labels.members.toLowerCase()} have it
-                    </p>
+                <div key={ar.id} className="glass-blue p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-heading font-semibold">{ar.topic}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Added {new Date(ar.assigned_at).toLocaleDateString()}
+                        {ar.sharedCount > 0 && ` · Shared with ${ar.sharedCount} ${ar.sharedCount === 1 ? labels.member.toLowerCase() : labels.members.toLowerCase()}`}
+                      </p>
+                    </div>
+                    {isOwner && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          onClick={() => handleShareToMembers(ar.id, ar.roadmap_id)}
+                          disabled={sharingRoadmap === ar.id || members.length === 0}
+                          size="sm"
+                          className="gradient-primary text-primary-foreground font-heading font-bold text-xs"
+                        >
+                          {sharingRoadmap === ar.id ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Send className="mr-1 h-3 w-3" />
+                          )}
+                          Share
+                        </Button>
+                        <Button
+                          onClick={() => navigate(`/group/${groupId}/progress/${ar.roadmap_id}`)}
+                          variant="outline"
+                          size="sm"
+                          className="border-border font-heading font-bold text-xs"
+                        >
+                          <BarChart3 className="mr-1 h-3 w-3" /> Progress
+                        </Button>
+                        <Button
+                          onClick={() => setRemoveRoadmapConfirm(ar.id)}
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  {isOwner && (
-                    <Button
-                      onClick={() => navigate(`/group/${groupId}/progress/${ar.roadmap_id}`)}
-                      variant="outline"
-                      size="sm"
-                      className="border-border font-heading font-bold"
-                    >
-                      <BarChart3 className="mr-1 h-3 w-3" /> Progress
-                    </Button>
-                  )}
                 </div>
               ))
             )}
@@ -365,16 +546,6 @@ export default function GroupDetail() {
         )}
       </div>
 
-      {/* Assign modal */}
-      {groupId && (
-        <AssignRoadmapModal
-          open={showAssign}
-          onClose={() => setShowAssign(false)}
-          groupId={groupId}
-          onAssigned={fetchGroup}
-        />
-      )}
-
       {/* Remove member confirm */}
       <Dialog open={!!removeConfirm} onOpenChange={() => setRemoveConfirm(null)}>
         <DialogContent className="glass-strong border-border">
@@ -385,6 +556,20 @@ export default function GroupDetail() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setRemoveConfirm(null)} className="border-border">Cancel</Button>
             <Button onClick={() => removeConfirm && handleRemoveMember(removeConfirm)} className="bg-destructive text-destructive-foreground font-heading font-bold">Remove</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove roadmap confirm */}
+      <Dialog open={!!removeRoadmapConfirm} onOpenChange={() => setRemoveRoadmapConfirm(null)}>
+        <DialogContent className="glass-strong border-border">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Remove roadmap from group?</DialogTitle>
+            <DialogDescription>Members who already received this roadmap will keep their copies.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRemoveRoadmapConfirm(null)} className="border-border">Cancel</Button>
+            <Button onClick={() => removeRoadmapConfirm && handleRemoveRoadmap(removeRoadmapConfirm)} className="bg-destructive text-destructive-foreground font-heading font-bold">Remove</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

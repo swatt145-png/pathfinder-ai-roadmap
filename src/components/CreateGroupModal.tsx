@@ -22,6 +22,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
   const [type, setType] = useState<GroupType>("study_group");
   const [creating, setCreating] = useState(false);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
+  const [createdName, setCreatedName] = useState("");
   const [copied, setCopied] = useState(false);
 
   const role = profile?.role ?? "learner";
@@ -47,6 +48,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
       return;
     }
     setCreatedCode(inviteCode);
+    setCreatedName(name.trim());
     onCreated();
   };
 
@@ -61,6 +63,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
     setDescription("");
     setType("study_group");
     setCreatedCode(null);
+    setCreatedName("");
     setCopied(false);
     onClose();
   };
@@ -76,7 +79,7 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
 
         {createdCode ? (
           <div className="space-y-4 text-center">
-            <h2 className="font-heading text-xl font-bold">Group Created!</h2>
+            <h2 className="font-heading text-xl font-bold">"{createdName}" Created!</h2>
             <p className="text-muted-foreground text-sm">Share this invite code with your members:</p>
             <div className="glass p-4 rounded-lg">
               <p className="font-mono text-2xl font-bold tracking-wider">{createdCode}</p>
