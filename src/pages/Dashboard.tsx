@@ -629,7 +629,7 @@ export default function Dashboard() {
             </Button>
             <h2 className="font-heading text-xl md:text-2xl font-bold">{roadmapData.topic}</h2>
           </div>
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
             {roadmap?.learning_goal && (() => {
               const goalMap: Record<string, { icon: React.ElementType; label: string }> = {
@@ -647,21 +647,17 @@ export default function Dashboard() {
                 </span>
               );
             })()}
-          </div>
-
-          {/* Return to Group button */}
-          {groupInfo && (
-            <div className="flex justify-end mb-2">
+            {groupInfo && (
               <Button
                 onClick={() => navigate(`/group/${groupInfo.groupId}`)}
                 variant="outline"
                 size="sm"
-                className="border-border font-heading text-xs"
+                className="border-border font-heading text-xs ml-auto"
               >
                 <Users className="mr-1 h-3 w-3" /> Return to {groupInfo.groupName}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Progress bar */}
           <div className="mb-4">
