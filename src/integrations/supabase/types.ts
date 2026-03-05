@@ -470,6 +470,14 @@ export type Database = {
     }
     Functions: {
       calculate_user_points: { Args: { p_user_id: string }; Returns: number }
+      clone_roadmap_for_member: {
+        Args: {
+          p_group_roadmap_id: string
+          p_source_roadmap_id: string
+          p_target_user_id: string
+        }
+        Returns: string
+      }
       has_active_roadmap: { Args: { p_user_id: string }; Returns: boolean }
     }
     Enums: {
