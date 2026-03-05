@@ -17,15 +17,16 @@ ALTER TABLE public.profiles
 -- All existing profiles get is_email_user = true (safe default)
 UPDATE public.profiles SET is_email_user = true;
 
--- Update the signup trigger to set is_email_user automatically
+-- Update the signup trigger to set is_email_user and is_public automatically
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  INSERT INTO public.profiles (id, display_name, is_email_user)
+  INSERT INTO public.profiles (id, display_name, is_email_user, is_public)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'display_name', 'User'),
-    NEW.email IS NOT NULL
+    NEW.email IS NOT NULL,
+    true
   );
   RETURN NEW;
 END;
