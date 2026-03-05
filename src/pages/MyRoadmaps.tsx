@@ -217,7 +217,9 @@ export default function MyRoadmaps() {
     );
   }
 
-  const displayRoadmaps = showArchived ? archivedRoadmaps : roadmaps;
+  // Exclude group-assigned roadmaps from the regular list (they appear in Group Roadmaps section)
+  const groupRoadmapIds = new Set(groupRoadmaps.map((gr) => gr.id));
+  const displayRoadmaps = showArchived ? archivedRoadmaps : roadmaps.filter((r) => !groupRoadmapIds.has(r.id));
 
   return (
     <>
