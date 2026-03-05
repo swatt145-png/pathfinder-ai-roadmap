@@ -55,7 +55,7 @@ export default function Community() {
     const otherProfiles = (profileData ?? []).filter((p) => {
       if (p.id === user.id) return false;
       if (!p.display_name || p.display_name === "User") return false;
-      if (!(p as any).is_email_user) return false;
+      if ((p as any).is_email_user === false) return false;
       return (p as any).is_public === true;
     });
     setProfiles(otherProfiles);
