@@ -387,7 +387,7 @@ export default function GroupDetail() {
             variant={tab === "roadmaps" ? "default" : "outline"}
             className={tab === "roadmaps" ? "gradient-primary text-primary-foreground font-heading font-bold" : "border-border font-heading font-bold"}
           >
-            Roadmaps ({isOwner ? `${assignedRoadmaps.length}/${MAX_GROUP_ROADMAPS}` : assignedRoadmaps.filter((ar) => memberRoadmapMap[ar.id]).length})
+            Roadmaps ({isOwner ? `${assignedRoadmaps.length}/${MAX_GROUP_ROADMAPS}` : assignedRoadmaps.length})
           </Button>
         </div>
 
@@ -471,23 +471,14 @@ export default function GroupDetail() {
               </div>
             )}
 
-            {(() => {
-              // Members only see roadmaps shared with them
-              const visibleRoadmaps = isOwner
-                ? assignedRoadmaps
-                : assignedRoadmaps.filter((ar) => memberRoadmapMap[ar.id]);
-
-              if (visibleRoadmaps.length === 0) {
-                return (
-                  <div className="glass p-6 text-center text-muted-foreground">
-                    {isOwner
-                      ? "No roadmaps added yet. Use the dropdown above to add roadmaps from your library."
-                      : "No roadmaps have been shared with you yet."}
-                  </div>
-                );
-              }
-
-              return visibleRoadmaps.map((ar) => {
+            {assignedRoadmaps.length === 0 ? (
+              <div className="glass p-6 text-center text-muted-foreground">
+                {isOwner
+                  ? "No roadmaps added yet. Use the dropdown above to add roadmaps from your library."
+                  : "No roadmaps have been shared with you yet."}
+              </div>
+            ) : (
+              assignedRoadmaps.map((ar) => {
                 const isShared = ar.sharedCount > 0;
                 const memberClonedId = memberRoadmapMap[ar.id];
 
@@ -561,8 +552,8 @@ export default function GroupDetail() {
                     </div>
                   </div>
                 );
-              });
-            })()}
+              })
+            )}
           </div>
         )}
 
