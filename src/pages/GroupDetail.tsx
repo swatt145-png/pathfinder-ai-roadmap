@@ -387,7 +387,7 @@ export default function GroupDetail() {
             variant={tab === "roadmaps" ? "default" : "outline"}
             className={tab === "roadmaps" ? "gradient-primary text-primary-foreground font-heading font-bold" : "border-border font-heading font-bold"}
           >
-            Roadmaps ({isOwner ? `${assignedRoadmaps.length}/${MAX_GROUP_ROADMAPS}` : assignedRoadmaps.length})
+            Roadmaps ({isOwner ? `${assignedRoadmaps.length}/${MAX_GROUP_ROADMAPS}` : assignedRoadmaps.filter((ar) => memberRoadmapMap[ar.id]).length})
           </Button>
         </div>
 
@@ -471,14 +471,23 @@ export default function GroupDetail() {
               </div>
             )}
 
-            {assignedRoadmaps.length === 0 ? (
-              <div className="glass p-6 text-center text-muted-foreground">
-                {isOwner
-                  ? "No roadmaps added yet. Use the dropdown above to add roadmaps from your library."
-                  : "No roadmaps have been shared with you yet."}
-              </div>
-            ) : (
-              assignedRoadmaps.map((ar) => {
+            {(() => {
+              // Owner sees all roadmaps; members only see ones assigned to them
+              const visibleRoadmaps = isOwner
+                ? assignedRoadmaps
+                : assignedRoadmaps.filter((ar) => memberRoadmapMap[ar.id]);
+
+              if (visibleRoadmaps.length === 0) {
+                return (
+                  <div className="glass p-6 text-center text-muted-foreground">
+                    {isOwner
+                      ? "No roadmaps added yet. Use the dropdown above to add roadmaps from your library."
+                      : "No roadmaps have been assigned to you yet."}
+                  </div>
+                );
+              }
+
+              return visibleRoadmaps.map((ar) => {
                 const isShared = ar.sharedCount > 0;
                 const memberClonedId = memberRoadmapMap[ar.id];
 
@@ -503,10 +512,8 @@ export default function GroupDetail() {
                               Added {new Date(ar.assigned_at).toLocaleDateString()}
                               {isShared && ` · Shared with ${ar.sharedCount} ${ar.sharedCount === 1 ? labels.member.toLowerCase() : labels.members.toLowerCase()}`}
                             </>
-                          ) : memberClonedId ? (
-                            "Click to view modules and track progress"
                           ) : (
-                            "Not yet shared by the group owner"
+                            "Click to view modules and track progress"
                           )}
                         </p>
                       </div>
@@ -552,8 +559,8 @@ export default function GroupDetail() {
                     </div>
                   </div>
                 );
-              })
-            )}
+              });
+            })()}
           </div>
         )}
 
