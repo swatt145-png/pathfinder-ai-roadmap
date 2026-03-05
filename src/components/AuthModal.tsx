@@ -231,9 +231,45 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                 <p className="text-amber-500 text-sm font-medium">You have already registered. Please sign in.</p>
               )}
               {verifyMessage && tab === "signin" && (
-                <p className="text-success text-sm font-medium">Verification email sent — please verify your email before signing in.</p>
+                <div className="space-y-1">
+                  <p className="text-success text-sm font-medium">Verification email sent — please verify your email before signing in.</p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setError(null);
+                      setLoading(true);
+                      const { error } = await signUp(email, password, displayName || "User");
+                      if (error) setError(error);
+                      else setError(null);
+                      setLoading(false);
+                    }}
+                    className="text-primary hover:underline text-sm"
+                  >
+                    Resend verification email
+                  </button>
+                </div>
               )}
-              {error && <p className="text-destructive text-sm">{error}</p>}
+              {error && !error.includes("Email not confirmed") ? (
+                <p className="text-destructive text-sm">{error}</p>
+              ) : error ? (
+                <div className="space-y-1">
+                  <p className="text-destructive text-sm">{error}</p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setError(null);
+                      setLoading(true);
+                      const result = await signUp(email, "", "User");
+                      if (result.error) setError("Could not resend. Please try signing up again.");
+                      else setError("Verification email resent. Please check your inbox.");
+                      setLoading(false);
+                    }}
+                    className="text-primary hover:underline text-sm"
+                  >
+                    Resend verification email
+                  </button>
+                </div>
+              ) : null}
               <Button type="submit" disabled={loading} className="w-full gradient-primary text-primary-foreground font-heading font-semibold h-12">
                 {loading ? <Loader2 className="animate-spin" /> : tab === "signup" ? "Create Account" : "Sign In"}
               </Button>
