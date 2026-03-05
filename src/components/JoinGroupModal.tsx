@@ -31,6 +31,9 @@ async function cloneSharedRoadmapsForMember(userId: string, groupId: string) {
 
     if ((count ?? 0) === 0) continue; // Not shared yet, skip
 
+    // Use SECURITY DEFINER RPC — the member themselves calls this on join,
+    // but it needs the group owner to be the caller. For late joiners,
+    // we do a direct insert since the user IS the target (user_id = auth.uid()).
     const { data: fullRoadmap } = await supabase
       .from("roadmaps")
       .select("*")

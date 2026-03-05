@@ -246,18 +246,6 @@ export default function GroupDetail() {
     if (!user || !groupId) return;
     setSharingRoadmap(groupRoadmapId);
 
-    const { data: fullRoadmap } = await supabase
-      .from("roadmaps")
-      .select("*")
-      .eq("id", roadmapId)
-      .single();
-
-    if (!fullRoadmap) {
-      toast({ title: "Error", description: "Roadmap not found.", variant: "destructive" });
-      setSharingRoadmap(null);
-      return;
-    }
-
     // Re-fetch members directly to avoid stale state
     const { data: currentMembers } = await (supabase as any)
       .from("group_members")
@@ -272,47 +260,16 @@ export default function GroupDetail() {
       return;
     }
 
-    // Get members who don't already have this roadmap
-    const { data: existingAssignments } = await (supabase as any)
-      .from("member_group_roadmaps")
-      .select("member_id")
-      .eq("group_roadmap_id", groupRoadmapId);
-
-    const alreadyHas = new Set((existingAssignments ?? []).map((a: any) => a.member_id));
-    const memberIds = allMemberIds.filter((id: string) => !alreadyHas.has(id));
-
-    if (memberIds.length === 0) {
-      toast({ title: "All members already have this roadmap" });
-      setSharingRoadmap(null);
-      return;
-    }
-
+    // Use SECURITY DEFINER RPC to clone roadmaps (bypasses roadmaps RLS)
     let shared = 0;
-    for (const memberId of memberIds) {
-      const { data: cloned } = await supabase.from("roadmaps").insert({
-        user_id: memberId,
-        topic: fullRoadmap.topic,
-        skill_level: fullRoadmap.skill_level,
-        timeline_weeks: fullRoadmap.timeline_weeks,
-        hours_per_day: fullRoadmap.hours_per_day,
-        hard_deadline: fullRoadmap.hard_deadline,
-        deadline_date: fullRoadmap.deadline_date,
-        roadmap_data: fullRoadmap.roadmap_data,
-        original_roadmap_data: fullRoadmap.original_roadmap_data,
-        learning_goal: fullRoadmap.learning_goal,
-        status: "active",
-        completed_modules: 0,
-        total_modules: fullRoadmap.total_modules,
-        current_streak: 0,
-        source_roadmap_id: fullRoadmap.id,
-      } as any).select("id").single();
+    for (const memberId of allMemberIds) {
+      const { data: clonedId, error } = await (supabase as any).rpc("clone_roadmap_for_member", {
+        p_source_roadmap_id: roadmapId,
+        p_target_user_id: memberId,
+        p_group_roadmap_id: groupRoadmapId,
+      });
 
-      if (cloned) {
-        await (supabase as any).from("member_group_roadmaps").insert({
-          group_roadmap_id: groupRoadmapId,
-          member_id: memberId,
-          roadmap_id: cloned.id,
-        });
+      if (!error && clonedId) {
         shared++;
       }
     }
@@ -430,7 +387,7 @@ export default function GroupDetail() {
             variant={tab === "roadmaps" ? "default" : "outline"}
             className={tab === "roadmaps" ? "gradient-primary text-primary-foreground font-heading font-bold" : "border-border font-heading font-bold"}
           >
-            Roadmaps ({assignedRoadmaps.length}/{MAX_GROUP_ROADMAPS})
+            Roadmaps ({isOwner ? `${assignedRoadmaps.length}/${MAX_GROUP_ROADMAPS}` : assignedRoadmaps.filter((ar) => memberRoadmapMap[ar.id]).length})
           </Button>
         </div>
 
@@ -514,12 +471,23 @@ export default function GroupDetail() {
               </div>
             )}
 
-            {assignedRoadmaps.length === 0 ? (
-              <div className="glass p-6 text-center text-muted-foreground">
-                No roadmaps added yet.{isOwner ? " Use the dropdown above to add roadmaps from your library." : ""}
-              </div>
-            ) : (
-              assignedRoadmaps.map((ar) => {
+            {(() => {
+              // Members only see roadmaps shared with them
+              const visibleRoadmaps = isOwner
+                ? assignedRoadmaps
+                : assignedRoadmaps.filter((ar) => memberRoadmapMap[ar.id]);
+
+              if (visibleRoadmaps.length === 0) {
+                return (
+                  <div className="glass p-6 text-center text-muted-foreground">
+                    {isOwner
+                      ? "No roadmaps added yet. Use the dropdown above to add roadmaps from your library."
+                      : "No roadmaps have been shared with you yet."}
+                  </div>
+                );
+              }
+
+              return visibleRoadmaps.map((ar) => {
                 const isShared = ar.sharedCount > 0;
                 const memberClonedId = memberRoadmapMap[ar.id];
 
@@ -593,8 +561,8 @@ export default function GroupDetail() {
                     </div>
                   </div>
                 );
-              })
-            )}
+              });
+            })()}
           </div>
         )}
 

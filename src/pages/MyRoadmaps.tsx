@@ -29,6 +29,19 @@ interface GroupAssignment {
   groupName: string;
 }
 
+interface GroupRoadmapRow {
+  id: string;
+  topic: string;
+  skill_level: string;
+  timeline_weeks: number;
+  hours_per_day: number;
+  completed_modules: number | null;
+  total_modules: number | null;
+  roadmap_data: unknown;
+  groupName: string;
+  ownerName: string;
+}
+
 export default function MyRoadmaps() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -41,6 +54,7 @@ export default function MyRoadmaps() {
   const [unarchiveConfirmId, setUnarchiveConfirmId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [groupAssignments, setGroupAssignments] = useState<Record<string, GroupAssignment>>({});
+  const [groupRoadmaps, setGroupRoadmaps] = useState<GroupRoadmapRow[]>([]);
 
   const fetchRoadmaps = async () => {
     if (!user) return;
@@ -126,6 +140,53 @@ export default function MyRoadmaps() {
         };
       }
       setGroupAssignments(assignments);
+    }
+
+    // Fetch roadmaps assigned via groups (member_group_roadmaps → roadmaps)
+    const { data: mgrAll } = await (supabase as any)
+      .from("member_group_roadmaps")
+      .select("roadmap_id, group_roadmap_id")
+      .eq("member_id", user.id);
+
+    if (mgrAll && mgrAll.length > 0) {
+      const grRoadmaps: GroupRoadmapRow[] = [];
+      for (const mgr of mgrAll) {
+        const { data: rm } = await supabase
+          .from("roadmaps")
+          .select("id, topic, skill_level, timeline_weeks, hours_per_day, completed_modules, total_modules, roadmap_data")
+          .eq("id", mgr.roadmap_id)
+          .single();
+        if (!rm) continue;
+
+        const { data: gr } = await (supabase as any)
+          .from("group_roadmaps")
+          .select("group_id")
+          .eq("id", mgr.group_roadmap_id)
+          .single();
+        if (!gr) continue;
+
+        const { data: g } = await (supabase as any)
+          .from("groups")
+          .select("name, owner_id")
+          .eq("id", gr.group_id)
+          .single();
+        if (!g) continue;
+
+        const { data: op } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", g.owner_id)
+          .single();
+
+        grRoadmaps.push({
+          ...rm,
+          groupName: g.name,
+          ownerName: op?.display_name ?? "Unknown",
+        });
+      }
+      setGroupRoadmaps(grRoadmaps);
+    } else {
+      setGroupRoadmaps([]);
     }
 
     setLoading(false);
@@ -309,6 +370,64 @@ export default function MyRoadmaps() {
           <p className="text-sm text-muted-foreground text-center mt-4">
             You've reached the maximum of 10 active roadmaps. Archive one to create a new one.
           </p>
+        )}
+
+        {/* Group Roadmaps section */}
+        {!showArchived && groupRoadmaps.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="h-5 w-5 text-primary" />
+              <h3 className="font-heading text-xl font-bold">Group Roadmaps</h3>
+              <span className="text-xs font-heading font-bold px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                {groupRoadmaps.length}
+              </span>
+            </div>
+            <div className="space-y-4">
+              {groupRoadmaps.map((rm) => {
+                const completed = rm.completed_modules ?? 0;
+                const total = rm.total_modules ?? 0;
+                const pct = total ? Math.round((completed / total) * 100) : 0;
+                const rd = rm.roadmap_data as unknown as RoadmapData;
+
+                return (
+                  <div key={rm.id} className="glass-blue p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-heading font-bold text-lg">{rm.topic}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day
+                        </p>
+                        <p className="text-xs text-primary mt-0.5">
+                          Assigned by {rm.ownerName} · {rm.groupName}
+                        </p>
+                      </div>
+                      <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary shrink-0">
+                        {pct}%
+                      </span>
+                    </div>
+
+                    {rd?.summary && (
+                      <p className="text-base text-muted-foreground mb-3 line-clamp-2">{rd.summary}</p>
+                    )}
+
+                    <div className="mb-3">
+                      <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
+                        <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{completed} of {total} modules completed</p>
+                    </div>
+
+                    <Button
+                      onClick={() => navigate(`/dashboard/${rm.id}`)}
+                      className="w-full gradient-primary text-primary-foreground font-heading font-bold"
+                    >
+                      Continue <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 

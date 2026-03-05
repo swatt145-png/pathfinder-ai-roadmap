@@ -1,0 +1,78 @@
+-- SECURITY DEFINER function to clone a roadmap for a group member
+-- Needed because roadmaps RLS only allows INSERT where user_id = auth.uid()
+-- The group owner needs to clone roadmaps on behalf of members
+
+CREATE OR REPLACE FUNCTION public.clone_roadmap_for_member(
+  p_source_roadmap_id uuid,
+  p_target_user_id uuid,
+  p_group_roadmap_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_source roadmaps%ROWTYPE;
+  v_cloned_id uuid;
+  v_caller_id uuid;
+  v_group_id uuid;
+BEGIN
+  -- Get caller
+  v_caller_id := auth.uid();
+
+  -- Verify caller owns the group that this group_roadmap belongs to
+  SELECT g.id INTO v_group_id
+  FROM group_roadmaps gr
+  JOIN groups g ON g.id = gr.group_id
+  WHERE gr.id = p_group_roadmap_id AND g.owner_id = v_caller_id;
+
+  IF v_group_id IS NULL THEN
+    RAISE EXCEPTION 'Not authorized: you do not own this group';
+  END IF;
+
+  -- Verify target user is a member of the group
+  IF NOT EXISTS (
+    SELECT 1 FROM group_members
+    WHERE group_id = v_group_id AND user_id = p_target_user_id
+  ) THEN
+    RAISE EXCEPTION 'Target user is not a member of this group';
+  END IF;
+
+  -- Check if member already has this roadmap assigned
+  IF EXISTS (
+    SELECT 1 FROM member_group_roadmaps
+    WHERE group_roadmap_id = p_group_roadmap_id AND member_id = p_target_user_id
+  ) THEN
+    RETURN NULL; -- Already assigned, skip
+  END IF;
+
+  -- Fetch source roadmap
+  SELECT * INTO v_source FROM roadmaps WHERE id = p_source_roadmap_id;
+  IF v_source IS NULL THEN
+    RAISE EXCEPTION 'Source roadmap not found';
+  END IF;
+
+  -- Clone the roadmap for the target user
+  INSERT INTO roadmaps (
+    user_id, topic, skill_level, timeline_weeks, hours_per_day,
+    hard_deadline, deadline_date, roadmap_data, original_roadmap_data,
+    learning_goal, status, completed_modules, total_modules,
+    current_streak, source_roadmap_id
+  ) VALUES (
+    p_target_user_id, v_source.topic, v_source.skill_level,
+    v_source.timeline_weeks, v_source.hours_per_day,
+    v_source.hard_deadline, v_source.deadline_date,
+    v_source.roadmap_data, v_source.original_roadmap_data,
+    v_source.learning_goal, 'active', 0, v_source.total_modules,
+    0, v_source.id
+  )
+  RETURNING id INTO v_cloned_id;
+
+  -- Link in member_group_roadmaps
+  INSERT INTO member_group_roadmaps (group_roadmap_id, member_id, roadmap_id)
+  VALUES (p_group_roadmap_id, p_target_user_id, v_cloned_id);
+
+  RETURN v_cloned_id;
+END;
+$$;
