@@ -6,7 +6,7 @@ import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Copy, Check, Users, Trash2, BarChart3, RefreshCw, LogOut, Save, Send, ChevronDown, CheckCircle, ExternalLink } from "lucide-react";
+import { Loader2, ArrowLeft, Copy, Check, Users, Trash2, BarChart3, RefreshCw, LogOut, Save, Send, ChevronDown, CheckCircle, ExternalLink, BookOpen, TrendingUp, Target } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
@@ -52,6 +52,14 @@ interface MemberRoadmapMap {
   [groupRoadmapId: string]: string;
 }
 
+interface MemberStats {
+  assignedCount: number;
+  completionPct: number;
+  topics: string[];
+  completedModules: number;
+  totalModules: number;
+}
+
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const { user } = useAuth();
@@ -79,6 +87,7 @@ export default function GroupDetail() {
   const [removeRoadmapConfirm, setRemoveRoadmapConfirm] = useState<string | null>(null);
   // Member's cloned roadmap IDs (group_roadmap_id → cloned roadmap_id)
   const [memberRoadmapMap, setMemberRoadmapMap] = useState<MemberRoadmapMap>({});
+  const [memberStats, setMemberStats] = useState<MemberStats | null>(null);
 
   const fetchGroup = async () => {
     if (!user || !groupId) return;
@@ -153,8 +162,12 @@ export default function GroupDetail() {
       const assignedIds = new Set((grRows ?? []).map((r: any) => r.roadmap_id));
       setAvailableRoadmaps((myRoadmaps ?? []).filter((r) => !assignedIds.has(r.id)));
     } else {
-      // For members: fetch their cloned roadmap IDs
+      // For members: fetch their cloned roadmap IDs and compute stats
       const map: MemberRoadmapMap = {};
+      const topics: string[] = [];
+      let totalModules = 0;
+      let completedModules = 0;
+
       for (const gr of grRows ?? []) {
         const { data: mgr } = await (supabase as any)
           .from("member_group_roadmaps")
@@ -164,9 +177,32 @@ export default function GroupDetail() {
           .maybeSingle();
         if (mgr) {
           map[gr.id] = mgr.roadmap_id;
+          // Get topic and progress for this cloned roadmap
+          const { data: rm } = await supabase.from("roadmaps").select("topic").eq("id", mgr.roadmap_id).single();
+          if (rm?.topic) topics.push(rm.topic);
+
+          const { data: progressRows } = await supabase
+            .from("progress")
+            .select("status")
+            .eq("roadmap_id", mgr.roadmap_id)
+            .eq("user_id", user.id);
+
+          if (progressRows) {
+            totalModules += progressRows.length;
+            completedModules += progressRows.filter((p: any) => p.status === "completed").length;
+          }
         }
       }
       setMemberRoadmapMap(map);
+
+      const assignedCount = Object.keys(map).length;
+      setMemberStats({
+        assignedCount,
+        completionPct: totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0,
+        topics,
+        completedModules,
+        totalModules,
+      });
     }
 
     setLoading(false);
@@ -370,6 +406,42 @@ export default function GroupDetail() {
         {!isOwner && group.description && (
           <div className="glass-strong p-5 mb-6">
             <p className="text-muted-foreground">{group.description}</p>
+          </div>
+        )}
+
+        {/* Member: mini personal dashboard */}
+        {!isOwner && memberStats && (
+          <div className="glass-strong p-5 mb-6">
+            <h3 className="font-heading font-bold text-sm mb-3 text-muted-foreground uppercase tracking-wide">My Progress</h3>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="glass p-3 rounded-lg text-center">
+                <BookOpen className="h-5 w-5 mx-auto mb-1 text-primary" />
+                <p className="font-heading font-bold text-xl">{memberStats.assignedCount}</p>
+                <p className="text-[11px] text-muted-foreground">Roadmaps</p>
+              </div>
+              <div className="glass p-3 rounded-lg text-center">
+                <TrendingUp className="h-5 w-5 mx-auto mb-1 text-emerald-400" />
+                <p className="font-heading font-bold text-xl">{memberStats.completionPct}%</p>
+                <p className="text-[11px] text-muted-foreground">Completed</p>
+              </div>
+              <div className="glass p-3 rounded-lg text-center">
+                <Target className="h-5 w-5 mx-auto mb-1 text-cyan-400" />
+                <p className="font-heading font-bold text-xl">{memberStats.completedModules}/{memberStats.totalModules}</p>
+                <p className="text-[11px] text-muted-foreground">Modules Done</p>
+              </div>
+            </div>
+            {memberStats.topics.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Topics you're learning</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {memberStats.topics.map((t, i) => (
+                    <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-heading">
+                      {t.length > 30 ? t.slice(0, 30) + "…" : t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

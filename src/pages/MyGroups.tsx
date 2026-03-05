@@ -28,11 +28,18 @@ interface MemberGroupRow {
   group: GroupRow & { owner_id: string };
 }
 
+interface EnrichedMemberGroup extends MemberGroupRow {
+  ownerName: string;
+  roadmapCount: number;
+  memberCount: number;
+  topics: string[];
+}
+
 export default function MyGroups() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [ownedGroups, setOwnedGroups] = useState<(GroupRow & { memberCount: number; roadmapCount: number })[]>([]);
-  const [memberGroups, setMemberGroups] = useState<(MemberGroupRow & { ownerName: string; roadmapCount: number })[]>([]);
+  const [ownedGroups, setOwnedGroups] = useState<(GroupRow & { memberCount: number; roadmapCount: number; topics: string[] })[]>([]);
+  const [memberGroups, setMemberGroups] = useState<EnrichedMemberGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -50,11 +57,17 @@ export default function MyGroups() {
 
     const ownedWithCounts: typeof ownedGroups = [];
     for (const g of owned ?? []) {
-      const [{ count: mc }, { count: rc }] = await Promise.all([
+      const [{ count: mc }, { count: rc }, { data: grRows }] = await Promise.all([
         (supabase as any).from("group_members").select("id", { count: "exact", head: true }).eq("group_id", g.id),
         (supabase as any).from("group_roadmaps").select("id", { count: "exact", head: true }).eq("group_id", g.id),
+        (supabase as any).from("group_roadmaps").select("roadmap_id").eq("group_id", g.id),
       ]);
-      ownedWithCounts.push({ ...g, memberCount: mc ?? 0, roadmapCount: rc ?? 0 });
+      const topics: string[] = [];
+      for (const gr of grRows ?? []) {
+        const { data: rm } = await supabase.from("roadmaps").select("topic").eq("id", gr.roadmap_id).single();
+        if (rm?.topic) topics.push(rm.topic);
+      }
+      ownedWithCounts.push({ ...g, memberCount: mc ?? 0, roadmapCount: rc ?? 0, topics });
     }
     setOwnedGroups(ownedWithCounts);
 
@@ -64,7 +77,7 @@ export default function MyGroups() {
       .select("id, group_id, joined_at")
       .eq("user_id", user.id);
 
-    const memberWithDetails: typeof memberGroups = [];
+    const memberWithDetails: EnrichedMemberGroup[] = [];
     for (const m of memberships ?? []) {
       const { data: g } = await (supabase as any)
         .from("groups")
@@ -74,22 +87,40 @@ export default function MyGroups() {
 
       if (!g || g.owner_id === user.id) continue;
 
-      const { data: ownerProfile } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", g.owner_id)
-        .single();
+      const [{ data: ownerProfile }, { count: mc }] = await Promise.all([
+        supabase.from("profiles").select("display_name").eq("id", g.owner_id).single(),
+        (supabase as any).from("group_members").select("id", { count: "exact", head: true }).eq("group_id", g.id),
+      ]);
 
-      const { count: rc } = await (supabase as any)
+      // Get only roadmaps assigned to this member (not total group roadmaps)
+      const { data: grRows } = await (supabase as any)
         .from("group_roadmaps")
-        .select("id", { count: "exact", head: true })
+        .select("id, roadmap_id")
         .eq("group_id", g.id);
+
+      let assignedCount = 0;
+      const topics: string[] = [];
+      for (const gr of grRows ?? []) {
+        const { data: mgr } = await (supabase as any)
+          .from("member_group_roadmaps")
+          .select("roadmap_id")
+          .eq("group_roadmap_id", gr.id)
+          .eq("member_id", user.id)
+          .maybeSingle();
+        if (mgr) {
+          assignedCount++;
+          const { data: rm } = await supabase.from("roadmaps").select("topic").eq("id", mgr.roadmap_id).single();
+          if (rm?.topic) topics.push(rm.topic);
+        }
+      }
 
       memberWithDetails.push({
         ...m,
         group: g,
         ownerName: ownerProfile?.display_name ?? "Unknown",
-        roadmapCount: rc ?? 0,
+        roadmapCount: assignedCount,
+        memberCount: mc ?? 0,
+        topics,
       });
     }
     setMemberGroups(memberWithDetails);
@@ -165,7 +196,15 @@ export default function MyGroups() {
                         <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-heading">Inactive</span>
                       )}
                     </div>
-                    {g.description && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{g.description}</p>}
+                    {g.description && <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{g.description}</p>}
+                    {g.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {g.topics.slice(0, 3).map((t, i) => (
+                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground font-heading">{t.length > 25 ? t.slice(0, 25) + "…" : t}</span>
+                        ))}
+                        {g.topics.length > 3 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{g.topics.length - 3}</span>}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {g.memberCount} {labels.members.toLowerCase()}</span>
@@ -195,15 +234,29 @@ export default function MyGroups() {
                 const labels = getGroupLabels(m.group.type as GroupType);
                 return (
                   <div key={m.id} className="glass-blue p-5 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => navigate(`/group/${m.group.id}`)}>
-                    <div className="mb-2">
-                      <h4 className="font-heading font-bold text-lg">{m.group.name}</h4>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">
-                        {labels.group}
-                      </span>
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h4 className="font-heading font-bold text-lg">{m.group.name}</h4>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">
+                          {labels.group}
+                        </span>
+                      </div>
                     </div>
+                    {m.group.description && <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{m.group.description}</p>}
+                    {m.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {m.topics.slice(0, 3).map((t, i) => (
+                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground font-heading">{t.length > 25 ? t.slice(0, 25) + "…" : t}</span>
+                        ))}
+                        {m.topics.length > 3 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{m.topics.length - 3}</span>}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>by {m.ownerName}</span>
-                      <span>{m.roadmapCount} roadmap{m.roadmapCount !== 1 ? "s" : ""}</span>
+                      <div className="flex items-center gap-3">
+                        <span>by {m.ownerName}</span>
+                        <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {m.memberCount}</span>
+                      </div>
+                      <span>{m.roadmapCount} roadmap{m.roadmapCount !== 1 ? "s" : ""} assigned</span>
                     </div>
                   </div>
                 );
