@@ -147,17 +147,17 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
 
             {error && <p className="text-destructive text-sm">{error}</p>}
 
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 border-border hover:bg-muted"
+                className="w-full sm:flex-1 border-border hover:bg-muted"
               >
                 Skip for now
               </Button>
-              <Button onClick={handleRecalculate} disabled={loading} className="flex-1 gradient-primary text-primary-foreground font-heading font-bold h-12 transition-all">
+              <Button onClick={handleRecalculate} disabled={loading} className="w-full sm:flex-1 gradient-primary text-primary-foreground font-heading font-bold h-12 transition-all">
                 {loading ? <><Loader2 className="animate-spin mr-2" /> Recalculating...</> : "Recalculate"}
               </Button>
             </div>
