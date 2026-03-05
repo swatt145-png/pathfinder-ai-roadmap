@@ -233,25 +233,23 @@ export default function MyGroups() {
               {memberGroups.map((m) => {
                 const labels = getGroupLabels(m.group.type as GroupType);
                 return (
-                  <div key={m.id} className="glass-blue p-5 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => navigate(`/group/${m.group.id}`)}>
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h4 className="font-heading font-bold text-lg">{m.group.name}</h4>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">
-                          {labels.group}
-                        </span>
-                      </div>
+                  <div key={m.id} className="glass-blue p-6 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all aspect-square flex flex-col justify-between" onClick={() => navigate(`/group/${m.group.id}`)}>
+                    <div>
+                      <h4 className="font-heading font-bold text-xl mb-2 break-words">{m.group.name}</h4>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">
+                        {labels.group}
+                      </span>
+                      {m.group.description && <p className="text-sm text-muted-foreground mt-3 mb-3">{m.group.description}</p>}
+                      {m.topics.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          {m.topics.slice(0, 5).map((t, i) => (
+                            <span key={i} className="text-xs px-2 py-1 rounded-full bg-muted/40 text-muted-foreground font-heading">{t}</span>
+                          ))}
+                          {m.topics.length > 5 && <span className="text-xs px-2 py-1 rounded-full bg-muted/40 text-muted-foreground">+{m.topics.length - 5}</span>}
+                        </div>
+                      )}
                     </div>
-                    {m.group.description && <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{m.group.description}</p>}
-                    {m.topics.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {m.topics.slice(0, 3).map((t, i) => (
-                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground font-heading">{t.length > 25 ? t.slice(0, 25) + "…" : t}</span>
-                        ))}
-                        {m.topics.length > 3 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{m.topics.length - 3}</span>}
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground pt-3 border-t border-border/30">
                       <div className="flex items-center gap-3">
                         <span>by {m.ownerName}</span>
                         <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {m.memberCount}</span>
