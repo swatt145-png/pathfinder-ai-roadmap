@@ -339,11 +339,16 @@ export default function PublicProfile() {
             <p className="text-sm text-muted-foreground mt-1">Connect with {profile.display_name || "this user"} to see their full roadmaps, share roadmaps, and send requests.</p>
             {roadmaps.length > 0 && (
               <div className="flex flex-wrap gap-1.5 justify-center mt-3">
-                {roadmaps.map((rm) => (
-                  <span key={rm.id} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-heading">
-                    {rm.topic}
+                {topics.slice(0, 6).map((topic) => (
+                  <span key={topic} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-heading">
+                    {topic}
                   </span>
                 ))}
+                {topics.length > 6 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted/50 text-muted-foreground font-heading">
+                    +{topics.length - 6} more
+                  </span>
+                )}
               </div>
             )}
           </div>
