@@ -47,7 +47,7 @@ export function AppBar() {
           className="w-9 h-9 rounded-full flex items-center justify-center border border-border text-foreground hover:bg-muted transition-colors"
           aria-label="My Groups"
         >
-          <FolderOpen className="h-5 w-5" />
+          <Users className="h-5 w-5" />
         </Link>
         <Link
           to="/community"
