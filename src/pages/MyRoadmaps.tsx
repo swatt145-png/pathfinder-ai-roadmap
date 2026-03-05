@@ -217,9 +217,8 @@ export default function MyRoadmaps() {
     );
   }
 
-  // Exclude group-assigned roadmaps from the regular list (they appear in Group Roadmaps section)
   const groupRoadmapIds = new Set(groupRoadmaps.map((gr) => gr.id));
-  const displayRoadmaps = showArchived ? archivedRoadmaps : roadmaps.filter((r) => !groupRoadmapIds.has(r.id));
+  const displayRoadmaps = showArchived ? archivedRoadmaps : roadmaps;
 
   return (
     <>
@@ -362,7 +361,7 @@ export default function MyRoadmaps() {
                       <p className="text-sm text-muted-foreground">
                         {rm.skill_level} · {rm.timeline_weeks} weeks · {rm.hours_per_day}h/day
                       </p>
-                      {groupAssignments[rm.id] && (
+                      {groupAssignments[rm.id] && !groupRoadmapIds.has(rm.id) && (
                         <p className="text-xs text-primary mt-0.5">
                           Assigned by {groupAssignments[rm.id].ownerName} · {groupAssignments[rm.id].groupName}
                         </p>
