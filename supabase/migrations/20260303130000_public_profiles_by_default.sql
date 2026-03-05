@@ -9,15 +9,13 @@ ALTER TABLE public.profiles ALTER COLUMN is_public SET DEFAULT true;
 UPDATE public.profiles SET is_public = true WHERE is_public = false;
 
 -- Add is_email_user flag to distinguish real accounts from guests
+-- Default true so all existing users are treated as email users;
+-- the signup trigger sets it false only for anonymous signups
 ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS is_email_user boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS is_email_user boolean NOT NULL DEFAULT true;
 
--- Mark existing email users (have email in auth.users)
-UPDATE public.profiles p
-SET is_email_user = true
-WHERE EXISTS (
-  SELECT 1 FROM auth.users u WHERE u.id = p.id AND u.email IS NOT NULL
-);
+-- All existing profiles get is_email_user = true (safe default)
+UPDATE public.profiles SET is_email_user = true;
 
 -- Update the signup trigger to set is_email_user automatically
 CREATE OR REPLACE FUNCTION public.handle_new_user()
