@@ -238,9 +238,10 @@ export function AuthModal({ open, onOpenChange, defaultTab = "signup" }: AuthMod
                     onClick={async () => {
                       setError(null);
                       setLoading(true);
-                      const { error } = await signUp(email, password, displayName || "User");
-                      if (error) setError(error);
-                      else setError(null);
+                      try {
+                        const { error: resendErr } = await supabase.auth.resend({ type: "signup", email });
+                        if (resendErr) setError(resendErr.message);
+                      } catch { setError("Could not resend. Please try again."); }
                       setLoading(false);
                     }}
                     className="text-primary hover:underline text-sm"
