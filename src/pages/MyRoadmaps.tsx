@@ -218,7 +218,7 @@ export default function MyRoadmaps() {
   }
 
   const groupRoadmapIds = new Set(groupRoadmaps.map((gr) => gr.id));
-  const displayRoadmaps = showArchived ? archivedRoadmaps : roadmaps;
+  const displayRoadmaps = showArchived ? archivedRoadmaps : roadmaps.filter((r) => !groupRoadmapIds.has(r.id));
 
   return (
     <>
