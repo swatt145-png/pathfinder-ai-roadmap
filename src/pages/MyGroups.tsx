@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
-import { Loader2, Plus, ArrowLeft, Users, Copy, Check, LogIn } from "lucide-react";
+import { Loader2, Plus, ArrowLeft, Users, Copy, Check, LogIn, BookOpen, TrendingUp } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
 import CreateGroupModal from "@/components/CreateGroupModal";
@@ -33,6 +33,27 @@ interface EnrichedMemberGroup extends MemberGroupRow {
   roadmapCount: number;
   memberCount: number;
   topics: string[];
+  completionPct: number;
+  completedModules: number;
+  totalModules: number;
+}
+
+function ProgressRing({ pct, size = 48, stroke = 4 }: { pct: number; size?: number; stroke?: number }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (pct / 100) * circ;
+  return (
+    <svg width={size} height={size} className="shrink-0 -rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-muted/30" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#ringGrad)" strokeWidth={stroke} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-700" />
+      <defs>
+        <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="hsl(var(--primary))" />
+          <stop offset="100%" stopColor="hsl(172 66% 50%)" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
 }
 
 export default function MyGroups() {
@@ -100,6 +121,8 @@ export default function MyGroups() {
 
       let assignedCount = 0;
       const topics: string[] = [];
+      let totalModules = 0;
+      let completedModules = 0;
       for (const gr of grRows ?? []) {
         const { data: mgr } = await (supabase as any)
           .from("member_group_roadmaps")
@@ -109,8 +132,12 @@ export default function MyGroups() {
           .maybeSingle();
         if (mgr) {
           assignedCount++;
-          const { data: rm } = await supabase.from("roadmaps").select("topic").eq("id", mgr.roadmap_id).single();
+          const { data: rm } = await supabase.from("roadmaps").select("topic, roadmap_data").eq("id", mgr.roadmap_id).single();
           if (rm?.topic) topics.push(rm.topic);
+          const rmData = rm?.roadmap_data as any;
+          totalModules += rmData?.modules?.length ?? 0;
+          const { data: prog } = await supabase.from("progress").select("status").eq("roadmap_id", mgr.roadmap_id).eq("user_id", user.id);
+          if (prog) completedModules += prog.filter((p: any) => p.status === "completed").length;
         }
       }
 
@@ -121,6 +148,9 @@ export default function MyGroups() {
         roadmapCount: assignedCount,
         memberCount: mc ?? 0,
         topics,
+        completionPct: totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0,
+        completedModules,
+        totalModules,
       });
     }
     setMemberGroups(memberWithDetails);
@@ -184,39 +214,43 @@ export default function MyGroups() {
               {ownedGroups.map((g) => {
                 const labels = getGroupLabels(g.type as GroupType);
                 return (
-                  <div key={g.id} className="glass-blue p-5 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all" onClick={() => navigate(`/group/${g.id}`)}>
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h4 className="font-heading font-bold text-lg">{g.name}</h4>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">
-                          {labels.group}
-                        </span>
-                      </div>
-                      {!g.is_active && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-heading">Inactive</span>
-                      )}
-                    </div>
-                    {g.description && <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{g.description}</p>}
-                    {g.topics.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {g.topics.slice(0, 3).map((t, i) => (
-                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground font-heading">{t.length > 25 ? t.slice(0, 25) + "…" : t}</span>
-                        ))}
-                        {g.topics.length > 3 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{g.topics.length - 3}</span>}
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {g.memberCount} {labels.members.toLowerCase()}</span>
-                        <span>{g.roadmapCount} roadmap{g.roadmapCount !== 1 ? "s" : ""}</span>
+                  <div key={g.id} className="glass-blue p-5 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all group" onClick={() => navigate(`/group/${g.id}`)}>
+                    {/* Top row */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-heading font-bold text-lg leading-tight group-hover:text-primary transition-colors">{g.name}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">{labels.group}</span>
+                          {!g.is_active && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-destructive/20 text-destructive font-heading">Inactive</span>
+                          )}
+                        </div>
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCopyCode(g.invite_code); }}
-                        className="flex items-center gap-1 text-xs font-mono hover:text-primary transition-colors"
+                        className="flex items-center gap-1 text-xs font-mono glass px-2 py-1 rounded-lg hover:text-primary transition-colors shrink-0"
                       >
                         {copiedCode === g.invite_code ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                         {g.invite_code}
                       </button>
+                    </div>
+
+                    {g.description && <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{g.description}</p>}
+
+                    {/* Topic tags */}
+                    {g.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {g.topics.slice(0, 3).map((t, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-heading">{t.length > 28 ? t.slice(0, 28) + "…" : t}</span>
+                        ))}
+                        {g.topics.length > 3 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{g.topics.length - 3}</span>}
+                      </div>
+                    )}
+
+                    {/* Stats row */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t border-border/30">
+                      <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {g.memberCount} {labels.members.toLowerCase()}</span>
+                      <span className="flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> {g.roadmapCount} roadmap{g.roadmapCount !== 1 ? "s" : ""}</span>
                     </div>
                   </div>
                 );
@@ -233,28 +267,41 @@ export default function MyGroups() {
               {memberGroups.map((m) => {
                 const labels = getGroupLabels(m.group.type as GroupType);
                 return (
-                  <div key={m.id} className="glass-blue p-6 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all aspect-square flex flex-col justify-between" onClick={() => navigate(`/group/${m.group.id}`)}>
-                    <div>
-                      <h4 className="font-heading font-bold text-xl mb-2 break-words">{m.group.name}</h4>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">
-                        {labels.group}
-                      </span>
-                      {m.group.description && <p className="text-sm text-muted-foreground mt-3 mb-3">{m.group.description}</p>}
-                      {m.topics.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-3">
-                          {m.topics.slice(0, 5).map((t, i) => (
-                            <span key={i} className="text-xs px-2 py-1 rounded-full bg-muted/40 text-muted-foreground font-heading">{t}</span>
-                          ))}
-                          {m.topics.length > 5 && <span className="text-xs px-2 py-1 rounded-full bg-muted/40 text-muted-foreground">+{m.topics.length - 5}</span>}
+                  <div key={m.id} className="glass-blue p-5 cursor-pointer hover:ring-1 hover:ring-primary/30 transition-all group" onClick={() => navigate(`/group/${m.group.id}`)}>
+                    {/* Top row: name + progress ring */}
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-heading font-bold text-lg leading-tight group-hover:text-primary transition-colors">{m.group.name}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">{labels.group}</span>
+                          <span className="text-xs text-muted-foreground">by {m.ownerName}</span>
+                        </div>
+                      </div>
+                      {m.roadmapCount > 0 && (
+                        <div className="relative">
+                          <ProgressRing pct={m.completionPct} />
+                          <span className="absolute inset-0 flex items-center justify-center text-xs font-heading font-bold">{m.completionPct}%</span>
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground pt-3 border-t border-border/30">
-                      <div className="flex items-center gap-3">
-                        <span>by {m.ownerName}</span>
-                        <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {m.memberCount}</span>
+
+                    {/* Topic tags */}
+                    {m.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {m.topics.slice(0, 3).map((t, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-heading">{t.length > 28 ? t.slice(0, 28) + "…" : t}</span>
+                        ))}
+                        {m.topics.length > 3 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted/40 text-muted-foreground">+{m.topics.length - 3}</span>}
                       </div>
-                      <span>{m.roadmapCount} roadmap{m.roadmapCount !== 1 ? "s" : ""} assigned</span>
+                    )}
+
+                    {/* Stats row */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t border-border/30">
+                      <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {m.memberCount} {labels.members.toLowerCase()}</span>
+                      <span className="flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> {m.roadmapCount} assigned</span>
+                      {m.totalModules > 0 && (
+                        <span className="flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" /> {m.completedModules}/{m.totalModules} modules</span>
+                      )}
                     </div>
                   </div>
                 );
