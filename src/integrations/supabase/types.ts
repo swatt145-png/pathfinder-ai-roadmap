@@ -79,6 +79,149 @@ export type Database = {
         }
         Relationships: []
       }
+      group_members: {
+        Row: {
+          group_id: string
+          id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_roadmaps: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          group_id: string
+          id: string
+          roadmap_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by: string
+          group_id: string
+          id?: string
+          roadmap_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          group_id?: string
+          id?: string
+          roadmap_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_roadmaps_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_roadmaps_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      groups: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          invite_code: string
+          is_active: boolean
+          name: string
+          owner_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          invite_code: string
+          is_active?: boolean
+          name: string
+          owner_id: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          invite_code?: string
+          is_active?: boolean
+          name?: string
+          owner_id?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      member_group_roadmaps: {
+        Row: {
+          created_at: string
+          group_roadmap_id: string
+          id: string
+          member_id: string
+          roadmap_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_roadmap_id: string
+          id?: string
+          member_id: string
+          roadmap_id: string
+        }
+        Update: {
+          created_at?: string
+          group_roadmap_id?: string
+          id?: string
+          member_id?: string
+          roadmap_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_group_roadmaps_group_roadmap_id_fkey"
+            columns: ["group_roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "group_roadmaps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_group_roadmaps_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           bio: string | null
