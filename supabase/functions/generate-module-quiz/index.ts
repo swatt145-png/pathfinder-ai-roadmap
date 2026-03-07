@@ -1,9 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -16,6 +15,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -33,11 +33,23 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (!checkRateLimit(authUser.id, "generate-module-quiz", 30)) {
+      return new Response(JSON.stringify({ error: "Too many requests. Please wait before generating another quiz." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
-    const { topic, skill_level, learning_goal, module } = await req.json();
+    const body = await req.json();
+    const topic = sanitizePromptInput(body.topic, 200);
+    const skill_level = sanitizePromptInput(body.skill_level, 50);
+    const learning_goal = sanitizePromptInput(body.learning_goal, 50);
+    const module = body.module;
+    if (module) {
+      module.title = sanitizePromptInput(module.title, 200);
+      module.description = sanitizePromptInput(module.description, 500);
+    }
     if (!topic || !module?.title) {
       return new Response(JSON.stringify({ error: "topic and module are required" }), {
         status: 400,

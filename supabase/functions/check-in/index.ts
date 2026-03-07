@@ -1,9 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 function sanitizeControlCharsInJson(raw: string): string {
   let inString = false;
@@ -202,6 +201,7 @@ async function enrichRoadmapYouTube(roadmap: any, apiKey: string): Promise<void>
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -219,7 +219,15 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { roadmap_data, module_id, module_title, self_report, quiz_score, quiz_answers, all_progress, learning_goal } = await req.json();
+    if (!checkRateLimit(authUser.id, "check-in", 60)) {
+      return new Response(JSON.stringify({ error: "Too many requests. Please slow down." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const body = await req.json();
+    const { roadmap_data, module_id, quiz_score, quiz_answers, all_progress } = body;
+    const module_title = sanitizePromptInput(body.module_title, 200);
+    const self_report = sanitizePromptInput(body.self_report, 50);
+    const learning_goal = sanitizePromptInput(body.learning_goal, 50);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");

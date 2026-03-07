@@ -9,10 +9,9 @@ import {
   fetchWithTimeout,
 } from "../_shared/resource-pipeline.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 // ─── Helpers (generate-roadmap specific) ─────────────────────────────────────
 
@@ -410,6 +409,7 @@ function sanitizeRoadmapPlaceholders(roadmap: any): void {
 // ─── Main Handler ────────────────────────────────────────────────────────────
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -426,7 +426,15 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { user_id, topic, skill_level, learning_goal, timeline_weeks, timeline_days, hours_per_day, total_hours: providedTotalHours, hard_deadline, deadline_date, include_weekends, timeline_mode } = await req.json();
+    if (!checkRateLimit(authUser.id, "generate-roadmap", 10)) {
+      return new Response(JSON.stringify({ error: "Too many requests. Please wait before creating another roadmap." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const body = await req.json();
+    const topic = sanitizePromptInput(body.topic, 200);
+    const skill_level = sanitizePromptInput(body.skill_level, 50);
+    const learning_goal = sanitizePromptInput(body.learning_goal, 50);
+    const { user_id, timeline_weeks, timeline_days, hours_per_day, total_hours: providedTotalHours, hard_deadline, deadline_date, include_weekends, timeline_mode } = body;
     const effectiveGoal = learning_goal || "hands_on";
 
     const isHoursOnly = timeline_mode === "hours";

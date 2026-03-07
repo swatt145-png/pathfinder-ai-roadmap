@@ -8,10 +8,9 @@ import {
   fetchWithTimeout,
 } from "../_shared/resource-pipeline.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { sanitizePromptInput } from "../_shared/sanitize.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 function sanitizeControlCharsInJson(raw: string): string {
   let inString = false;
@@ -273,6 +272,7 @@ function redistributeDayRanges(
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -289,7 +289,15 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day, learning_goal, new_topic, new_skill_level } = await req.json();
+    if (!checkRateLimit(authUser.id, "adapt-roadmap", 20)) {
+      return new Response(JSON.stringify({ error: "Too many requests. Please wait before adapting again." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const body = await req.json();
+    const { roadmap_data, all_progress, new_timeline_weeks, new_timeline_days, new_hours_per_day } = body;
+    const learning_goal = sanitizePromptInput(body.learning_goal, 50);
+    const new_topic = sanitizePromptInput(body.new_topic, 200);
+    const new_skill_level = sanitizePromptInput(body.new_skill_level, 50);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
