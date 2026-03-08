@@ -558,12 +558,11 @@ serve(async (req) => {
     const excludedUrls = new Set<string>();
     const excludedDomains = new Set<string>();
     try {
-      const topicKey = normalizeTopicKey(topic);
       const { data: feedbackRows } = await supabaseAdmin
         .from("resource_feedback")
         .select("resource_url")
         .eq("user_id", authUser.id)
-        .eq("topic_key", topicKey)
+        .eq("roadmap_id", roadmap_id)
         .eq("relevant", false);
       for (const row of (feedbackRows || [])) {
         if (!row.resource_url) continue;
