@@ -5,11 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
-import { Loader2, Plus, ArrowLeft, Users, Copy, Check, LogIn, BookOpen, TrendingUp } from "lucide-react";
+import { Loader2, Plus, ArrowLeft, Users, Copy, Check, LogIn, BookOpen, TrendingUp, Send, Mail, X as XIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import JoinGroupModal from "@/components/JoinGroupModal";
+import { ShareInviteModal } from "@/components/ShareInviteModal";
+import { cloneSharedRoadmapsForMember } from "@/components/JoinGroupModal";
 
 interface GroupRow {
   id: string;
@@ -36,6 +38,16 @@ interface EnrichedMemberGroup extends MemberGroupRow {
   completionPct: number;
   completedModules: number;
   totalModules: number;
+}
+
+interface PendingInvite {
+  id: string;
+  group_id: string;
+  sender_id: string;
+  senderName: string;
+  groupName: string;
+  groupType: string;
+  groupDescription: string | null;
 }
 
 function ProgressRing({ pct, size = 48, stroke = 4 }: { pct: number; size?: number; stroke?: number }) {
@@ -65,6 +77,10 @@ export default function MyGroups() {
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [joiningInvite, setJoiningInvite] = useState<string | null>(null);
+  const [dismissingInvite, setDismissingInvite] = useState<string | null>(null);
+  const [shareInviteGroup, setShareInviteGroup] = useState<{ id: string; name: string; invite_code: string } | null>(null);
 
   const fetchGroups = async () => {
     if (!user) return;
@@ -154,6 +170,32 @@ export default function MyGroups() {
       });
     }
     setMemberGroups(memberWithDetails);
+
+    // Fetch pending invites for this user
+    const { data: inviteRows } = await (supabase as any)
+      .from("group_invites")
+      .select("id, group_id, sender_id")
+      .eq("receiver_id", user.id)
+      .eq("status", "pending");
+
+    const invitesWithDetails: PendingInvite[] = [];
+    for (const inv of inviteRows ?? []) {
+      const [{ data: g }, { data: senderProfile }] = await Promise.all([
+        (supabase as any).from("groups").select("name, type, description").eq("id", inv.group_id).single(),
+        supabase.from("profiles").select("display_name").eq("id", inv.sender_id).single(),
+      ]);
+      if (g) {
+        invitesWithDetails.push({
+          ...inv,
+          senderName: senderProfile?.display_name ?? "Unknown",
+          groupName: g.name,
+          groupType: g.type,
+          groupDescription: g.description,
+        });
+      }
+    }
+    setPendingInvites(invitesWithDetails);
+
     setLoading(false);
   };
 
@@ -164,6 +206,45 @@ export default function MyGroups() {
     setCopiedCode(code);
     toast({ title: "Invite code copied!" });
     setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const handleAcceptInvite = async (invite: PendingInvite) => {
+    if (!user) return;
+    setJoiningInvite(invite.id);
+
+    // Insert as group member
+    const { error } = await (supabase as any)
+      .from("group_members")
+      .insert({ group_id: invite.group_id, user_id: user.id, role: "member" });
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      setJoiningInvite(null);
+      return;
+    }
+
+    // Clone shared roadmaps
+    await cloneSharedRoadmapsForMember(user.id, invite.group_id);
+
+    // Update invite status
+    await (supabase as any)
+      .from("group_invites")
+      .update({ status: "accepted" })
+      .eq("id", invite.id);
+
+    toast({ title: `Joined "${invite.groupName}"!` });
+    setJoiningInvite(null);
+    fetchGroups();
+  };
+
+  const handleDismissInvite = async (inviteId: string) => {
+    setDismissingInvite(inviteId);
+    await (supabase as any)
+      .from("group_invites")
+      .update({ status: "dismissed" })
+      .eq("id", inviteId);
+    setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    setDismissingInvite(null);
   };
 
   if (loading) {
@@ -206,6 +287,57 @@ export default function MyGroups() {
           </div>
         </div>
 
+        {/* Pending Invites */}
+        {pendingInvites.length > 0 && (
+          <div className="mb-8">
+            <h3 className="font-heading text-lg font-semibold mb-3 text-muted-foreground flex items-center gap-2">
+              <Mail className="h-4 w-4" /> Pending Invites
+              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">{pendingInvites.length}</span>
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {pendingInvites.map((inv) => {
+                const labels = getGroupLabels(inv.groupType as GroupType);
+                return (
+                  <div key={inv.id} className="glass-strong p-5 border border-primary/20">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-heading font-bold text-lg leading-tight">{inv.groupName}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-heading">{labels.group}</span>
+                          <span className="text-xs text-muted-foreground">from {inv.senderName}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {inv.groupDescription && (
+                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{inv.groupDescription}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleAcceptInvite(inv)}
+                        disabled={joiningInvite === inv.id}
+                        className="flex-1 gradient-primary text-primary-foreground font-heading font-bold"
+                        size="sm"
+                      >
+                        {joiningInvite === inv.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <LogIn className="w-3 h-3 mr-1" />}
+                        Join
+                      </Button>
+                      <Button
+                        onClick={() => handleDismissInvite(inv.id)}
+                        disabled={dismissingInvite === inv.id}
+                        variant="outline"
+                        className="border-border font-heading font-bold"
+                        size="sm"
+                      >
+                        {dismissingInvite === inv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XIcon className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Owned Groups */}
         {ownedGroups.length > 0 && (
           <div className="mb-8">
@@ -226,13 +358,22 @@ export default function MyGroups() {
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleCopyCode(g.invite_code); }}
-                        className="flex items-center gap-1 text-xs font-mono glass px-2 py-1 rounded-lg hover:text-primary transition-colors shrink-0"
-                      >
-                        {copiedCode === g.invite_code ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                        {g.invite_code}
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleCopyCode(g.invite_code); }}
+                          className="flex items-center gap-1 text-xs font-mono glass px-2 py-1 rounded-lg hover:text-primary transition-colors"
+                        >
+                          {copiedCode === g.invite_code ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          {g.invite_code}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShareInviteGroup({ id: g.id, name: g.name, invite_code: g.invite_code }); }}
+                          className="flex items-center justify-center w-7 h-7 rounded-lg glass hover:text-primary transition-colors"
+                          title="Share with connections"
+                        >
+                          <Send className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
 
                     {g.description && <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{g.description}</p>}
@@ -328,6 +469,15 @@ export default function MyGroups() {
 
       <CreateGroupModal open={showCreate} onClose={() => setShowCreate(false)} onCreated={fetchGroups} />
       <JoinGroupModal open={showJoin} onClose={() => setShowJoin(false)} onJoined={fetchGroups} />
+      {shareInviteGroup && (
+        <ShareInviteModal
+          open={!!shareInviteGroup}
+          onClose={() => setShareInviteGroup(null)}
+          groupId={shareInviteGroup.id}
+          groupName={shareInviteGroup.name}
+          inviteCode={shareInviteGroup.invite_code}
+        />
+      )}
     </>
   );
 }

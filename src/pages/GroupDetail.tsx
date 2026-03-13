@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
 import { generateInviteCode } from "@/lib/inviteCode";
+import { ShareInviteModal } from "@/components/ShareInviteModal";
 
 const MAX_GROUP_ROADMAPS = 5;
 
@@ -85,6 +86,7 @@ export default function GroupDetail() {
   const [addingRoadmap, setAddingRoadmap] = useState<string | null>(null);
   const [sharingRoadmap, setSharingRoadmap] = useState<string | null>(null);
   const [removeRoadmapConfirm, setRemoveRoadmapConfirm] = useState<string | null>(null);
+  const [showShareInvite, setShowShareInvite] = useState(false);
   // Member's cloned roadmap IDs (group_roadmap_id → cloned roadmap_id)
   const [memberRoadmapMap, setMemberRoadmapMap] = useState<MemberRoadmapMap>({});
   const [memberStats, setMemberStats] = useState<MemberStats | null>(null);
@@ -402,6 +404,9 @@ export default function GroupDetail() {
               <Button onClick={handleRegenerateCode} variant="ghost" size="sm" className="text-xs text-muted-foreground">
                 <RefreshCw className="h-3 w-3 mr-1" /> Regenerate
               </Button>
+              <Button onClick={() => setShowShareInvite(true)} variant="outline" size="sm" className="border-border text-xs">
+                <Send className="h-3 w-3 mr-1" /> Share with Connections
+              </Button>
             </div>
           </div>
         )}
@@ -691,6 +696,16 @@ export default function GroupDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {group && (
+        <ShareInviteModal
+          open={showShareInvite}
+          onClose={() => setShowShareInvite(false)}
+          groupId={group.id}
+          groupName={group.name}
+          inviteCode={group.invite_code}
+        />
+      )}
     </>
   );
 }

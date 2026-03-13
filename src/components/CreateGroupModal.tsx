@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { X, Loader2, Copy, Check } from "lucide-react";
+import { X, Loader2, Copy, Check, Send } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { generateInviteCode } from "@/lib/inviteCode";
 import type { GroupType } from "@/lib/groupLabels";
+import { ShareInviteModal } from "@/components/ShareInviteModal";
 
 interface Props {
   open: boolean;
@@ -24,6 +25,8 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [createdName, setCreatedName] = useState("");
   const [copied, setCopied] = useState(false);
+  const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
+  const [showShareInvite, setShowShareInvite] = useState(false);
 
   const role = profile?.role ?? "learner";
 
@@ -34,19 +37,20 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
     setCreating(true);
     const inviteCode = generateInviteCode();
 
-    const { error } = await (supabase as any).from("groups").insert({
+    const { data: inserted, error } = await (supabase as any).from("groups").insert({
       owner_id: user.id,
       name: name.trim(),
       description: description.trim() || null,
       type,
       invite_code: inviteCode,
-    });
+    }).select("id").single();
 
     setCreating(false);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
+    setCreatedGroupId(inserted?.id ?? null);
     setCreatedCode(inviteCode);
     setCreatedName(name.trim());
     onCreated();
@@ -64,7 +68,9 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
     setType("study_group");
     setCreatedCode(null);
     setCreatedName("");
+    setCreatedGroupId(null);
     setCopied(false);
+    setShowShareInvite(false);
     onClose();
   };
 
@@ -100,6 +106,15 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
                 <Copy className="mr-2 h-4 w-4" /> Copy Link
               </Button>
             </div>
+            {createdGroupId && (
+              <Button
+                onClick={() => setShowShareInvite(true)}
+                variant="outline"
+                className="w-full border-border font-heading font-bold"
+              >
+                <Send className="mr-2 h-4 w-4" /> Share with Connections
+              </Button>
+            )}
             <Button onClick={handleClose} variant="ghost" className="w-full">Done</Button>
           </div>
         ) : (
@@ -154,6 +169,16 @@ export default function CreateGroupModal({ open, onClose, onCreated }: Props) {
           </div>
         )}
       </div>
+
+      {createdGroupId && createdCode && (
+        <ShareInviteModal
+          open={showShareInvite}
+          onClose={() => setShowShareInvite(false)}
+          groupId={createdGroupId}
+          groupName={createdName}
+          inviteCode={createdCode}
+        />
+      )}
     </div>
   );
 }
