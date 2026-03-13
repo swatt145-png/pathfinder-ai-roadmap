@@ -44,7 +44,7 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
       : 0);
   const daysRemaining = Math.max(1, totalRoadmapDays - daysCompleted);
 
-  const [timelineUnit, setTimelineUnit] = useState<"days" | "weeks">("days");
+  const [timelineUnit, setTimelineUnit] = useState<"hours" | "days" | "weeks">("days");
   const [newValue, setNewValue] = useState(daysRemaining);
   const [newHours, setNewHours] = useState(roadmapData.hours_per_day);
   const [newTopic, setNewTopic] = useState(roadmapData.topic || "");
@@ -59,18 +59,33 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
   const goalChanged = newGoal !== (learningGoal || "hands_on");
   const skillChanged = newSkillLevel !== (roadmapData.skill_level || "beginner");
 
-  const totalDays = timelineUnit === "weeks" ? newValue * 7 : newValue;
+  const totalDays = timelineUnit === "weeks" ? newValue * 7 : timelineUnit === "hours" ? Math.max(1, Math.ceil(newValue / roadmapData.hours_per_day)) : newValue;
+  const effectiveHours = timelineUnit === "hours" ? newValue : newHours;
 
   const handleRecalculate = async () => {
     setLoading(true);
     setError(null);
     try {
+      // Strip resources and quiz data to reduce payload size
+      const strippedRoadmapData = {
+        ...roadmapData,
+        modules: roadmapData.modules.map((m) => ({
+          ...m,
+          resources: [],
+          quiz: [],
+        })),
+      };
+      // Strip quiz_answers from progress to reduce payload
+      const strippedProgress = Object.values(progressMap).map(({ quiz_answers, ...rest }) => rest);
+
+      const hrsPerDay = timelineUnit === "hours" ? Math.max(0.5, newValue / totalDays) : newHours;
+
       const { data, error: fnErr } = await supabase.functions.invoke("adapt-roadmap", {
         body: {
-          roadmap_data: roadmapData,
-          all_progress: Object.values(progressMap),
+          roadmap_data: strippedRoadmapData,
+          all_progress: strippedProgress,
           new_timeline_days: totalDays,
-          new_hours_per_day: newHours,
+          new_hours_per_day: hrsPerDay,
           adjustment_type: "manual",
           learning_goal: newGoal,
           ...(topicChanged ? { new_topic: newTopic.trim() } : {}),
@@ -188,7 +203,13 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
             {/* Timeline unit toggle */}
             <div>
               <Label className="text-sm text-muted-foreground mb-2 block">Timeline</Label>
-              <div className="grid grid-cols-2 gap-1 p-1 glass rounded-xl mb-3">
+              <div className="grid grid-cols-3 gap-1 p-1 glass rounded-xl mb-3">
+                <button
+                  onClick={() => { setTimelineUnit("hours"); setNewValue(Math.max(1, totalDays * newHours)); }}
+                  className={`py-2 px-3 rounded-lg text-sm font-heading font-bold transition-all ${timelineUnit === "hours" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Hours
+                </button>
                 <button
                   onClick={() => { setTimelineUnit("days"); setNewValue(totalDays); }}
                   className={`py-2 px-3 rounded-lg text-sm font-heading font-bold transition-all ${timelineUnit === "days" ? "gradient-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -204,26 +225,28 @@ export function AdaptPlanModal({ roadmapData, progressMap, roadmapId, learningGo
               </div>
 
               <Label className="text-sm text-muted-foreground mb-2 block">
-                Remaining target {timelineUnit === "days" ? "days" : "weeks"}: <span className="text-primary font-heading font-bold">{newValue}</span>
+                Remaining target {timelineUnit}: <span className="text-primary font-heading font-bold">{newValue}</span>
               </Label>
               <input
                 type="range"
                 min={1}
-                max={timelineUnit === "days" ? 90 : 12}
+                max={timelineUnit === "hours" ? 30 : timelineUnit === "days" ? 40 : 10}
                 value={newValue}
                 onChange={(e) => setNewValue(Number(e.target.value))}
                 className="w-full accent-primary"
               />
             </div>
-            <div>
-              <Label className="text-sm text-muted-foreground mb-2 block">
-                How many hours a day can you study? <span className="text-primary font-heading font-bold">{newHours}</span>
-              </Label>
-              <input type="range" min={0.5} max={8} step={0.5} value={newHours} onChange={(e) => setNewHours(Number(e.target.value))} className="w-full accent-primary" />
-              <p className="text-xs text-muted-foreground mt-2">
-                Total target hours: <span className="text-primary font-heading font-bold">{(totalDays * newHours).toFixed(1)}h</span>
-              </p>
-            </div>
+            {timelineUnit !== "hours" && (
+              <div>
+                <Label className="text-sm text-muted-foreground mb-2 block">
+                  How many hours a day can you study? <span className="text-primary font-heading font-bold">{newHours}</span>
+                </Label>
+                <input type="range" min={0.5} max={8} step={0.5} value={newHours} onChange={(e) => setNewHours(Number(e.target.value))} className="w-full accent-primary" />
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Total target hours: <span className="text-primary font-heading font-bold">{timelineUnit === "hours" ? newValue : (totalDays * newHours).toFixed(1)}h</span>
+            </p>
 
             {error && <p className="text-destructive text-sm">{error}</p>}
 
