@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, ArrowRight, RotateCcw, ChevronLeft } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import type { RoadmapData } from "@/lib/types";
 
 interface FlashCard {
@@ -208,6 +209,10 @@ export default function Flashcards() {
         <AppBar />
         <WavyBackground />
         <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-6xl mx-auto animate-fade-in">
+          <Breadcrumbs items={[
+            { label: "Flashcards", href: "/flashcards" },
+            { label: selectedRoadmap.topic },
+          ]} />
           <div className="flex items-center gap-3 mb-8">
             <Button variant="ghost" size="icon" onClick={() => { setSelectedRoadmap(null); setGeneratingQuizzes(false); }}>
               <ArrowLeft className="h-5 w-5" />
@@ -290,12 +295,8 @@ export default function Flashcards() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-6xl mx-auto animate-fade-in">
-        <div className="flex items-center gap-3 mb-8">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h2 className="font-heading text-2xl md:text-3xl font-bold">Flashcards</h2>
-        </div>
+        <Breadcrumbs items={[{ label: "Flashcards" }]} />
+        <h2 className="font-heading text-2xl md:text-3xl font-bold mb-8">Flashcards</h2>
 
         {roadmaps.length === 0 ? (
           <div className="glass-strong p-8 text-center">

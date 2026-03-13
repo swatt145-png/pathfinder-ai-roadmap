@@ -15,12 +15,12 @@ import {
   Globe,
   Star,
   BookOpen,
-  ArrowLeft,
   Calendar,
   Send,
   Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import type { RoadmapData } from "@/lib/types";
 
 interface ProfileData {
@@ -208,17 +208,10 @@ export default function PublicProfile() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-3xl mx-auto animate-fade-in">
-        {/* Back button */}
-        <div className="mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/community")}
-            className="text-muted-foreground hover:text-foreground font-heading"
-          >
-            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Community
-          </Button>
-        </div>
+        <Breadcrumbs items={[
+          { label: "Community", href: "/community" },
+          { label: profile.display_name || "User" },
+        ]} />
 
         {/* Profile header */}
         <div className="glass-strong p-6 mb-6">

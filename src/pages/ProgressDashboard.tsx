@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Users, BarChart3, Clock, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Users, BarChart3, Clock, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
 
 interface MemberProgress {
@@ -190,21 +191,12 @@ export default function ProgressDashboard() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate(`/group/${groupId}`)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <p className="text-xs text-muted-foreground">
-              <button onClick={() => navigate("/groups")} className="hover:text-foreground">Groups</button>
-              {" > "}
-              <button onClick={() => navigate(`/group/${groupId}`)} className="hover:text-foreground">{groupName}</button>
-              {" > "} Progress
-            </p>
-            <h2 className="font-heading text-xl md:text-2xl font-bold">{roadmapTopic} Progress</h2>
-          </div>
-        </div>
+        <Breadcrumbs items={[
+          { label: "My Groups", href: "/groups" },
+          { label: groupName, href: `/group/${groupId}` },
+          { label: `${roadmapTopic} Progress` },
+        ]} />
+        <h2 className="font-heading text-xl md:text-2xl font-bold mb-6">{roadmapTopic} Progress</h2>
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

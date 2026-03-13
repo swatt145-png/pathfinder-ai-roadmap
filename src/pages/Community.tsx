@@ -7,6 +7,7 @@ import { UserCard } from "@/components/community/UserCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search, Users, UserCheck, Bell, Check } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -199,6 +200,7 @@ export default function Community() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
+        <Breadcrumbs items={[{ label: "Community" }]} />
         <div className="flex items-center gap-3 mb-6">
           <Users className="h-7 w-7 text-primary" />
           <h2 className="font-heading text-2xl md:text-3xl font-bold">

@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Send, X } from "lucide-react";
+import { Loader2, Send, X, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Connection {
@@ -85,6 +84,17 @@ export function ShareInviteModal({ open, onClose, groupId, groupName, inviteCode
     });
   };
 
+  const selectableConnections = connections.filter((c) => !c.disabledReason);
+  const allSelected = selectableConnections.length > 0 && selectableConnections.every((c) => selected.has(c.userId));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(selectableConnections.map((c) => c.userId)));
+    }
+  };
+
   const handleSend = async () => {
     if (!user || selected.size === 0) return;
     setSending(true);
@@ -107,8 +117,6 @@ export function ShareInviteModal({ open, onClose, groupId, groupName, inviteCode
   };
 
   if (!open) return null;
-
-  const selectableCount = connections.filter((c) => !c.disabledReason).length;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
@@ -137,37 +145,58 @@ export function ShareInviteModal({ open, onClose, groupId, groupName, inviteCode
           <p className="text-muted-foreground text-center py-6">
             No connections yet. Connect with other learners first!
           </p>
-        ) : selectableCount === 0 ? (
+        ) : selectableConnections.length === 0 ? (
           <p className="text-muted-foreground text-center py-6">
             All your connections are already members or have pending invites.
           </p>
         ) : (
           <>
+            {/* Select All */}
+            <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/10 cursor-pointer mb-1">
+              <span
+                onClick={toggleAll}
+                className={`w-4 h-4 rounded-[3px] border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                  allSelected ? "bg-primary border-primary" : "border-muted-foreground/40"
+                }`}
+              >
+                {allSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+              </span>
+              <span className="font-heading text-sm font-semibold">Select All ({selectableConnections.length})</span>
+            </label>
+
             <div className="max-h-72 overflow-y-auto mb-4">
               <div className="space-y-1">
-                {connections.map((c) => (
-                  <label
-                    key={c.userId}
-                    className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
-                      c.disabledReason ? "opacity-50 cursor-not-allowed" : "hover:bg-accent/10 cursor-pointer"
-                    }`}
-                  >
-                    <Checkbox
-                      checked={selected.has(c.userId)}
-                      onCheckedChange={() => !c.disabledReason && toggle(c.userId)}
-                      disabled={!!c.disabledReason}
-                    />
-                    <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-heading font-bold text-primary-foreground shrink-0">
-                      {(c.displayName[0] ?? "U").toUpperCase()}
-                    </div>
-                    <div>
-                      <span className="font-heading text-sm">{c.displayName}</span>
-                      {c.disabledReason && (
-                        <p className="text-xs text-muted-foreground">{c.disabledReason}</p>
-                      )}
-                    </div>
-                  </label>
-                ))}
+                {connections.map((c) => {
+                  const isChecked = selected.has(c.userId);
+                  const disabled = !!c.disabledReason;
+                  return (
+                    <label
+                      key={c.userId}
+                      className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
+                        disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-accent/10 cursor-pointer"
+                      }`}
+                    >
+                      <span
+                        onClick={(e) => { if (!disabled) { e.preventDefault(); toggle(c.userId); } }}
+                        className={`w-4 h-4 rounded-[3px] border-2 flex items-center justify-center shrink-0 transition-colors ${
+                          disabled ? "border-muted-foreground/20 cursor-not-allowed" :
+                          isChecked ? "bg-primary border-primary cursor-pointer" : "border-muted-foreground/40 cursor-pointer"
+                        }`}
+                      >
+                        {isChecked && <Check className="h-3 w-3 text-primary-foreground" />}
+                      </span>
+                      <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-heading font-bold text-primary-foreground shrink-0">
+                        {(c.displayName[0] ?? "U").toUpperCase()}
+                      </div>
+                      <div>
+                        <span className="font-heading text-sm">{c.displayName}</span>
+                        {c.disabledReason && (
+                          <p className="text-xs text-muted-foreground">{c.disabledReason}</p>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 

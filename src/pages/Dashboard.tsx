@@ -11,7 +11,8 @@ import { ModuleCompletionActionsModal } from "@/components/ModuleCompletionActio
 import { RoadmapReviewModal } from "@/components/RoadmapReviewModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, ArrowLeft, BookOpenCheck, Code2, Zap, GraduationCap, Share2, Bell, Check, X, Users } from "lucide-react";
+import { Loader2, Flame, Clock, BookOpen, Settings2, ArrowRight, Sparkles, BookOpenCheck, Code2, Zap, GraduationCap, Share2, Bell, Check, X, Users } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ShareRoadmapModal } from "@/components/ShareRoadmapModal";
 import type { RoadmapData, ModuleProgress, Module, AdaptationResult } from "@/lib/types";
 
@@ -627,13 +628,12 @@ export default function Dashboard() {
         {/* Main content */}
         <div className="w-full">
         {/* Summary Card */}
+        <Breadcrumbs items={[
+          { label: "My Roadmaps", href: "/my-roadmaps" },
+          { label: roadmapData.topic },
+        ]} />
         <div className="glass-blue p-6 mb-6 animate-fade-in">
-          <div className="flex items-center gap-3 mb-1">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/my-roadmaps")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h2 className="font-heading text-xl md:text-2xl font-bold">{roadmapData.topic}</h2>
-          </div>
+          <h2 className="font-heading text-xl md:text-2xl font-bold mb-1">{roadmapData.topic}</h2>
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
             {roadmap?.learning_goal && (() => {

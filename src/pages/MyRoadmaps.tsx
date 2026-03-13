@@ -6,7 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, ArrowRight, Archive, ArrowLeft, Share2, Users } from "lucide-react";
+import { Loader2, Plus, ArrowRight, Archive, Share2, Users } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import type { RoadmapData } from "@/lib/types";
 
 interface RoadmapRow {
@@ -225,15 +226,11 @@ export default function MyRoadmaps() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
+        <Breadcrumbs items={[{ label: showArchived ? "Archived Roadmaps" : "My Roadmaps" }]} />
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h2 className="font-heading text-2xl md:text-3xl font-bold">
-              {showArchived ? "Archived Roadmaps" : "My Roadmaps"}
-            </h2>
-          </div>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold">
+            {showArchived ? "Archived Roadmaps" : "My Roadmaps"}
+          </h2>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"

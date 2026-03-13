@@ -6,7 +6,8 @@ import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Copy, Check, Users, Trash2, BarChart3, RefreshCw, LogOut, Save, Send, ChevronDown, CheckCircle, ExternalLink, BookOpen, TrendingUp, Target } from "lucide-react";
+import { Loader2, Copy, Check, Users, Trash2, BarChart3, RefreshCw, LogOut, Save, Send, ChevronDown, CheckCircle, ExternalLink, BookOpen, TrendingUp, Target } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
@@ -352,10 +353,11 @@ export default function GroupDetail() {
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-4xl mx-auto animate-fade-in">
         {/* Header */}
+        <Breadcrumbs items={[
+          { label: "My Groups", href: "/groups" },
+          { label: group.name },
+        ]} />
         <div className="flex items-center gap-3 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/groups")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-heading text-2xl md:text-3xl font-bold">{group.name}</h2>

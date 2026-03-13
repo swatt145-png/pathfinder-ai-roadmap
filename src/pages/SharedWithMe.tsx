@@ -5,7 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Share2, Check, X, Send, Bell } from "lucide-react";
+import { Loader2, Share2, Check, X, Send, Bell } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { useToast } from "@/hooks/use-toast";
 import type { RoadmapData } from "@/lib/types";
 
@@ -297,10 +298,8 @@ export default function SharedWithMe() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
+        <Breadcrumbs items={[{ label: "Shared With Me" }]} />
         <div className="flex items-center gap-3 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/my-roadmaps")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
           <Share2 className="h-6 w-6 text-primary" />
           <h2 className="font-heading text-2xl md:text-3xl font-bold">Shared Roadmaps</h2>
         </div>

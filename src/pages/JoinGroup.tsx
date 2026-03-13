@@ -6,6 +6,7 @@ import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
 import { Loader2, Users, CheckCircle } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
 import { cloneSharedRoadmapsForMember } from "@/components/JoinGroupModal";
@@ -120,7 +121,11 @@ export default function JoinGroup() {
     <>
       <AppBar />
       <WavyBackground />
-      <div className="min-h-screen pt-20 pb-10 px-4 flex items-center justify-center">
+      <div className="min-h-screen pt-20 pb-10 px-4">
+        <div className="max-w-5xl mx-auto">
+          <Breadcrumbs items={[{ label: "Join Group" }]} />
+        </div>
+        <div className="flex items-center justify-center" style={{ minHeight: "calc(100vh - 12rem)" }}>
         <div className="glass-strong p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 rounded-full gradient-primary flex items-center justify-center mx-auto mb-4">
             <Users className="h-8 w-8 text-primary-foreground" />
@@ -167,6 +172,7 @@ export default function JoinGroup() {
               {joining ? "Joining..." : `Join ${labels.group}`}
             </Button>
           )}
+        </div>
         </div>
       </div>
     </>

@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import WavyBackground from "@/components/WavyBackground";
 import { Button } from "@/components/ui/button";
-import { Loader2, Plus, ArrowLeft, Users, Copy, Check, LogIn, BookOpen, TrendingUp, Send, Mail, X as XIcon } from "lucide-react";
+import { Loader2, Plus, Users, Copy, Check, LogIn, BookOpen, TrendingUp, Send, Mail, X as XIcon } from "lucide-react";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { toast } from "@/hooks/use-toast";
 import { getGroupLabels, type GroupType } from "@/lib/groupLabels";
 import CreateGroupModal from "@/components/CreateGroupModal";
@@ -263,13 +264,9 @@ export default function MyGroups() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
+        <Breadcrumbs items={[{ label: "My Groups" }]} />
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/home")}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <h2 className="font-heading text-2xl md:text-3xl font-bold">My Groups</h2>
-          </div>
+          <h2 className="font-heading text-2xl md:text-3xl font-bold">My Groups</h2>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
