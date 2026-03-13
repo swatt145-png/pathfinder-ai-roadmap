@@ -88,6 +88,8 @@ export default function GroupDetail() {
   const [sharingRoadmap, setSharingRoadmap] = useState<string | null>(null);
   const [removeRoadmapConfirm, setRemoveRoadmapConfirm] = useState<string | null>(null);
   const [showShareInvite, setShowShareInvite] = useState(false);
+  const [deleteGroupConfirm, setDeleteGroupConfirm] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
   // Member's cloned roadmap IDs (group_roadmap_id → cloned roadmap_id)
   const [memberRoadmapMap, setMemberRoadmapMap] = useState<MemberRoadmapMap>({});
   const [memberStats, setMemberStats] = useState<MemberStats | null>(null);
@@ -243,6 +245,15 @@ export default function GroupDetail() {
     fetchGroup();
   };
 
+  const handleDeleteGroup = async () => {
+    if (!group) return;
+    setDeletingGroup(true);
+    await (supabase as any).from("groups").delete().eq("id", group.id);
+    setDeletingGroup(false);
+    toast({ title: "Group deleted" });
+    navigate("/groups");
+  };
+
   const handleRegenerateCode = async () => {
     if (!group) return;
     const newCode = generateInviteCode();
@@ -390,6 +401,9 @@ export default function GroupDetail() {
               </Button>
               <Button onClick={handleToggleActive} variant="outline" size="sm" className="border-border">
                 {group.is_active ? "Deactivate" : "Reactivate"}
+              </Button>
+              <Button onClick={() => setDeleteGroupConfirm(true)} variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                <Trash2 className="w-3 h-3 mr-1" /> Delete Group
               </Button>
             </div>
 
@@ -695,6 +709,23 @@ export default function GroupDetail() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setLeaveConfirm(false)} className="border-border">Cancel</Button>
             <Button onClick={handleLeaveGroup} className="bg-destructive text-destructive-foreground font-heading font-bold">Leave</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete group confirm */}
+      <Dialog open={deleteGroupConfirm} onOpenChange={setDeleteGroupConfirm}>
+        <DialogContent className="glass-strong border-border">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Delete this group?</DialogTitle>
+            <DialogDescription>This will permanently delete the group, remove all members, and unlink all roadmaps. Members will keep their cloned roadmaps. This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteGroupConfirm(false)} className="border-border">Cancel</Button>
+            <Button onClick={handleDeleteGroup} disabled={deletingGroup} className="bg-destructive text-destructive-foreground font-heading font-bold">
+              {deletingGroup ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Trash2 className="w-3 h-3 mr-1" />}
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
