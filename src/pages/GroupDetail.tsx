@@ -585,7 +585,8 @@ export default function GroupDetail() {
               }
 
               return visibleRoadmaps.map((ar) => {
-                const isShared = ar.sharedCount > 0;
+                const unsharedCount = members.length - ar.sharedCount;
+                const allShared = unsharedCount <= 0;
                 const memberClonedId = memberRoadmapMap[ar.id];
 
                 return (
@@ -607,7 +608,7 @@ export default function GroupDetail() {
                           {isOwner ? (
                             <>
                               Added {new Date(ar.assigned_at).toLocaleDateString()}
-                              {isShared && ` · Shared with ${ar.sharedCount} ${ar.sharedCount === 1 ? labels.member.toLowerCase() : labels.members.toLowerCase()}`}
+                              {ar.sharedCount > 0 && ` · Shared with ${ar.sharedCount} ${ar.sharedCount === 1 ? labels.member.toLowerCase() : labels.members.toLowerCase()}`}
                             </>
                           ) : (
                             "Click to view modules and track progress"
@@ -616,9 +617,9 @@ export default function GroupDetail() {
                       </div>
                       {isOwner && (
                         <div className="flex items-center gap-1 shrink-0">
-                          {isShared ? (
+                          {allShared ? (
                             <span className="flex items-center gap-1 text-xs font-heading font-bold text-success px-2 py-1">
-                              <CheckCircle className="h-3.5 w-3.5" /> Shared
+                              <CheckCircle className="h-3.5 w-3.5" /> All Shared
                             </span>
                           ) : (
                             <Button
@@ -632,7 +633,7 @@ export default function GroupDetail() {
                               ) : (
                                 <Send className="mr-1 h-3 w-3" />
                               )}
-                              Share
+                              {ar.sharedCount > 0 ? `Share (${unsharedCount} new)` : "Share"}
                             </Button>
                           )}
                           <Button
