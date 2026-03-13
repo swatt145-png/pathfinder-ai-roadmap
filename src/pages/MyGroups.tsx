@@ -49,6 +49,7 @@ interface PendingInvite {
   groupName: string;
   groupType: string;
   groupDescription: string | null;
+  topics: string[];
 }
 
 function ProgressRing({ pct, size = 48, stroke = 4 }: { pct: number; size?: number; stroke?: number }) {
@@ -181,10 +182,16 @@ export default function MyGroups() {
 
     const invitesWithDetails: PendingInvite[] = [];
     for (const inv of inviteRows ?? []) {
-      const [{ data: g }, { data: senderProfile }] = await Promise.all([
+      const [{ data: g }, { data: senderProfile }, { data: grRows }] = await Promise.all([
         (supabase as any).from("groups").select("name, type, description").eq("id", inv.group_id).single(),
         supabase.from("profiles").select("display_name").eq("id", inv.sender_id).single(),
+        (supabase as any).from("group_roadmaps").select("roadmap_id").eq("group_id", inv.group_id),
       ]);
+      const topics: string[] = [];
+      for (const gr of grRows ?? []) {
+        const { data: rm } = await supabase.from("roadmaps").select("topic").eq("id", gr.roadmap_id).single();
+        if (rm?.topic) topics.push(rm.topic);
+      }
       if (g) {
         invitesWithDetails.push({
           ...inv,
@@ -192,6 +199,7 @@ export default function MyGroups() {
           groupName: g.name,
           groupType: g.type,
           groupDescription: g.description,
+          topics,
         });
       }
     }
@@ -307,6 +315,14 @@ export default function MyGroups() {
                     </div>
                     {inv.groupDescription && (
                       <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{inv.groupDescription}</p>
+                    )}
+                    {inv.topics.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                        {inv.topics.map((t, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-heading">{t}</span>
+                        ))}
+                      </div>
                     )}
                     <div className="flex gap-2">
                       <Button
