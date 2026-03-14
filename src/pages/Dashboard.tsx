@@ -635,7 +635,9 @@ export default function Dashboard() {
         <div className="glass-blue p-6 mb-6 animate-fade-in">
           <h2 className="font-heading text-xl md:text-2xl font-bold mb-1">{roadmapData.topic}</h2>
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary">{roadmapData.skill_level}</span>
+            {(roadmapData.skill_level || roadmap?.skill_level) && (
+              <span className="px-2 py-0.5 text-sm font-heading rounded-full bg-primary/20 text-primary capitalize">{roadmapData.skill_level || roadmap?.skill_level}</span>
+            )}
             {roadmap?.learning_goal && (() => {
               const goalMap: Record<string, { icon: React.ElementType; label: string }> = {
                 conceptual: { icon: BookOpenCheck, label: "Conceptual" },
