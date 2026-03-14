@@ -445,9 +445,11 @@ Return ONLY valid JSON:
 
     const moduleCount = roadmap_data.modules?.length || 0;
     const aiTimeoutMs = Math.min(120000, 45000 + Math.max(0, moduleCount - 6) * 8000);
-    const response = await callLLM(
-      "google/gemini-3-pro-preview",
-      [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+    const messages = [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }];
+
+    let response = await callLLM(
+      "google/gemini-2.5-flash",
+      messages,
       LOVABLE_API_KEY,
       GEMINI_API_KEY,
       aiTimeoutMs,
@@ -456,7 +458,9 @@ Return ONLY valid JSON:
     if (!response.ok) {
       if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       if (response.status === 402) return new Response(JSON.stringify({ error: "Usage limit reached" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error("AI call failed");
+      const errBody = await response.text().catch(() => "");
+      console.error(`AI call failed: status=${response.status} body=${errBody}`);
+      throw new Error(`AI call failed (${response.status})`);
     }
 
     const data = await response.json();

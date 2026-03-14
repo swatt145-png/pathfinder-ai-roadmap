@@ -17,7 +17,7 @@ import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 const FAST_MODE_MAX_HOURS = 40;
 const FAST_MODE_MAX_MODULES = 8;
-const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-3-pro-preview";
+const ROADMAP_MODEL_AGENT1 = Deno.env.get("ROADMAP_MODEL_AGENT1") || "google/gemini-2.5-flash";
 
 function extractJsonObject(raw: string): string | null {
   if (!raw) return null;
