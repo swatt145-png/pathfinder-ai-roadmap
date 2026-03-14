@@ -16,6 +16,7 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signInAsGuest: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   isGuest: boolean;
   isEducator: boolean;
   isManager: boolean;
@@ -134,12 +135,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshProfile = async () => {
+    if (user) await fetchProfile(user.id);
+  };
+
   const isGuest = !!user && !user.email;
   const isEducator = profile?.role === 'educator';
   const isManager = profile?.role === 'manager';
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signInAsGuest, signOut, isGuest, isEducator, isManager }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signInAsGuest, signOut, refreshProfile, isGuest, isEducator, isManager }}>
       {children}
     </AuthContext.Provider>
   );

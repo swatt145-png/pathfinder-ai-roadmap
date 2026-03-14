@@ -19,7 +19,7 @@ const PASSWORD_RULES = [
 ];
 
 export default function Profile() {
-  const { user, profile, isGuest } = useAuth();
+  const { user, profile, isGuest, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
@@ -67,6 +67,7 @@ export default function Profile() {
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+      await refreshProfile();
       toast({ title: "Profile updated", description: "Your changes have been saved." });
     }
   };
