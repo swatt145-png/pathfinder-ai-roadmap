@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import WavyBackground from "@/components/WavyBackground";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
@@ -46,6 +46,7 @@ interface GroupRoadmapRow {
 export default function MyRoadmaps() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [roadmaps, setRoadmaps] = useState<RoadmapRow[]>([]);
   const [archivedRoadmaps, setArchivedRoadmaps] = useState<RoadmapRow[]>([]);
   const [sharedCount, setSharedCount] = useState(0);
@@ -56,6 +57,9 @@ export default function MyRoadmaps() {
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [groupAssignments, setGroupAssignments] = useState<Record<string, GroupAssignment>>({});
   const [groupRoadmaps, setGroupRoadmaps] = useState<GroupRoadmapRow[]>([]);
+
+  // Reset archived view when navigating to this page (e.g., via AppBar icon or breadcrumb)
+  useEffect(() => { setShowArchived(false); }, [location.key]);
 
   const fetchRoadmaps = async () => {
     if (!user) return;
