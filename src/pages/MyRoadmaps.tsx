@@ -226,7 +226,7 @@ export default function MyRoadmaps() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
-        <Breadcrumbs items={[{ label: showArchived ? "Archived Roadmaps" : "My Roadmaps" }]} />
+        <Breadcrumbs items={showArchived ? [{ label: "My Roadmaps", href: "/my-roadmaps" }, { label: "Archived Roadmaps" }] : [{ label: "My Roadmaps" }]} />
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-heading text-2xl md:text-3xl font-bold">
             {showArchived ? "Archived Roadmaps" : "My Roadmaps"}
