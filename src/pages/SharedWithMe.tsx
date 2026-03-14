@@ -298,7 +298,7 @@ export default function SharedWithMe() {
       <AppBar />
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
-        <Breadcrumbs items={[{ label: "Shared With Me" }]} />
+        <Breadcrumbs items={[{ label: "My Roadmaps", href: "/my-roadmaps" }, { label: "Shared With Me" }]} />
         <div className="flex items-center gap-3 mb-6">
           <Share2 className="h-6 w-6 text-primary" />
           <h2 className="font-heading text-2xl md:text-3xl font-bold">Shared Roadmaps</h2>
