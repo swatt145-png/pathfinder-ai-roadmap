@@ -958,7 +958,6 @@ export default function Dashboard() {
           result={adaptationNotif}
           currentRoadmap={roadmapData}
           onAccept={() => handleAcceptCheckInAdaptation(false)}
-          onAcceptNoScheduleChange={() => handleAcceptCheckInAdaptation(true)}
           onKeepCurrent={handleKeepCurrentRoadmap}
           saving={applyingAdaptation}
         />
@@ -977,13 +976,6 @@ export default function Dashboard() {
             setCompletionActions(null);
             if (suggested?.updated_roadmap) {
               handleAcceptCheckInAdaptation(false, suggested);
-            }
-          }}
-          onAcceptNoScheduleChange={() => {
-            const suggested = completionActions.suggestedAdaptation;
-            setCompletionActions(null);
-            if (suggested?.updated_roadmap) {
-              handleAcceptCheckInAdaptation(true, suggested);
             }
           }}
           onClose={() => setCompletionActions(null)}

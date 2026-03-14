@@ -10,7 +10,6 @@ interface Props {
   onProceedNext: () => void;
   onReturnToRoadmap: () => void;
   onAcceptAdaptation: () => void;
-  onAcceptNoScheduleChange: () => void;
   onClose: () => void;
 }
 
@@ -22,7 +21,6 @@ export function ModuleCompletionActionsModal({
   onProceedNext,
   onReturnToRoadmap,
   onAcceptAdaptation,
-  onAcceptNoScheduleChange,
   onClose,
 }: Props) {
   return (
@@ -55,14 +53,6 @@ export function ModuleCompletionActionsModal({
                 className="w-full gradient-primary text-primary-foreground font-heading font-bold"
               >
                 Accept Update
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onAcceptNoScheduleChange}
-                className="w-full border-border hover:bg-muted"
-              >
-                Accept (Keep Schedule)
               </Button>
             </div>
           </div>

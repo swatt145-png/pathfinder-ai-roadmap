@@ -5,7 +5,6 @@ interface Props {
   result: AdaptationResult;
   currentRoadmap: RoadmapData;
   onAccept: () => void;
-  onAcceptNoScheduleChange: () => void;
   onKeepCurrent: () => void;
   saving?: boolean;
 }
@@ -34,7 +33,6 @@ export function AdaptationNotification({
   result,
   currentRoadmap,
   onAccept,
-  onAcceptNoScheduleChange,
   onKeepCurrent,
   saving = false,
 }: Props) {
@@ -74,15 +72,6 @@ export function AdaptationNotification({
             className="w-full gradient-primary text-primary-foreground font-heading font-bold"
           >
             {saving ? "Applying..." : "Accept Update"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onAcceptNoScheduleChange}
-            disabled={saving || !proposed}
-            className="w-full border-border hover:bg-muted"
-          >
-            {saving ? "Applying..." : "Accept (Keep Schedule)"}
           </Button>
           <Button
             type="button"
