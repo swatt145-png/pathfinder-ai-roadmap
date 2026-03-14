@@ -586,7 +586,7 @@ export default function GroupDetail() {
 
               return visibleRoadmaps.map((ar) => {
                 const unsharedCount = members.length - ar.sharedCount;
-                const allShared = unsharedCount <= 0;
+                const allShared = members.length > 0 && unsharedCount <= 0;
                 const memberClonedId = memberRoadmapMap[ar.id];
 
                 return (
