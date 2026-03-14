@@ -687,6 +687,12 @@ export default function Dashboard() {
               <span className="text-sm text-muted-foreground">
                 {(() => {
                   const totalDays = roadmapData.timeline_weeks * 7;
+                  const hasStarted = completedCount > 0 || Object.values(progressMap).some((p) => p.status === "in_progress");
+                  if (!hasStarted) {
+                    if (totalDays <= 1) return "Day 1 of 1";
+                    if (roadmapData.timeline_weeks < 1.5) return `Day 1 of ${Math.round(totalDays)}`;
+                    return `Week 1 of ${Math.ceil(roadmapData.timeline_weeks)}`;
+                  }
                   const elapsed = Math.max(Math.floor((Date.now() - new Date(roadmap.created_at).getTime()) / 86400000), 0);
                   if (totalDays <= 1) {
                     return "Day 1 of 1";
