@@ -231,18 +231,18 @@ export default function MyRoadmaps() {
       <WavyBackground />
       <div className="min-h-screen pt-20 pb-10 px-4 md:px-12 max-w-5xl mx-auto animate-fade-in">
         <Breadcrumbs items={showArchived ? [{ label: "My Roadmaps", href: "/my-roadmaps" }, { label: "Archived Roadmaps" }] : [{ label: "My Roadmaps" }]} />
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-3 mb-6">
           <h2 className="font-heading text-2xl md:text-3xl font-bold">
             {showArchived ? "Archived Roadmaps" : "My Roadmaps"}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={() => navigate("/shared-with-me")}
               className="border-border font-heading font-bold relative"
             >
               <Share2 className="mr-2 h-4 w-4" />
-              Shared Roadmaps
+              Shared
               {sharedCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-warning text-warning-foreground text-xs font-bold flex items-center justify-center">
                   {sharedCount}
