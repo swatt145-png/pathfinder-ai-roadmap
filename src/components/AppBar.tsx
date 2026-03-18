@@ -32,9 +32,9 @@ export function AppBar() {
         className="flex items-center gap-2 font-heading font-bold text-xl md:text-2xl gradient-text focus:outline-none focus:ring-2 focus:ring-primary rounded-sm"
       >
         <img src={logo} alt="WayVion logo" className="h-9 w-9 object-contain" />
-        WayVion
+        <span className="hidden sm:inline">WayVion</span>
       </Link>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <Link
           to="/my-roadmaps"
           className="w-9 h-9 rounded-full flex items-center justify-center border border-border text-foreground hover:bg-muted transition-colors"

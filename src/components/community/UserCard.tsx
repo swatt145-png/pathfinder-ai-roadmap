@@ -36,7 +36,7 @@ export function UserCard({
           {initial}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-heading font-bold text-base truncate">{displayName || "User"}</p>
+          <p className="font-heading font-bold text-base break-words">{displayName || "User"}</p>
           {bio ? (
             <p className="text-sm text-muted-foreground line-clamp-1">{bio}</p>
           ) : topics.length > 0 ? (
