@@ -1,0 +1,12 @@
+REVOKE ALL ON FUNCTION public.handle_new_user() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.update_updated_at_column() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.has_active_roadmap(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_group_member(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.shares_group_with(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.can_view_roadmap(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.calculate_user_points(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.clone_roadmap_for_member(uuid, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_group_by_invite_code(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.calculate_user_points(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.clone_roadmap_for_member(uuid, uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_group_by_invite_code(text) TO authenticated;
