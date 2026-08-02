@@ -37,12 +37,10 @@ export default function JoinGroup() {
     if (!user || !inviteCode) return;
 
     (async () => {
-      const { data: g } = await (supabase as any)
-        .from("groups")
-        .select("id, name, description, type, is_active, owner_id")
-        .eq("invite_code", inviteCode.toUpperCase())
-        .eq("is_active", true)
-        .single();
+      const { data: rows } = await (supabase as any).rpc("get_group_by_invite_code", {
+        _invite_code: inviteCode,
+      });
+      const g = Array.isArray(rows) ? rows[0] : rows;
 
       if (!g) {
         setNotFound(true);
@@ -53,14 +51,15 @@ export default function JoinGroup() {
       setGroup(g);
       setIsOwner(g.owner_id === user.id);
 
-      const [{ data: ownerProfile }, { count }, { data: membership }] = await Promise.all([
-        supabase.from("profiles").select("display_name").eq("id", g.owner_id).single(),
-        (supabase as any).from("group_members").select("id", { count: "exact", head: true }).eq("group_id", g.id),
-        (supabase as any).from("group_members").select("id").eq("group_id", g.id).eq("user_id", user.id).maybeSingle(),
-      ]);
+      const { data: membership } = await (supabase as any)
+        .from("group_members")
+        .select("id")
+        .eq("group_id", g.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      setOwnerName(ownerProfile?.display_name ?? "Unknown");
-      setMemberCount(count ?? 0);
+      setOwnerName(g.owner_name ?? "Unknown");
+      setMemberCount(g.member_count ?? 0);
       setAlreadyMember(!!membership);
       setLoading(false);
     })();
