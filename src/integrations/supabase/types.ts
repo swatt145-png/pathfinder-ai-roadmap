@@ -505,6 +505,10 @@ export type Database = {
     }
     Functions: {
       calculate_user_points: { Args: { p_user_id: string }; Returns: number }
+      can_view_roadmap: {
+        Args: { _roadmap_id: string; _user_id: string }
+        Returns: boolean
+      }
       clone_roadmap_for_member: {
         Args: {
           p_group_roadmap_id: string
@@ -513,7 +517,28 @@ export type Database = {
         }
         Returns: string
       }
+      get_group_by_invite_code: {
+        Args: { _invite_code: string }
+        Returns: {
+          description: string
+          id: string
+          is_active: boolean
+          member_count: number
+          name: string
+          owner_id: string
+          owner_name: string
+          type: string
+        }[]
+      }
       has_active_roadmap: { Args: { p_user_id: string }; Returns: boolean }
+      is_group_member: {
+        Args: { _group_id: string; _user_id: string }
+        Returns: boolean
+      }
+      shares_group_with: {
+        Args: { _user_a: string; _user_b: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
