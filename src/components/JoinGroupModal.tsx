@@ -83,12 +83,10 @@ export default function JoinGroupModal({ open, onClose, onJoined }: Props) {
 
     const normalizedCode = code.trim().toUpperCase();
 
-    const { data: group, error: lookupErr } = await (supabase as any)
-      .from("groups")
-      .select("id, name")
-      .eq("invite_code", normalizedCode)
-      .eq("is_active", true)
-      .single();
+    const { data: rows, error: lookupErr } = await (supabase as any).rpc("get_group_by_invite_code", {
+      _invite_code: normalizedCode,
+    });
+    const group = Array.isArray(rows) ? rows[0] : rows;
 
     if (lookupErr || !group) {
       toast({ title: "Invalid invite code", description: "No active group found with this code.", variant: "destructive" });
