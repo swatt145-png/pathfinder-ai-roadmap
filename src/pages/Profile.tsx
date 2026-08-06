@@ -31,7 +31,7 @@ export default function Profile() {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [linkingAccount, setLinkingAccount] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
   const [showPublicConfirm, setShowPublicConfirm] = useState(false);
   const [role, setRole] = useState("learner");
 
@@ -49,7 +49,7 @@ export default function Profile() {
         setLocation(data.location ?? "");
         setWebsite(data.website ?? "");
         setPhone(data.phone ?? "");
-        setIsPublic((data as any).is_public ?? false);
+        setIsPublic((data as any).is_public ?? true);
         setRole((data as any).role ?? "learner");
       }
       setLoading(false);
