@@ -87,13 +87,13 @@ export function AppBar() {
             <button
               onClick={toggleTheme}
               className="w-9 h-9 rounded-full flex items-center justify-center border border-border text-foreground hover:bg-muted transition-colors"
-              aria-label="Toggle theme"
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p>Night mode</p>
+            <p>{theme === "dark" ? "Light mode" : "Dark mode"}</p>
           </TooltipContent>
         </Tooltip>
 
