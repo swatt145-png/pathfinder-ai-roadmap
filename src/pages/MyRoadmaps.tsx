@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppBar } from "@/components/AppBar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, ArrowRight, Archive, Share2, Users } from "lucide-react";
+import { Loader2, Plus, ArrowRight, Archive, Share2, Users, Trash2 } from "lucide-react";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import type { RoadmapData } from "@/lib/types";
 
@@ -55,6 +55,7 @@ export default function MyRoadmaps() {
   const [showArchived, setShowArchived] = useState(false);
   const [unarchiveConfirmId, setUnarchiveConfirmId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [groupAssignments, setGroupAssignments] = useState<Record<string, GroupAssignment>>({});
   const [groupRoadmaps, setGroupRoadmaps] = useState<GroupRoadmapRow[]>([]);
 
@@ -208,6 +209,13 @@ export default function MyRoadmaps() {
   const handleUnarchive = async (id: string) => {
     await supabase.from("roadmaps").update({ status: "active" }).eq("id", id);
     setUnarchiveConfirmId(null);
+    fetchRoadmaps();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!user) return;
+    await supabase.from("roadmaps").delete().eq("id", id).eq("user_id", user.id);
+    setDeleteConfirmId(null);
     fetchRoadmaps();
   };
 
@@ -408,6 +416,15 @@ export default function MyRoadmaps() {
                         >
                           Restore
                         </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setDeleteConfirmId(rm.id)}
+                          aria-label="Delete roadmap"
+                          title="Delete roadmap"
+                          className="border-border hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </>
                     ) : (
                       <>
@@ -455,6 +472,25 @@ export default function MyRoadmaps() {
             </Button>
             <Button onClick={() => archiveConfirmId && handleArchive(archiveConfirmId)} className="gradient-primary text-primary-foreground font-heading font-bold">
               Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
+        <DialogContent className="glass-strong border-border">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Delete this roadmap permanently?</DialogTitle>
+            <DialogDescription>
+              This removes the roadmap and all your progress, notes, and quiz results for it. This can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} className="border-border">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)} className="font-heading font-bold">
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
